@@ -29,6 +29,11 @@
 .auth-box{max-width:470px}.auth-logo{font-size:22px;color:var(--navy);font-weight:850;margin-bottom:3px}.config-help{font-size:11px;color:var(--muted);line-height:1.5;margin-top:7px}
 @media(max-width:980px){.app{grid-template-columns:1fr}.sidebar{position:relative;height:auto}.main{padding:14px}.kpis{grid-template-columns:repeat(2,1fr)}.form-grid{grid-template-columns:repeat(2,1fr)}.span4{grid-column:span 2}}
 @media(max-width:600px){.filters{grid-template-columns:1fr}.kpis{grid-template-columns:1fr}.form-grid{grid-template-columns:1fr}.span2,.span4{grid-column:span 1}.history-summary{grid-template-columns:repeat(2,1fr)}}
+
+.sel-count{font-size:12px;font-weight:750;color:var(--navy);padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:#fff}
+.cargo-preview-note{font-size:12px;color:var(--muted);margin-top:7px;line-height:1.45}
+.cargo-list{max-height:260px;overflow:auto;border:1px solid var(--line);border-radius:9px;margin-top:10px}
+.cargo-list table{font-size:11px}.cargo-list th{position:sticky;top:0}
 </style>
 </head>
 <body>
@@ -44,6 +49,8 @@
     <div class="title"><h1>Sistema de Control y Trazabilidad de Expedientes</h1><p>EXPEDIENTE = número + año en una sola celda · EXTENSIÓN opcional y visible</p></div>
     <div class="actions">
       <button class="btn" onclick="openRecordModal()">+ Nuevo expediente</button>
+      <button class="btn secondary" id="cargoBtn" onclick="openCargoModal()" disabled>🖨 Imprimir cargo</button>
+      <span class="sel-count" id="selectedCount">0 seleccionados</span>
       <button class="btn secondary" onclick="document.getElementById('csvFile').click()">Importar CSV</button>
       <input class="hidden" id="csvFile" type="file" accept=".csv,text/csv" onchange="importCSV(event)">
       <button class="btn secondary" onclick="exportCSV(this)">Exportar registro</button>
@@ -148,6 +155,37 @@
   </div>
 </div>
 
+
+<!-- Generación e impresión de cargo -->
+<div class="modal" id="cargoModal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <div>
+        <h2>Generar cargo de préstamo</h2>
+        <div style="font-size:12px;color:#64748b;margin-top:3px">El cargo incluirá todos los expedientes seleccionados.</div>
+      </div>
+      <button class="btn secondary small" onclick="closeCargoModal()">Cerrar</button>
+    </div>
+    <div class="form-grid">
+      <div class="field"><label>Cargo N° *</label><input id="cNumero" required onchange="loadCargoHeaderByNumber()" title="El número queda fijo una vez guardado"></div>
+      <div class="field span2">
+  <label>Solicitante *</label>
+  <input id="cSolicitante" placeholder="Nombre del solicitante"
+         title="Se carga automáticamente, pero puede corregirse antes de imprimir">
+</div>
+      <div class="field"><label>Fecha</label><input id="cFecha" type="date"></div>
+      <div class="field span4"><label>Observación general</label><textarea id="cObservacion" placeholder="Observación del cargo, de corresponder"></textarea></div>
+    </div>
+    <div class="cargo-preview-note">Al generar el cargo, el número se registrará también en los expedientes seleccionados y quedará reflejado en su historial.</div>
+    <div class="cargo-list" id="cargoSelectedList"></div>
+    <div class="modal-foot">
+      <span id="cargoStatus" style="margin-right:auto;font-size:12px;color:#64748b"></span>
+      <button class="btn secondary" onclick="closeCargoModal()">Cancelar</button>
+      <button class="btn" id="cargoPrintBtn" onclick="saveAndPrintCargo()">Guardar e imprimir</button>
+    </div>
+  </div>
+</div>
+
 <!-- Historial individual -->
 <div class="modal" id="expHistoryModal">
   <div class="modal-box">
@@ -169,6 +207,7 @@ const MASTER=[["MARCELA ALONZO", "PERSONAL"], ["ABRAHAN DAMAS", "PERSONAL"], ["A
 const STATUSES=['CUSTODIA','EN PRÉSTAMO','DEVUELTO','REASIGNADO','EN TRÁMITE','PENDIENTE DE ORGANIZAR','TRANSFERIDO','EN NOTIFICACIONES'];
 const PAGE_SIZE=200;
 let sb=null, session=null, summaryRows=[], panelRows=[], allRows=[], historyRows=[];
+let selectedIds=new Set(), cargoRows=[];
 let selectedOwner='', page=0, panelCount=0, allCountValue=0, panelTimer=null, allTimer=null, historyTimer=null;
 
 function el(id){return document.getElementById(id)}
@@ -233,6 +272,7 @@ async function afterLogin(){
   el('loginModal').classList.remove('show');
   el('currentUser').textContent=session.user.email||session.user.id;
   fillSelects();
+  updateSelectionUI();
   await Promise.all([loadSummary(),loadPanel(),loadAll(),loadHistory()]);
 }
 function fillSelects(){
@@ -285,7 +325,7 @@ async function loadPanel(){
   panelRows=data||[];panelCount=count||0;
   el('panelTitle').textContent=selectedOwner?`Expedientes de ${selectedOwner} · ${typeOf(selectedOwner)}`:'Todos los expedientes';
   el('pageInfo').textContent=`${page+1} · ${panelCount} registros`;
-  el('panelTable').innerHTML=recordTable(panelRows,false)
+  el('panelTable').innerHTML=recordTable(panelRows,false,'panel')
 }
 function debouncePanel(){clearTimeout(panelTimer);page=0;panelTimer=setTimeout(loadPanel,300)}
 async function setOwner(v){selectedOwner=v||'';page=0;el('ownerSelect').value=selectedOwner;switchTab('panel',document.querySelector('[data-tab="panel"]'));renderSidebar();renderKpis();await loadPanel()}
@@ -297,7 +337,7 @@ async function loadAll(){
   q=applySearch(q,el('allSearch').value);
   const {data,error,count}=await q;
   if(error){serverError(error);return}
-  allRows=data||[];allCountValue=count||0;el('allCount').textContent=`${allCountValue} registros · mostrando ${allRows.length}`;el('allTable').innerHTML=recordTable(allRows,true)
+  allRows=data||[];allCountValue=count||0;el('allCount').textContent=`${allCountValue} registros · mostrando ${allRows.length}`;el('allTable').innerHTML=recordTable(allRows,true,'all')
 }
 function debounceAll(){clearTimeout(allTimer);allTimer=setTimeout(loadAll,300)}
 
@@ -311,18 +351,282 @@ async function loadHistory(){
 }
 function debounceHistory(){clearTimeout(historyTimer);historyTimer=setTimeout(loadHistory,300)}
 
+
+function updateSelectionUI(){
+  const n=selectedIds.size;
+  el('selectedCount').textContent=n+' seleccionado'+(n===1?'':'s');
+  el('cargoBtn').disabled=n===0;
+}
+function toggleSelect(id,checked){
+  if(checked)selectedIds.add(id);else selectedIds.delete(id);
+  updateSelectionUI();
+}
+function toggleAllRows(checked,source){
+  const rows=source==='all'?allRows:panelRows;
+  rows.forEach(r=>checked?selectedIds.add(r.id):selectedIds.delete(r.id));
+  updateSelectionUI();
+  if(source==='all')el('allTable').innerHTML=recordTable(allRows,true,'all');
+  else el('panelTable').innerHTML=recordTable(panelRows,false,'panel');
+}
+
 function rowStatus(r){const c=r.estado==='EN PRÉSTAMO'?'loan':r.estado==='DEVUELTO'?'returned':'';return `<span class="pill ${c}">${esc(r.estado||'')}</span>`}
-function recordTable(data,withOwner=false){
+function recordTable(data,withOwner=false,source='panel'){
   if(!data.length)return '<div class="empty">No hay expedientes registrados para esta selección.</div>';
   const ownerHead=withOwner?'<th>Responsable / ubicación</th>':'';
-  const body=data.map(r=>`<tr><td><b>${esc(expBase(r.expediente))}</b></td><td>${r.extension?esc(r.extension):'—'}</td><td>${esc(r.rd)}</td>${withOwner?`<td>${esc(r.responsable)}</td>`:''}<td>${rowStatus(r)}</td><td>${fmtDate(r.fecha_entrega)}</td><td>${fmtDate(r.fecha_devolucion)}</td><td>${rowDays(r)||''}</td><td>${esc(r.modalidad)}</td><td>${esc(r.ultimo_folio)}</td><td>${esc(r.digitalizado)}${r.enlace?` · <a href="${esc(r.enlace)}" target="_blank">Abrir</a>`:''}</td><td>${esc(r.cargo)}</td><td>${rowAlert(r)?'<span class="pill alert">ALERTA >30 DÍAS</span>':''}</td><td>${esc(r.observacion)}</td><td><div style="display:flex;gap:5px;white-space:nowrap"><button class="btn secondary small" onclick="showExpHistory('${r.id}')">Historial</button><button class="btn secondary small" onclick="editRecord('${r.id}')">Editar</button></div></td></tr>`).join('');
-  return `<table><thead><tr><th>Expediente</th><th>Extensión</th><th>R.D.</th>${ownerHead}<th>Estado</th><th>F. entrega</th><th>F. devolución</th><th>Días háb.</th><th>Modalidad</th><th>Últ. folio</th><th>Digitalizado</th><th>Cargo</th><th>Alerta</th><th>Observación</th><th></th></tr></thead><tbody>${body}</tbody></table>`
+  const allChecked=data.length>0&&data.every(r=>selectedIds.has(r.id));
+  const body=data.map(r=>`<tr>
+    <td><input type="checkbox" aria-label="Seleccionar ${esc(expKey(r))}" ${selectedIds.has(r.id)?'checked':''} onchange="toggleSelect('${r.id}',this.checked)"></td>
+    <td><b>${esc(expBase(r.expediente))}</b></td><td>${r.extension?esc(r.extension):'—'}</td><td>${esc(r.rd)}</td>
+    ${withOwner?`<td>${esc(r.responsable)}</td>`:''}<td>${rowStatus(r)}</td>
+    <td>${fmtDate(r.fecha_entrega)}</td><td>${fmtDate(r.fecha_devolucion)}</td><td>${rowDays(r)||''}</td>
+    <td>${esc(r.modalidad)}</td><td>${esc(r.ultimo_folio)}</td>
+    <td>${esc(r.digitalizado)}${r.enlace?` · <a href="${esc(r.enlace)}" target="_blank">Abrir</a>`:''}</td>
+    <td>${esc(r.cargo)}</td><td>${rowAlert(r)?'<span class="pill alert">ALERTA >30 DÍAS</span>':''}</td><td>${esc(r.observacion)}</td>
+    <td><div style="display:flex;gap:5px;white-space:nowrap"><button class="btn secondary small" onclick="showExpHistory('${r.id}')">Historial</button><button class="btn secondary small" onclick="editRecord('${r.id}')">Editar</button></div></td>
+  </tr>`).join('');
+  return `<table><thead><tr>
+    <th><input type="checkbox" aria-label="Seleccionar todos" ${allChecked?'checked':''} onchange="toggleAllRows(this.checked,'${source}')"></th>
+    <th>Expediente</th><th>Extensión</th><th>R.D.</th>${ownerHead}<th>Estado</th><th>F. entrega</th><th>F. devolución</th><th>Días háb.</th><th>Modalidad</th><th>Últ. folio</th><th>Digitalizado</th><th>Cargo</th><th>Alerta</th><th>Observación</th><th></th>
+  </tr></thead><tbody>${body}</tbody></table>`
 }
+
 function renderHistory(){
   if(!historyRows.length){el('historyTable').innerHTML='<div class="empty">No hay movimientos para mostrar.</div>';return}
   el('historyTable').innerHTML=`<table><thead><tr><th>Fecha</th><th>Expediente</th><th>Extensión</th><th>Acción</th><th>Desde</th><th>Hacia</th><th>Cargo</th><th>Detalle</th></tr></thead><tbody>${historyRows.map(h=>`<tr><td>${fmtDate(h.created_at)}</td><td><b>${esc(h.expediente)}</b></td><td>${h.extension?esc(h.extension):'—'}</td><td>${esc(h.accion)}</td><td>${esc(h.desde)}</td><td>${esc(h.hacia)}</td><td>${esc(h.cargo)}</td><td>${esc(h.detalle)}</td></tr>`).join('')}</tbody></table>`
 }
 function switchTab(name,btn){['panel','summary','all','history'].forEach(x=>el('tab-'+x).classList.toggle('hidden',x!==name));document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));if(btn)btn.classList.add('active')}
+
+
+function autoCargoNumber(){ return ''; }
+
+async function loadCargoHeaderByNumber(){
+  if(!sb)return false;
+
+  const numero=el('cNumero').value.trim();
+  if(!numero)return false;
+
+  el('cargoStatus').textContent='Buscando datos del cargo...';
+
+  // 1. Buscar el encabezado oficial del cargo.
+  const {data,error}=await sb
+    .from('cargos')
+    .select('*')
+    .eq('numero',numero)
+    .maybeSingle();
+
+  if(error){
+    el('cargoStatus').textContent=error.message;
+    return false;
+  }
+
+  if(!data){
+    return false;
+  }
+
+  let solicitante=(data.solicitante||'').trim();
+
+  // 2. Si el cargo existe pero el nombre está vacío, intentar recuperarlo del historial.
+  if(!solicitante){
+    const {data:hist,error:histError}=await sb
+      .from('historial_expedientes')
+      .select('hacia,created_at')
+      .eq('cargo',numero)
+      .eq('accion','CARGO ASOCIADO')
+      .not('hacia','is',null)
+      .order('created_at',{ascending:true});
+
+    if(!histError && hist && hist.length){
+      const nombres=[...new Set(hist.map(x=>(x.hacia||'').trim()).filter(Boolean))];
+      if(nombres.length===1)solicitante=nombres[0];
+    }
+  }
+
+  // 3. Segundo fallback: expedientes vinculados al cargo.
+  if(!solicitante){
+    const {data:exp,error:expError}=await sb
+      .from('expedientes')
+      .select('responsable')
+      .eq('cargo',numero);
+
+    if(!expError && exp && exp.length){
+      const nombres=[...new Set(exp.map(x=>(x.responsable||'').trim()).filter(Boolean))];
+      if(nombres.length===1)solicitante=nombres[0];
+    }
+  }
+
+  el('cNumero').value=data.numero;
+  el('cNumero').readOnly=true;
+
+  // El nombre se carga automáticamente PERO sigue siendo editable.
+  el('cSolicitante').value=solicitante;
+  el('cSolicitante').readOnly=false;
+  el('cSolicitante').title='Nombre cargado automáticamente. Puede corregirlo antes de imprimir.';
+
+  if(data.fecha)el('cFecha').value=data.fecha;
+  if(data.observacion)el('cObservacion').value=data.observacion;
+
+  if(solicitante){
+    el('cargoStatus').textContent='Solicitante cargado automáticamente. Puede corregirlo antes de imprimir.';
+  }else{
+    el('cargoStatus').textContent='No se encontró un solicitante guardado. Escriba el nombre antes de imprimir; al guardar quedará asociado al cargo.';
+    setTimeout(()=>el('cSolicitante').focus(),50);
+  }
+
+  return true;
+}
+async function openCargoModal(){
+  if(!selectedIds.size){alert('Seleccione al menos un expediente.');return}
+  el('cargoStatus').textContent='Cargando expedientes seleccionados...';
+  el('cargoModal').classList.add('show');
+
+  const ids=[...selectedIds];
+  const {data,error}=await sb.from('expedientes').select('*').in('id',ids).order('expediente');
+  if(error){el('cargoStatus').textContent=error.message;return}
+  cargoRows=data||[];
+
+  const cargosExistentes=[...new Set(cargoRows.map(r=>(r.cargo||'').trim()).filter(Boolean))];
+  const responsables=[...new Set(cargoRows.map(r=>(r.responsable||'').trim()).filter(Boolean))];
+
+  el('cNumero').readOnly=false;
+  el('cNumero').value=cargosExistentes.length===1?cargosExistentes[0]:'';
+  el('cSolicitante').readOnly=false;
+  el('cSolicitante').value='';
+  el('cFecha').value=new Date().toISOString().slice(0,10);
+  el('cObservacion').value='';
+  el('cargoStatus').textContent='';
+
+  // Si el cargo ya existe, recuperar SIEMPRE el encabezado original desde la tabla cargos.
+  if(cargosExistentes.length===1){
+    const encontrado=await loadCargoHeaderByNumber();
+    if(!encontrado){
+      // Compatibilidad con cargos antiguos que aún no fueron migrados.
+      if(responsables.length===1){
+        el('cSolicitante').value=responsables[0];
+        el('cargoStatus').textContent='Cargo antiguo sin encabezado almacenado. Se usará el responsable registrado y se guardará como solicitante del cargo.';
+      }else{
+        el('cargoStatus').textContent='Cargo antiguo con responsables actuales distintos. Ejecute MIGRACION_CARGOS.sql para recuperar el solicitante desde el historial.';
+      }
+    }
+  }else if(cargosExistentes.length>1){
+    el('cNumero').readOnly=true;
+    el('cargoStatus').textContent='Los expedientes seleccionados pertenecen a cargos distintos. Seleccione un solo cargo.';
+  }else{
+    // Nuevo cargo: el solicitante se toma del panel por personal si existe;
+    // si no, se usa el responsable común de los expedientes seleccionados.
+    const panelPersona=selectedOwner && typeOf(selectedOwner)==='PERSONAL' ? selectedOwner : '';
+    if(panelPersona){
+      el('cSolicitante').value=panelPersona;
+      el('cargoStatus').textContent='Solicitante cargado automáticamente desde el panel por personal.';
+    }else if(responsables.length===1){
+      el('cSolicitante').value=responsables[0];
+      el('cargoStatus').textContent='Solicitante cargado automáticamente desde el registro.';
+    }else{
+      el('cargoStatus').textContent='Para un cargo nuevo, seleccione los expedientes desde el panel del mismo personal.';
+    }
+  }
+
+  el('cargoSelectedList').innerHTML=`<table><thead><tr><th>N°</th><th>Expediente</th><th>Ext.</th><th>R.D.</th><th>Último folio</th><th>Observación</th></tr></thead><tbody>${
+    cargoRows.map((r,i)=>`<tr><td>${i+1}</td><td><b>${esc(r.expediente)}</b></td><td>${r.extension?esc(r.extension):'—'}</td><td>${esc(r.rd)}</td><td>${esc(r.ultimo_folio)}</td><td>${esc(r.observacion)}</td></tr>`).join('')
+  }</tbody></table>`;
+}
+
+function closeCargoModal(){el('cargoModal').classList.remove('show')}
+function cargoPrintHtml(cargo,solicitante,fecha,observacion,rows){
+  const user=session?.user?.email||'';
+  const rowsHtml=rows.map((r,i)=>`<tr><td>${i+1}</td><td><b>${esc(r.expediente)}</b></td><td>${r.extension?esc(r.extension):'—'}</td><td>${esc(r.rd||'')}</td><td>${esc(r.ultimo_folio||'')}</td><td>${esc(r.observacion||'')}</td></tr>`).join('');
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(cargo)}</title><style>
+  @page{size:A4;margin:15mm}body{font-family:Arial,sans-serif;color:#111;font-size:11px;margin:0}
+  h1{text-align:center;font-size:16px;margin:0 0 4px}h2{text-align:center;font-size:12px;font-weight:normal;margin:0 0 18px}
+  .meta{width:100%;border-collapse:collapse;margin-bottom:12px}.meta td{padding:5px 6px;border:1px solid #777}.sign-top{height:48px;vertical-align:bottom}
+  .sign-line{display:inline-block;min-width:190px;border-top:1px solid #111;padding-top:3px;text-align:center}
+  table.list{width:100%;border-collapse:collapse}.list th,.list td{border:1px solid #555;padding:5px;vertical-align:top}.list th{background:#eee}
+  .total{margin-top:8px;font-weight:bold}.obs{margin-top:12px;border:1px solid #777;padding:8px;min-height:35px}
+  .signatures{display:flex;justify-content:space-between;margin-top:58px;gap:60px}.signature{flex:1;text-align:center;border-top:1px solid #111;padding-top:5px}
+  .footer{margin-top:20px;font-size:9px;color:#555;text-align:right}</style></head><body>
+  <h1>CARGO DE PRÉSTAMO DE EXPEDIENTES</h1><h2>DIRECCIÓN DE SANCIONES - DS-PA</h2>
+  <table class="meta"><tr><td><b>Cargo N°:</b> ${esc(cargo)}</td><td><b>Fecha:</b> ${esc(fmtDate(fecha))}</td></tr>
+  <tr><td><b>Solicitante:</b> ${esc(solicitante)}</td><td class="sign-top"><span class="sign-line">Firma del solicitante</span></td></tr></table>
+  <table class="list"><thead><tr><th>N°</th><th>Expediente</th><th>Ext.</th><th>R.D.</th><th>Último folio</th><th>Observación</th></tr></thead><tbody>${rowsHtml}</tbody></table>
+  <div class="total">Total de expedientes: ${rows.length}</div>
+  <div class="obs"><b>Observación general:</b><br>${esc(observacion||'')}</div>
+  <div class="signatures"><div class="signature">ENTREGADO POR - ARCHIVO</div><div class="signature">RECIBIDO POR - SOLICITANTE</div></div>
+  <div class="footer">Generado por: ${esc(user)} · ${new Date().toLocaleString('es-PE')}</div>
+  <script>window.onload=()=>{setTimeout(()=>window.print(),250)}<\/script></body></html>`;
+}
+async function saveAndPrintCargo(){
+  const cargo=el('cNumero').value.trim();
+  const solicitante=el('cSolicitante').value.trim();
+  const fecha=el('cFecha').value;
+  const observacion=el('cObservacion').value.trim();
+
+  if(!cargo){
+    el('cargoStatus').textContent='Ingrese el número de cargo.';
+    return;
+  }
+  if(!solicitante){
+    el('cargoStatus').textContent='Ingrese o corrija el nombre del solicitante.';
+    el('cSolicitante').focus();
+    return;
+  }
+  if(!cargoRows.length){
+    el('cargoStatus').textContent='No hay expedientes seleccionados.';
+    return;
+  }
+
+  const cargosSeleccionados=[...new Set(cargoRows.map(r=>(r.cargo||'').trim()).filter(Boolean))];
+  if(cargosSeleccionados.length>1){
+    el('cargoStatus').textContent='No se pueden unir expedientes pertenecientes a cargos distintos.';
+    return;
+  }
+
+  const btn=el('cargoPrintBtn');
+  btn.disabled=true;
+  btn.textContent='Guardando...';
+  el('cargoStatus').textContent='Guardando cargo y nombre del solicitante...';
+
+  try{
+    const ids=cargoRows.map(r=>r.id);
+
+    // Esta función mantiene fijo el NÚMERO DE CARGO,
+    // pero permite corregir el NOMBRE DEL SOLICITANTE.
+    const {data:cargoId,error}=await sb.rpc('guardar_cargo_con_solicitante_editable',{
+      p_numero:cargo,
+      p_solicitante:solicitante,
+      p_fecha:fecha||null,
+      p_observacion:observacion||null,
+      p_expediente_ids:ids
+    });
+    if(error)throw error;
+
+    const {data:header,error:headError}=await sb.from('cargos').select('*').eq('id',cargoId).single();
+    if(headError)throw headError;
+
+    const w=window.open('','_blank','width=980,height=800');
+    if(!w)throw new Error('El navegador bloqueó la ventana de impresión. Permita ventanas emergentes para este sitio.');
+
+    w.document.open();
+    w.document.write(cargoPrintHtml(
+      header.numero,
+      header.solicitante,
+      header.fecha,
+      header.observacion||'',
+      cargoRows
+    ));
+    w.document.close();
+
+    selectedIds.clear();
+    cargoRows=[];
+    updateSelectionUI();
+    closeCargoModal();
+    showToast('Cargo guardado y listo para imprimir');
+    await Promise.all([loadSummary(),loadPanel(),loadAll(),loadHistory()]);
+  }catch(err){
+    el('cargoStatus').textContent=err?.message||String(err);
+  }finally{
+    btn.disabled=false;
+    btn.textContent='Guardar e imprimir';
+  }
+}
 
 function openRecordModal(){el('recordForm').reset();el('fId').value='';el('fSerie').value='PAS';el('fEstado').value='CUSTODIA';el('fModalidad').value='FÍSICO';el('fDigitalizado').value='NO';el('modalTitle').textContent='Nuevo expediente';el('saveStatus').textContent='';el('recordModal').classList.add('show')}
 function closeRecordModal(){el('recordModal').classList.remove('show')}
