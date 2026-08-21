@@ -1,0 +1,78 @@
+SISTEMA DE EXPEDIENTES - BASE DE DATOS EN LÍNEA
+================================================
+
+Esta versión usa:
+- Página web HTML
+- Supabase
+- PostgreSQL
+- Supabase Auth
+- Row Level Security (RLS)
+
+LOS DATOS YA NO SE GUARDAN EN EL NAVEGADOR.
+Todos los usuarios autorizados consultan y actualizan la misma base.
+
+ARCHIVOS
+--------
+index.html        Página web.
+SUPABASE_SETUP.sql Estructura, historial automático y seguridad.
+PLANTILLA_CARGA.csv Plantilla para importación.
+
+INSTALACIÓN
+-----------
+1. Cree un proyecto en Supabase.
+2. Abra SQL Editor.
+3. Copie y ejecute TODO SUPABASE_SETUP.sql.
+4. En Supabase Auth cree los usuarios que podrán entrar al sistema.
+5. Abra index.html.
+6. Pulse "Base de datos" o complete la pantalla inicial.
+7. Ingrese:
+   - Project URL
+   - Publishable key (NO Secret key)
+8. Inicie sesión con un usuario creado en Supabase Auth.
+
+PUBLICAR EN INTERNET
+--------------------
+Puede publicar index.html en un hosting estático como:
+- GitHub Pages
+- Netlify
+- Vercel
+- servidor institucional
+
+SEGURIDAD
+---------
+La página usa únicamente la Publishable key.
+Nunca coloque una Secret key o service_role en index.html.
+Las tablas tienen Row Level Security y solo permiten trabajar a usuarios autenticados.
+
+HISTORIAL
+---------
+El historial se genera directamente en PostgreSQL mediante triggers.
+Esto significa que el historial no depende del navegador del usuario.
+
+Registra:
+- Alta
+- Solicitud
+- Entrega
+- Cambio de responsable / ubicación
+- Cambio de estado
+- Reasignación
+- Devolución
+- Cargo
+- Último folio
+- Digitalización
+- Observaciones
+
+El historial tiene lectura e inserción para usuarios autenticados, pero la aplicación
+no otorga UPDATE ni DELETE sobre la tabla de historial.
+
+CAPACIDAD
+---------
+La página consulta los expedientes por páginas de 200 registros.
+No necesita descargar toda la base para el trabajo normal.
+La exportación completa sí recorre la base en bloques.
+
+IMPORTANTE SOBRE DÍAS HÁBILES
+-----------------------------
+La función de alerta cuenta lunes a viernes.
+En esta versión no se descuentan feriados oficiales. Se puede agregar un calendario
+de feriados en una versión posterior.

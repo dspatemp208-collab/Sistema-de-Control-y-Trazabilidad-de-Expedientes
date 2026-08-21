@@ -1,0 +1,396 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sistema de Control y Trazabilidad de Expedientes</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{--navy:#17365d;--blue:#1f4e78;--sky:#d9eaf7;--bg:#f4f7fb;--line:#d7e0ea;--text:#1f2937;--muted:#64748b;--ok:#e2f0d9;--warn:#fff2cc;--danger:#f4cccc;--white:#fff;--shadow:0 8px 24px rgba(23,54,93,.08)}
+*{box-sizing:border-box}body{margin:0;font-family:Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--text)}
+.app{display:grid;grid-template-columns:285px 1fr;min-height:100vh}
+.sidebar{background:var(--navy);color:white;padding:18px 14px;overflow:auto;position:sticky;top:0;height:100vh}
+.brand{font-weight:800;font-size:18px;line-height:1.25;padding:5px 8px 16px;border-bottom:1px solid rgba(255,255,255,.18);margin-bottom:14px}.brand small{display:block;font-size:11px;font-weight:500;opacity:.75;margin-top:5px}
+.side-title{font-size:11px;text-transform:uppercase;letter-spacing:.08em;opacity:.65;margin:16px 8px 7px}.side-item{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 10px;border-radius:8px;cursor:pointer;font-size:12px;margin:2px 0}.side-item:hover,.side-item.active{background:rgba(255,255,255,.14)}.badge{background:rgba(255,255,255,.17);padding:2px 7px;border-radius:999px;font-size:11px;min-width:24px;text-align:center}
+.main{padding:22px;min-width:0}.topbar{display:flex;justify-content:space-between;align-items:center;gap:15px;margin-bottom:16px;flex-wrap:wrap}.title h1{margin:0;font-size:24px;color:var(--navy)}.title p{margin:4px 0 0;color:var(--muted);font-size:13px}
+.actions{display:flex;gap:8px;flex-wrap:wrap}.btn{border:0;border-radius:8px;padding:9px 13px;font-weight:650;cursor:pointer;background:var(--blue);color:white}.btn.secondary{background:white;color:var(--navy);border:1px solid var(--line)}.btn.small{padding:6px 9px;font-size:12px}.btn:disabled{opacity:.55;cursor:not-allowed}
+.tabs{display:flex;gap:7px;margin-bottom:14px;flex-wrap:wrap}.tab{border:1px solid var(--line);background:white;color:var(--muted);padding:8px 13px;border-radius:8px;cursor:pointer;font-weight:650}.tab.active{background:var(--navy);color:white;border-color:var(--navy)}
+.card{background:white;border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow)}.filters{display:grid;grid-template-columns:minmax(260px,2fr) minmax(220px,1fr) auto;gap:12px;padding:14px;margin-bottom:14px}
+.field label{display:block;font-size:11px;font-weight:700;color:var(--muted);margin-bottom:5px;text-transform:uppercase}.field input,.field select,.field textarea{width:100%;border:1px solid var(--line);border-radius:7px;padding:9px 10px;font:inherit;background:white}.field textarea{min-height:72px;resize:vertical}
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(150px,1fr));gap:12px;margin-bottom:14px}.kpi{padding:14px 16px}.kpi .label{font-size:11px;text-transform:uppercase;font-weight:800;color:var(--muted)}.kpi .value{font-size:28px;font-weight:800;color:var(--navy);margin-top:4px}.kpi.warn .value{color:#a15c00}.kpi.danger .value{color:#a61b1b}
+.table-wrap{overflow:auto}.table-head{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid var(--line);gap:10px}.table-head strong{color:var(--navy)}table{border-collapse:collapse;width:100%;font-size:12px}th{position:sticky;top:0;background:var(--navy);color:white;text-align:left;padding:9px 8px;white-space:nowrap}td{padding:8px;border-bottom:1px solid #edf1f5;vertical-align:top}tr:hover td{background:#f8fbff}
+.pill{display:inline-block;padding:3px 7px;border-radius:999px;font-weight:700;font-size:10px;background:#e8eef6}.pill.loan{background:var(--warn)}.pill.returned{background:var(--ok)}.pill.alert{background:var(--danger);color:#8a1414}.empty{padding:30px;text-align:center;color:var(--muted)}
+.summary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:10px}.summary-card{padding:12px 14px;display:flex;justify-content:space-between;align-items:center;cursor:pointer}.summary-card h3{margin:0;font-size:13px}.summary-card small{display:block;color:var(--muted);margin-top:3px}.summary-num{font-size:22px;font-weight:800;color:var(--navy)}
+.modal{display:none;position:fixed;inset:0;background:rgba(15,23,42,.60);z-index:30;align-items:center;justify-content:center;padding:18px}.modal.show{display:flex}.modal-box{background:white;border-radius:14px;max-width:1050px;width:100%;max-height:92vh;overflow:auto;padding:18px;box-shadow:0 24px 80px rgba(0,0,0,.25)}.modal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.modal-head h2{margin:0;color:var(--navy)}.form-grid{display:grid;grid-template-columns:repeat(4,minmax(160px,1fr));gap:10px}.span2{grid-column:span 2}.span4{grid-column:span 4}.modal-foot{display:flex;justify-content:flex-end;gap:8px;margin-top:14px;border-top:1px solid var(--line);padding-top:13px}
+.note{font-size:12px;color:var(--muted);padding:10px 12px;background:#f8fafc;border:1px solid var(--line);border-radius:8px}.hidden{display:none!important}.toast{position:fixed;right:22px;bottom:22px;z-index:60;background:var(--navy);color:#fff;padding:11px 15px;border-radius:9px;box-shadow:0 8px 24px rgba(23,54,93,.22);font-size:12px;font-weight:700;opacity:0;transform:translateY(8px);pointer-events:none;transition:.18s}.toast.show{opacity:1;transform:translateY(0)}
+.statusbar{font-size:12px;color:var(--muted);padding:8px 12px;margin-bottom:12px;background:#fff;border:1px solid var(--line);border-radius:8px}.pager{display:flex;align-items:center;gap:7px}.pager span{font-size:12px;color:var(--muted)}
+.history-summary{display:grid;grid-template-columns:repeat(4,minmax(130px,1fr));gap:10px;margin-bottom:14px}.history-summary .mini{background:#f8fafc;border:1px solid var(--line);border-radius:9px;padding:10px 12px}.history-summary .mini span{display:block;font-size:10px;text-transform:uppercase;font-weight:800;color:var(--muted);margin-bottom:4px}.history-summary .mini b{color:var(--navy);font-size:14px}
+.timeline{position:relative;margin:12px 0 4px;padding-left:24px}.timeline:before{content:"";position:absolute;left:8px;top:4px;bottom:4px;width:2px;background:#cbd5e1}.timeline-item{position:relative;background:#fff;border:1px solid var(--line);border-radius:10px;padding:11px 13px;margin-bottom:10px}.timeline-item:before{content:"";position:absolute;left:-21px;top:16px;width:10px;height:10px;border-radius:50%;background:var(--blue);border:2px solid #fff;box-shadow:0 0 0 2px #cbd5e1}.timeline-item .t-date{font-size:11px;color:var(--muted);font-weight:700}.timeline-item .t-action{font-size:13px;color:var(--navy);font-weight:800;margin:3px 0}.timeline-item .t-detail{font-size:12px;color:var(--text);line-height:1.45}.timeline-item .t-meta{font-size:11px;color:var(--muted);margin-top:5px}
+.auth-box{max-width:470px}.auth-logo{font-size:22px;color:var(--navy);font-weight:850;margin-bottom:3px}.config-help{font-size:11px;color:var(--muted);line-height:1.5;margin-top:7px}
+@media(max-width:980px){.app{grid-template-columns:1fr}.sidebar{position:relative;height:auto}.main{padding:14px}.kpis{grid-template-columns:repeat(2,1fr)}.form-grid{grid-template-columns:repeat(2,1fr)}.span4{grid-column:span 2}}
+@media(max-width:600px){.filters{grid-template-columns:1fr}.kpis{grid-template-columns:1fr}.form-grid{grid-template-columns:1fr}.span2,.span4{grid-column:span 1}.history-summary{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+<div class="app">
+<aside class="sidebar">
+  <div class="brand">CONTROL DE EXPEDIENTES<small>Base de datos en línea · multiusuario</small></div>
+  <div class="side-item active" id="sideAll" onclick="setOwner('')"><span>TODOS</span><span class="badge" id="countAll">0</span></div>
+  <div class="side-title">Personal</div><div id="sidePersonal"></div>
+  <div class="side-title">Áreas / etapas / ubicaciones</div><div id="sideAreas"></div>
+</aside>
+<main class="main">
+  <div class="topbar">
+    <div class="title"><h1>Sistema de Control y Trazabilidad de Expedientes</h1><p>EXPEDIENTE = número + año en una sola celda · EXTENSIÓN opcional y visible</p></div>
+    <div class="actions">
+      <button class="btn" onclick="openRecordModal()">+ Nuevo expediente</button>
+      <button class="btn secondary" onclick="document.getElementById('csvFile').click()">Importar CSV</button>
+      <input class="hidden" id="csvFile" type="file" accept=".csv,text/csv" onchange="importCSV(event)">
+      <button class="btn secondary" onclick="exportCSV(this)">Exportar registro</button>
+      <button class="btn secondary" onclick="openConfig()">Base de datos</button>
+      <button class="btn secondary" onclick="logout()">Cerrar sesión</button>
+    </div>
+  </div>
+  <div class="statusbar">Base: <b>Supabase / PostgreSQL</b> · Usuario: <b id="currentUser">—</b> · Los cambios son compartidos por todos los usuarios autorizados.</div>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="panel" onclick="switchTab('panel',this)">Panel por personal</button>
+    <button class="tab" data-tab="summary" onclick="switchTab('summary',this)">Resumen</button>
+    <button class="tab" data-tab="all" onclick="switchTab('all',this)">Registro maestro</button>
+    <button class="tab" data-tab="history" onclick="switchTab('history',this)">Historial</button>
+  </div>
+
+  <section id="tab-panel">
+    <div class="card filters">
+      <div class="field"><label>Buscar</label><input id="searchInput" placeholder="Expediente, extensión, R.D., cargo, observación..." oninput="debouncePanel()"></div>
+      <div class="field"><label>Responsable / ubicación</label><select id="ownerSelect" onchange="setOwner(this.value)"></select></div>
+      <div style="display:flex;align-items:flex-end"><button class="btn secondary" onclick="setOwner('')">Limpiar</button></div>
+    </div>
+    <div class="kpis">
+      <div class="card kpi"><div class="label">Total registros</div><div class="value" id="kTotal">0</div></div>
+      <div class="card kpi"><div class="label">Pendientes de devolución</div><div class="value" id="kPending">0</div></div>
+      <div class="card kpi warn"><div class="label">En préstamo</div><div class="value" id="kLoan">0</div></div>
+      <div class="card kpi danger"><div class="label">Alertas > 30 días</div><div class="value" id="kAlert">0</div></div>
+    </div>
+    <div class="card table-wrap">
+      <div class="table-head"><strong id="panelTitle">Todos los expedientes</strong><div class="pager"><button class="btn secondary small" onclick="changePage(-1)">Anterior</button><span id="pageInfo">1</span><button class="btn secondary small" onclick="changePage(1)">Siguiente</button></div></div>
+      <div id="panelTable"><div class="empty">Conectando...</div></div>
+    </div>
+  </section>
+
+  <section id="tab-summary" class="hidden"><div id="summaryGrid" class="summary-grid"></div></section>
+
+  <section id="tab-all" class="hidden">
+    <div class="card filters"><div class="field"><label>Buscar en registro maestro</label><input id="allSearch" placeholder="Buscar cualquier dato..." oninput="debounceAll()"></div><div class="note">EXTENSIÓN siempre visible. Si no existe, se muestra “—”. No existe columna AÑO.</div><div></div></div>
+    <div class="card table-wrap"><div class="table-head"><strong>Registro maestro</strong><span id="allCount">0</span></div><div id="allTable"></div></div>
+  </section>
+
+  <section id="tab-history" class="hidden">
+    <div class="card filters"><div class="field"><label>Buscar historial</label><input id="historySearch" placeholder="Expediente, extensión, acción, responsable..." oninput="debounceHistory()"></div><div class="note">El historial se genera en la base de datos; los usuarios no pueden editarlo ni eliminarlo desde esta aplicación.</div><div></div></div>
+    <div class="card table-wrap"><div class="table-head"><strong>Últimos movimientos</strong><span id="historyCount">0</span></div><div id="historyTable"></div></div>
+  </section>
+</main>
+</div>
+
+<!-- Configuración -->
+<div class="modal" id="configModal">
+  <div class="modal-box auth-box">
+    <div class="auth-logo">Conectar base de datos</div>
+    <div class="note" style="margin:10px 0">Ingresa la URL del proyecto Supabase y la <b>Publishable key</b>. No uses una Secret key.</div>
+    <div class="field"><label>Supabase URL</label><input id="cfgUrl" placeholder="https://xxxx.supabase.co"></div>
+    <div class="field" style="margin-top:10px"><label>Publishable key</label><textarea id="cfgKey" rows="4" placeholder="sb_publishable_..."></textarea></div>
+    <div class="config-help">La configuración se guarda únicamente en este navegador. Los datos de expedientes permanecen en PostgreSQL.</div>
+    <div class="modal-foot"><button class="btn" onclick="saveConfig()">Guardar y conectar</button></div>
+  </div>
+</div>
+
+<!-- Inicio de sesión -->
+<div class="modal" id="loginModal">
+  <div class="modal-box auth-box">
+    <div class="auth-logo">Iniciar sesión</div>
+    <div class="note" style="margin:10px 0">Solo usuarios creados/autorizados en Supabase Auth pueden acceder a los expedientes.</div>
+    <form onsubmit="login(event)">
+      <div class="field"><label>Correo</label><input id="loginEmail" type="email" required></div>
+      <div class="field" style="margin-top:10px"><label>Contraseña</label><input id="loginPassword" type="password" required></div>
+      <div id="loginStatus" style="font-size:12px;color:#a61b1b;margin-top:8px"></div>
+      <div class="modal-foot"><button class="btn" type="submit">Ingresar</button></div>
+    </form>
+  </div>
+</div>
+
+<!-- Formulario -->
+<div class="modal" id="recordModal">
+  <div class="modal-box">
+    <div class="modal-head"><h2 id="modalTitle">Nuevo expediente</h2><button class="btn secondary small" onclick="closeRecordModal()">Cerrar</button></div>
+    <form id="recordForm" onsubmit="saveRecord(event)">
+      <input type="hidden" id="fId">
+      <div class="form-grid">
+        <div class="field"><label>Expediente *</label><input id="fExpediente" required placeholder="Ej.: 0012-2025"></div>
+        <div class="field"><label>Extensión (opcional)</label><input id="fExtension" placeholder="Ej.: 01 o A"></div>
+        <div class="field"><label>R.D.</label><input id="fRd"></div>
+        <div class="field"><label>Serie / tipo</label><select id="fSerie"><option>PAS</option><option>RESOLUCIÓN DIRECTORAL</option><option>OTRO</option></select></div>
+        <div class="field"><label>Estado actual</label><select id="fEstado"></select></div>
+        <div class="field span2"><label>Responsable / ubicación actual *</label><select id="fResponsable" required></select></div>
+        <div class="field"><label>Modalidad</label><select id="fModalidad"><option>FÍSICO</option><option>COPIA DIGITAL</option></select></div>
+        <div class="field"><label>Fecha solicitud</label><input type="date" id="fSolicitud"></div>
+        <div class="field"><label>Fecha entrega</label><input type="date" id="fEntrega"></div>
+        <div class="field"><label>Fecha devolución</label><input type="date" id="fDevolucion"></div>
+        <div class="field"><label>Última reasignación</label><input type="date" id="fReasignacion"></div>
+        <div class="field"><label>Último folio</label><input id="fFolio"></div>
+        <div class="field"><label>Digitalizado</label><select id="fDigitalizado"><option>NO</option><option>SÍ</option><option>PARCIAL</option></select></div>
+        <div class="field span2"><label>Enlace digital</label><input id="fEnlace" placeholder="https://..."></div>
+        <div class="field"><label>Cargo N°</label><input id="fCargo"></div>
+        <div class="field span2"><label>Expediente acumulado / vinculado</label><input id="fAcumulado"></div>
+        <div class="field span4"><label>Observación</label><textarea id="fObservacion"></textarea></div>
+      </div>
+      <div class="modal-foot"><span id="saveStatus" style="margin-right:auto;font-size:12px;color:#64748b"></span><button type="button" class="btn secondary" onclick="closeRecordModal()">Cancelar</button><button class="btn" type="submit">Guardar expediente</button></div>
+    </form>
+  </div>
+</div>
+
+<!-- Historial individual -->
+<div class="modal" id="expHistoryModal">
+  <div class="modal-box">
+    <div class="modal-head"><div><h2 id="expHistoryTitle">Historial del expediente</h2><div style="font-size:12px;color:#64748b;margin-top:3px">Trazabilidad almacenada en la base de datos</div></div><button class="btn secondary small" onclick="closeExpHistory()">Cerrar</button></div>
+    <div class="history-summary">
+      <div class="mini"><span>Expediente</span><b id="hExp">—</b></div>
+      <div class="mini"><span>Extensión</span><b id="hExt">—</b></div>
+      <div class="mini"><span>Responsable actual</span><b id="hResp">—</b></div>
+      <div class="mini"><span>Estado actual</span><b id="hEstado">—</b></div>
+    </div>
+    <div id="expTimeline"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast">Guardado correctamente</div>
+
+<script>
+const MASTER=[["MARCELA ALONZO", "PERSONAL"], ["ABRAHAN DAMAS", "PERSONAL"], ["ALMENDRA YALE", "PERSONAL"], ["ALVARO BOJORQUEZ", "PERSONAL"], ["ARCHIVO CENTRAL", "ÁREA / UBICACIÓN"], ["BRANDY MEZA", "PERSONAL"], ["CRISTINA ALZAMORA", "PERSONAL"], ["NINO CCALAHUILLY", "PERSONAL"], ["DANIELA FUENTES", "PERSONAL"], ["DSF-PA", "ÁREA / UBICACIÓN"], ["DVC", "ÁREA / UBICACIÓN"], ["ELEVADO AL CONAS", "ETAPA / UBICACIÓN"], ["GENARO LIZA", "PERSONAL"], ["HANS HUARACA", "PERSONAL"], ["HENRY AQUINO", "PERSONAL"], ["IGNACIO INFANTAS", "PERSONAL"], ["INSTRUCCIÓN", "ETAPA / UBICACIÓN"], ["JAIME GRADOS", "PERSONAL"], ["ALEXANDER ÑAUPARI", "PERSONAL"], ["JHUVER RIMAC", "PERSONAL"], ["JOAN VALDIVIESO", "PERSONAL"], ["JOHNNY ZAVALA", "PERSONAL"], ["JUAN GUTIERREZ", "PERSONAL"], ["LISSETH PRADO", "PERSONAL"], ["LOANY AQUINO", "PERSONAL"], ["MELISA LOPEZ", "PERSONAL"], ["MILAGRO SALINAS", "PERSONAL"], ["MILTON DIAZ", "PERSONAL"], ["MIRELLA ALEMAN", "PERSONAL"], ["MIRTHA DOMINGUEZ", "PERSONAL"], ["NOTIFICACIONES", "ÁREA / UBICACIÓN"], ["PAOLA ADANAQUE", "PERSONAL"], ["PAOLA MORENO", "PERSONAL"], ["PATRICIA MORALES", "PERSONAL"], ["PIERRE ARANDA", "PERSONAL"], ["RENEE BENITES", "PERSONAL"], ["RETORNO CONAS", "ETAPA / UBICACIÓN"], ["REVISAR OBSERVACIÓN", "ETAPA / UBICACIÓN"], ["RONALD HUARCAYA", "PERSONAL"], ["SAN LUIS", "UBICACIÓN"], ["SHEYLA GUZMAN", "PERSONAL"], ["STYVEN MEDINA", "PERSONAL"], ["VICTOR GARCIA", "PERSONAL"], ["ERICK MANTARI", "PERSONAL"], ["VICTORIA GAMBOA", "PERSONAL"], ["YRMA HUARINGA", "PERSONAL"], ["RUBYSOL RUIZ", "PERSONAL"], ["RAMIRO ARRIARAN", "PERSONAL"], ["FRANK TORRES", "PERSONAL"], ["ALBERT COLAN", "PERSONAL"], ["MARIA LAGOS", "PERSONAL"], ["IVETT SOLIS", "PERSONAL"], ["MINNEETH PACHERRES", "PERSONAL"], ["KARINA CARO", "PERSONAL"], ["GABRIELA AIQUIPA", "PERSONAL"], ["JUAN CARLOS CIFUENTES", "PERSONAL"], ["CESAR CHUQUIZUTA", "PERSONAL"], ["GISELL ESPINOZA", "PERSONAL"], ["GUSTAVO MARTIN RIOS - CASSTELL", "PERSONAL"], ["HILDA LEVANO", "PERSONAL"], ["JUAN HUAMAN", "PERSONAL"]];
+const STATUSES=['CUSTODIA','EN PRÉSTAMO','DEVUELTO','REASIGNADO','EN TRÁMITE','PENDIENTE DE ORGANIZAR','TRANSFERIDO','EN NOTIFICACIONES'];
+const PAGE_SIZE=200;
+let sb=null, session=null, summaryRows=[], panelRows=[], allRows=[], historyRows=[];
+let selectedOwner='', page=0, panelCount=0, allCountValue=0, panelTimer=null, allTimer=null, historyTimer=null;
+
+function el(id){return document.getElementById(id)}
+function norm(v){return String(v??'').trim().toUpperCase()}
+function esc(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
+function expBase(v){let s=String(v??'').trim().replace(/\s+/g,'');const m=s.match(/^(\d+)[-\/]([12]\d{3})$/);if(m){let n=m[1];if(n.length<4)n=n.padStart(4,'0');return n+'-'+m[2]}return s.replace('/','-')}
+function expKey(r){return r.extension?expBase(r.expediente)+'-'+r.extension:expBase(r.expediente)}
+function fmtDate(v){if(!v)return '';const s=String(v).slice(0,10);return s.slice(8,10)+'/'+s.slice(5,7)+'/'+s.slice(0,4)}
+function businessDays(start,end){
+  if(!start)return 0;
+  let a=new Date(String(start).slice(0,10)+'T00:00:00');
+  let b=end?new Date(String(end).slice(0,10)+'T00:00:00'):new Date();
+  if(isNaN(a)||isNaN(b)||b<a)return 0;
+  let n=0,d=new Date(a);
+  while(d<=b){const w=d.getDay();if(w!==0&&w!==6)n++;d.setDate(d.getDate()+1)}
+  return n;
+}
+function rowDays(r){return businessDays(r.fecha_entrega,r.fecha_devolucion)}
+function rowAlert(r){return !r.fecha_devolucion&&r.estado!=='DEVUELTO'&&r.modalidad!=='COPIA DIGITAL'&&r.fecha_entrega&&rowDays(r)>30}
+function normalizeDate(v){
+  const s=String(v||'').trim();
+  if(!s)return null;
+  if(/^\d{4}-\d{2}-\d{2}$/.test(s))return s;
+  const m=s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if(m)return `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+  return s;
+}
+function typeOf(n){const x=MASTER.find(r=>norm(r[0])===norm(n));return x?x[1]:''}
+function showToast(t){const x=el('toast');x.textContent=t;x.classList.add('show');clearTimeout(window.__toast);window.__toast=setTimeout(()=>x.classList.remove('show'),1800)}
+function cleanSearch(q){return String(q||'').replace(/[,%()]/g,' ').trim()}
+function serverError(err){console.error(err);alert(err?.message||String(err||'Error inesperado'))}
+
+function config(){try{return JSON.parse(localStorage.getItem('ds_pa_supabase_config')||'null')}catch{return null}}
+function openConfig(){const c=config()||{};el('cfgUrl').value=c.url||'';el('cfgKey').value=c.key||'';el('configModal').classList.add('show')}
+async function saveConfig(){
+  const url=el('cfgUrl').value.trim(),key=el('cfgKey').value.trim();
+  if(!url||!key){alert('Complete URL y Publishable key.');return}
+  localStorage.setItem('ds_pa_supabase_config',JSON.stringify({url,key}));
+  el('configModal').classList.remove('show');
+  await connect();
+}
+async function connect(){
+  const c=config();
+  if(!c){openConfig();return}
+  try{
+    sb=window.supabase.createClient(c.url,c.key,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
+    const {data:{session:s}}=await sb.auth.getSession();
+    session=s;
+    sb.auth.onAuthStateChange((_event,sess)=>{session=sess;if(sess){afterLogin()}else{el('loginModal').classList.add('show')}});
+    if(session)await afterLogin();else el('loginModal').classList.add('show');
+  }catch(err){serverError(err);openConfig()}
+}
+async function login(e){
+  e.preventDefault();el('loginStatus').textContent='Ingresando...';
+  const {data,error}=await sb.auth.signInWithPassword({email:el('loginEmail').value.trim(),password:el('loginPassword').value});
+  if(error){el('loginStatus').textContent=error.message;return}
+  session=data.session;el('loginStatus').textContent='';el('loginModal').classList.remove('show');await afterLogin()
+}
+async function logout(){if(sb)await sb.auth.signOut();session=null;location.reload()}
+async function afterLogin(){
+  if(!session)return;
+  el('loginModal').classList.remove('show');
+  el('currentUser').textContent=session.user.email||session.user.id;
+  fillSelects();
+  await Promise.all([loadSummary(),loadPanel(),loadAll(),loadHistory()]);
+}
+function fillSelects(){
+  el('ownerSelect').innerHTML='<option value="">TODOS</option>'+MASTER.map(x=>`<option>${esc(x[0])}</option>`).join('');
+  el('fResponsable').innerHTML=MASTER.map(x=>`<option>${esc(x[0])}</option>`).join('');
+  el('fEstado').innerHTML=STATUSES.map(x=>`<option>${esc(x)}</option>`).join('');
+}
+
+async function loadSummary(){
+  const {data,error}=await sb.rpc('resumen_responsables');
+  if(error){serverError(error);return}
+  summaryRows=data||[];
+  renderSidebar();renderSummary();renderKpis()
+}
+function summaryFor(name){
+  if(!name){
+    return summaryRows.reduce((a,x)=>({total:a.total+Number(x.total||0),pendientes:a.pendientes+Number(x.pendientes||0),en_prestamo:a.en_prestamo+Number(x.en_prestamo||0),alertas:a.alertas+Number(x.alertas||0)}),{total:0,pendientes:0,en_prestamo:0,alertas:0})
+  }
+  const x=summaryRows.find(s=>s.responsable===name);
+  return x?{total:Number(x.total||0),pendientes:Number(x.pendientes||0),en_prestamo:Number(x.en_prestamo||0),alertas:Number(x.alertas||0)}:{total:0,pendientes:0,en_prestamo:0,alertas:0}
+}
+function renderKpis(){const s=summaryFor(selectedOwner);el('kTotal').textContent=s.total;el('kPending').textContent=s.pendientes;el('kLoan').textContent=s.en_prestamo;el('kAlert').textContent=s.alertas}
+function renderSidebar(){
+  const map=new Map(summaryRows.map(x=>[x.responsable,Number(x.pendientes||0)]));
+  const make=x=>`<div class="side-item ${selectedOwner===x[0]?'active':''}" onclick="setOwner('${x[0].replace(/'/g,"\\'")}')"><span>${esc(x[0])}</span><span class="badge">${map.get(x[0])||0}</span></div>`;
+  el('sidePersonal').innerHTML=MASTER.filter(x=>x[1]==='PERSONAL').map(make).join('');
+  el('sideAreas').innerHTML=MASTER.filter(x=>x[1]!=='PERSONAL').map(make).join('');
+  el('countAll').textContent=summaryFor('').pendientes;
+  el('sideAll').classList.toggle('active',!selectedOwner)
+}
+function renderSummary(){
+  const map=new Map(summaryRows.map(x=>[x.responsable,x]));
+  const data=MASTER.map(([name,type])=>{const x=map.get(name)||{};return{name,type,total:Number(x.total||0),pending:Number(x.pendientes||0),alerts:Number(x.alertas||0)}}).sort((a,b)=>b.pending-a.pending||a.name.localeCompare(b.name));
+  el('summaryGrid').innerHTML=data.map(x=>`<div class="card summary-card" onclick="setOwner('${x.name.replace(/'/g,"\\'")}')"><div><h3>${esc(x.name)}</h3><small>${esc(x.type)} · ${x.pending} pendientes · ${x.alerts} alertas</small></div><div class="summary-num">${x.total}</div></div>`).join('')
+}
+
+function applySearch(query,q){
+  q=cleanSearch(q);if(!q)return query;
+  const p=`%${q}%`;
+  return query.or(`expediente.ilike.${p},extension.ilike.${p},rd.ilike.${p},responsable.ilike.${p},cargo.ilike.${p},observacion.ilike.${p},acumulado.ilike.${p},ultimo_folio.ilike.${p}`)
+}
+async function loadPanel(){
+  if(!sb||!session)return;
+  const from=page*PAGE_SIZE,to=from+PAGE_SIZE-1;
+  let q=sb.from('expedientes').select('*',{count:'exact'}).order('updated_at',{ascending:false}).range(from,to);
+  if(selectedOwner)q=q.eq('responsable',selectedOwner);
+  q=applySearch(q,el('searchInput').value);
+  const {data,error,count}=await q;
+  if(error){serverError(error);return}
+  panelRows=data||[];panelCount=count||0;
+  el('panelTitle').textContent=selectedOwner?`Expedientes de ${selectedOwner} · ${typeOf(selectedOwner)}`:'Todos los expedientes';
+  el('pageInfo').textContent=`${page+1} · ${panelCount} registros`;
+  el('panelTable').innerHTML=recordTable(panelRows,false)
+}
+function debouncePanel(){clearTimeout(panelTimer);page=0;panelTimer=setTimeout(loadPanel,300)}
+async function setOwner(v){selectedOwner=v||'';page=0;el('ownerSelect').value=selectedOwner;switchTab('panel',document.querySelector('[data-tab="panel"]'));renderSidebar();renderKpis();await loadPanel()}
+async function changePage(d){const next=page+d;if(next<0)return;if(next*PAGE_SIZE>=panelCount&&d>0)return;page=next;await loadPanel()}
+
+async function loadAll(){
+  if(!sb||!session)return;
+  let q=sb.from('expedientes').select('*',{count:'exact'}).order('updated_at',{ascending:false}).limit(500);
+  q=applySearch(q,el('allSearch').value);
+  const {data,error,count}=await q;
+  if(error){serverError(error);return}
+  allRows=data||[];allCountValue=count||0;el('allCount').textContent=`${allCountValue} registros · mostrando ${allRows.length}`;el('allTable').innerHTML=recordTable(allRows,true)
+}
+function debounceAll(){clearTimeout(allTimer);allTimer=setTimeout(loadAll,300)}
+
+async function loadHistory(){
+  if(!sb||!session)return;
+  let q=sb.from('historial_expedientes').select('*').order('created_at',{ascending:false}).limit(500);
+  const s=cleanSearch(el('historySearch').value);
+  if(s){const p=`%${s}%`;q=q.or(`expediente.ilike.${p},extension.ilike.${p},accion.ilike.${p},desde.ilike.${p},hacia.ilike.${p},cargo.ilike.${p},detalle.ilike.${p}`)}
+  const {data,error}=await q;if(error){serverError(error);return}
+  historyRows=data||[];el('historyCount').textContent=historyRows.length;renderHistory()
+}
+function debounceHistory(){clearTimeout(historyTimer);historyTimer=setTimeout(loadHistory,300)}
+
+function rowStatus(r){const c=r.estado==='EN PRÉSTAMO'?'loan':r.estado==='DEVUELTO'?'returned':'';return `<span class="pill ${c}">${esc(r.estado||'')}</span>`}
+function recordTable(data,withOwner=false){
+  if(!data.length)return '<div class="empty">No hay expedientes registrados para esta selección.</div>';
+  const ownerHead=withOwner?'<th>Responsable / ubicación</th>':'';
+  const body=data.map(r=>`<tr><td><b>${esc(expBase(r.expediente))}</b></td><td>${r.extension?esc(r.extension):'—'}</td><td>${esc(r.rd)}</td>${withOwner?`<td>${esc(r.responsable)}</td>`:''}<td>${rowStatus(r)}</td><td>${fmtDate(r.fecha_entrega)}</td><td>${fmtDate(r.fecha_devolucion)}</td><td>${rowDays(r)||''}</td><td>${esc(r.modalidad)}</td><td>${esc(r.ultimo_folio)}</td><td>${esc(r.digitalizado)}${r.enlace?` · <a href="${esc(r.enlace)}" target="_blank">Abrir</a>`:''}</td><td>${esc(r.cargo)}</td><td>${rowAlert(r)?'<span class="pill alert">ALERTA >30 DÍAS</span>':''}</td><td>${esc(r.observacion)}</td><td><div style="display:flex;gap:5px;white-space:nowrap"><button class="btn secondary small" onclick="showExpHistory('${r.id}')">Historial</button><button class="btn secondary small" onclick="editRecord('${r.id}')">Editar</button></div></td></tr>`).join('');
+  return `<table><thead><tr><th>Expediente</th><th>Extensión</th><th>R.D.</th>${ownerHead}<th>Estado</th><th>F. entrega</th><th>F. devolución</th><th>Días háb.</th><th>Modalidad</th><th>Últ. folio</th><th>Digitalizado</th><th>Cargo</th><th>Alerta</th><th>Observación</th><th></th></tr></thead><tbody>${body}</tbody></table>`
+}
+function renderHistory(){
+  if(!historyRows.length){el('historyTable').innerHTML='<div class="empty">No hay movimientos para mostrar.</div>';return}
+  el('historyTable').innerHTML=`<table><thead><tr><th>Fecha</th><th>Expediente</th><th>Extensión</th><th>Acción</th><th>Desde</th><th>Hacia</th><th>Cargo</th><th>Detalle</th></tr></thead><tbody>${historyRows.map(h=>`<tr><td>${fmtDate(h.created_at)}</td><td><b>${esc(h.expediente)}</b></td><td>${h.extension?esc(h.extension):'—'}</td><td>${esc(h.accion)}</td><td>${esc(h.desde)}</td><td>${esc(h.hacia)}</td><td>${esc(h.cargo)}</td><td>${esc(h.detalle)}</td></tr>`).join('')}</tbody></table>`
+}
+function switchTab(name,btn){['panel','summary','all','history'].forEach(x=>el('tab-'+x).classList.toggle('hidden',x!==name));document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));if(btn)btn.classList.add('active')}
+
+function openRecordModal(){el('recordForm').reset();el('fId').value='';el('fSerie').value='PAS';el('fEstado').value='CUSTODIA';el('fModalidad').value='FÍSICO';el('fDigitalizado').value='NO';el('modalTitle').textContent='Nuevo expediente';el('saveStatus').textContent='';el('recordModal').classList.add('show')}
+function closeRecordModal(){el('recordModal').classList.remove('show')}
+async function editRecord(id){
+  const {data,error}=await sb.from('expedientes').select('*').eq('id',id).single();
+  if(error){serverError(error);return}
+  const r=data,map={fId:r.id,fExpediente:r.expediente,fExtension:r.extension,fRd:r.rd,fSerie:r.serie,fEstado:r.estado,fResponsable:r.responsable,fModalidad:r.modalidad,fSolicitud:r.fecha_solicitud,fEntrega:r.fecha_entrega,fDevolucion:r.fecha_devolucion,fReasignacion:r.fecha_reasignacion,fFolio:r.ultimo_folio,fDigitalizado:r.digitalizado,fEnlace:r.enlace,fCargo:r.cargo,fAcumulado:r.acumulado,fObservacion:r.observacion};
+  Object.entries(map).forEach(([id,v])=>{const x=el(id);if(x)x.value=v||''});el('modalTitle').textContent='Editar '+expKey(r);el('saveStatus').textContent='';el('recordModal').classList.add('show')
+}
+async function saveRecord(e){
+  e.preventDefault();const btn=e.submitter,get=id=>el(id).value.trim();const expediente=expBase(get('fExpediente'));el('fExpediente').value=expediente;
+  if(!/^\d+-[12]\d{3}$/.test(expediente)){el('saveStatus').textContent='Use NÚMERO-AÑO. Ej.: 0012-2025.';return}
+  const row={expediente,extension:get('fExtension')||null,rd:get('fRd')||null,serie:get('fSerie'),estado:get('fEstado'),responsable:get('fResponsable'),modalidad:get('fModalidad'),fecha_solicitud:get('fSolicitud')||null,fecha_entrega:get('fEntrega')||null,fecha_devolucion:get('fDevolucion')||null,fecha_reasignacion:get('fReasignacion')||null,ultimo_folio:get('fFolio')||null,digitalizado:get('fDigitalizado'),enlace:get('fEnlace')||null,cargo:get('fCargo')||null,acumulado:get('fAcumulado')||null,observacion:get('fObservacion')||null};
+  if(btn){btn.disabled=true;btn.textContent='Guardando...'}el('saveStatus').textContent='Guardando en la base de datos...';
+  let result;
+  const id=get('fId');
+  if(id)result=await sb.from('expedientes').update(row).eq('id',id).select().single();
+  else result=await sb.from('expedientes').insert(row).select().single();
+  if(btn){btn.disabled=false;btn.textContent='Guardar expediente'}
+  if(result.error){el('saveStatus').textContent=result.error.message;return}
+  closeRecordModal();showToast('Guardado correctamente');await Promise.all([loadSummary(),loadPanel(),loadAll(),loadHistory()])
+}
+
+async function showExpHistory(id){
+  const [{data:r,error:e1},{data:h,error:e2}]=await Promise.all([
+    sb.from('expedientes').select('*').eq('id',id).single(),
+    sb.from('historial_expedientes').select('*').eq('expediente_id',id).order('created_at',{ascending:false})
+  ]);
+  if(e1||e2){serverError(e1||e2);return}
+  el('hExp').textContent=r.expediente||'—';el('hExt').textContent=r.extension||'—';el('hResp').textContent=r.responsable||'—';el('hEstado').textContent=r.estado||'—';el('expHistoryTitle').textContent='Historial del expediente '+expKey(r);
+  el('expTimeline').innerHTML=!h.length?'<div class="empty">Sin movimientos.</div>':'<div class="timeline">'+h.map(x=>{const meta=[x.desde?`Desde: ${esc(x.desde)}`:'',x.hacia?`Hacia: ${esc(x.hacia)}`:'',x.cargo?`Cargo: ${esc(x.cargo)}`:''].filter(Boolean).join(' · ');return `<div class="timeline-item"><div class="t-date">${fmtDate(x.created_at)}</div><div class="t-action">${esc(x.accion)}</div><div class="t-detail">${esc(x.detalle||'Sin detalle')}</div>${meta?`<div class="t-meta">${meta}</div>`:''}</div>`}).join('')+'</div>';
+  el('expHistoryModal').classList.add('show')
+}
+function closeExpHistory(){el('expHistoryModal').classList.remove('show')}
+
+const CSV_HEADERS=['EXPEDIENTE','EXTENSIÓN','R.D.','SERIE / TIPO','ESTADO ACTUAL','RESPONSABLE / UBICACIÓN ACTUAL','FECHA SOLICITUD','FECHA ENTREGA','FECHA DEVOLUCIÓN','FECHA ÚLTIMA REASIGNACIÓN','MODALIDAD','ÚLTIMO FOLIO','DIGITALIZADO','ENLACE DIGITAL','CARGO N°','EXPEDIENTE ACUMULADO / VINCULADO','OBSERVACIÓN'];
+function csvEscape(v){let s=String(v??'');return /[",\n;]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s}
+function downloadBlob(name,text){const b=new Blob(['\ufeff'+text],{type:'text/csv;charset=utf-8'}),u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download=name;a.click();URL.revokeObjectURL(u)}
+async function fetchAllRecords(){
+  let all=[],from=0;
+  while(true){const {data,error}=await sb.from('expedientes').select('*').order('updated_at',{ascending:false}).range(from,from+999);if(error)throw error;all.push(...data);if(data.length<1000)break;from+=1000}
+  return all
+}
+async function exportCSV(btn){
+  const old=btn.textContent;btn.disabled=true;btn.textContent='Exportando...';
+  try{const rows=await fetchAllRecords();const vals=rows.map(r=>[r.expediente,r.extension,r.rd,r.serie,r.estado,r.responsable,r.fecha_solicitud,r.fecha_entrega,r.fecha_devolucion,r.fecha_reasignacion,r.modalidad,r.ultimo_folio,r.digitalizado,r.enlace,r.cargo,r.acumulado,r.observacion]);downloadBlob('REGISTRO_EXPEDIENTES.csv',[CSV_HEADERS.join(';'),...vals.map(x=>x.map(csvEscape).join(';'))].join('\n'))}catch(e){serverError(e)}finally{btn.disabled=false;btn.textContent=old}
+}
+function parseCSV(text){let rows=[],row=[],cell='',q=false;for(let i=0;i<text.length;i++){let c=text[i];if(c==='"'){if(q&&text[i+1]==='"'){cell+='"';i++}else q=!q}else if((c===';'||c===',')&&!q){row.push(cell.trim());cell=''}else if((c==='\n'||c==='\r')&&!q){if(c==='\r'&&text[i+1]==='\n')i++;row.push(cell.trim());cell='';if(row.some(x=>x!==''))rows.push(row);row=[]}else cell+=c}if(cell||row.length){row.push(cell.trim());rows.push(row)}return rows}
+async function importCSV(ev){
+  const f=ev.target.files[0];if(!f)return;const rd=new FileReader();
+  rd.onload=async()=>{
+    try{
+      const rows=parseCSV(rd.result);if(rows.length<2){alert('El archivo no contiene registros.');return}
+      const header=rows[0].map(norm),idx=n=>header.indexOf(norm(n)),items=[];
+      for(const row of rows.slice(1)){
+        const val=n=>{const i=idx(n);return i>=0?(row[i]||'').trim():''};const expediente=expBase(val('EXPEDIENTE'));if(!/^\d+-[12]\d{3}$/.test(expediente))continue;
+        let responsable=val('RESPONSABLE / UBICACIÓN ACTUAL');const found=MASTER.find(x=>norm(x[0])===norm(responsable));if(found)responsable=found[0];
+        items.push({expediente,extension:val('EXTENSIÓN')||val('EXTENSION')||null,rd:val('R.D.')||null,serie:val('SERIE / TIPO')||'PAS',estado:val('ESTADO ACTUAL')||'CUSTODIA',responsable,fecha_solicitud:normalizeDate(val('FECHA SOLICITUD')),fecha_entrega:normalizeDate(val('FECHA ENTREGA')),fecha_devolucion:normalizeDate(val('FECHA DEVOLUCIÓN')),fecha_reasignacion:normalizeDate(val('FECHA ÚLTIMA REASIGNACIÓN')),modalidad:val('MODALIDAD')||'FÍSICO',ultimo_folio:val('ÚLTIMO FOLIO')||null,digitalizado:val('DIGITALIZADO')||'NO',enlace:val('ENLACE DIGITAL')||null,cargo:val('CARGO N°')||null,acumulado:val('EXPEDIENTE ACUMULADO / VINCULADO')||null,observacion:val('OBSERVACIÓN')||null})
+      }
+      let inserted=0;
+      for(let i=0;i<items.length;i+=200){const batch=items.slice(i,i+200);const {error}=await sb.from('expedientes').insert(batch);if(error)throw error;inserted+=batch.length}
+      alert(inserted+' registros importados.');ev.target.value='';await Promise.all([loadSummary(),loadPanel(),loadAll(),loadHistory()])
+    }catch(e){serverError(e)}
+  };
+  rd.readAsText(f,'UTF-8')
+}
+
+connect();
+</script>
+</body>
+</html>
