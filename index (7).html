@@ -1,0 +1,1380 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sistema de Control y Trazabilidad de Expedientes</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{--navy:#17365d;--blue:#1f4e78;--sky:#d9eaf7;--bg:#f4f7fb;--line:#d7e0ea;--text:#1f2937;--muted:#64748b;--ok:#e2f0d9;--warn:#fff2cc;--danger:#f4cccc;--white:#fff;--shadow:0 8px 24px rgba(23,54,93,.08)}
+*{box-sizing:border-box}body{margin:0;font-family:Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--text)}
+.app{display:grid;grid-template-columns:285px 1fr;min-height:100vh}
+.sidebar{background:var(--navy);color:white;padding:18px 14px;overflow:auto;position:sticky;top:0;height:100vh}
+.brand{font-weight:800;font-size:18px;line-height:1.25;padding:5px 8px 16px;border-bottom:1px solid rgba(255,255,255,.18);margin-bottom:14px}.brand small{display:block;font-size:11px;font-weight:500;opacity:.75;margin-top:5px}
+.side-title{font-size:11px;text-transform:uppercase;letter-spacing:.08em;opacity:.65;margin:16px 8px 7px}.side-item{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 10px;border-radius:8px;cursor:pointer;font-size:12px;margin:2px 0}.side-item:hover,.side-item.active{background:rgba(255,255,255,.14)}.badge{background:rgba(255,255,255,.17);padding:2px 7px;border-radius:999px;font-size:11px;min-width:24px;text-align:center}
+.main{padding:22px;min-width:0}.topbar{display:flex;justify-content:space-between;align-items:center;gap:15px;margin-bottom:16px;flex-wrap:wrap}.title h1{margin:0;font-size:24px;color:var(--navy)}.title p{margin:4px 0 0;color:var(--muted);font-size:13px}
+.actions{display:flex;gap:8px;flex-wrap:wrap}.btn{border:0;border-radius:8px;padding:9px 13px;font-weight:650;cursor:pointer;background:var(--blue);color:white}.btn.secondary{background:white;color:var(--navy);border:1px solid var(--line)}.btn.small{padding:6px 9px;font-size:12px}.btn:disabled{opacity:.55;cursor:not-allowed}
+.tabs{display:flex;gap:7px;margin-bottom:14px;flex-wrap:wrap}.tab{border:1px solid var(--line);background:white;color:var(--muted);padding:8px 13px;border-radius:8px;cursor:pointer;font-weight:650}.tab.active{background:var(--navy);color:white;border-color:var(--navy)}
+.card{background:white;border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow)}.filters{display:grid;grid-template-columns:minmax(260px,2fr) minmax(220px,1fr) auto;gap:12px;padding:14px;margin-bottom:14px}
+.field label{display:block;font-size:11px;font-weight:700;color:var(--muted);margin-bottom:5px;text-transform:uppercase}.field input,.field select,.field textarea{width:100%;border:1px solid var(--line);border-radius:7px;padding:9px 10px;font:inherit;background:white}.field textarea{min-height:72px;resize:vertical}
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(150px,1fr));gap:12px;margin-bottom:14px}.kpi{padding:14px 16px}.kpi .label{font-size:11px;text-transform:uppercase;font-weight:800;color:var(--muted)}.kpi .value{font-size:28px;font-weight:800;color:var(--navy);margin-top:4px}.kpi.warn .value{color:#a15c00}.kpi.danger .value{color:#a61b1b}
+.table-wrap{overflow:auto}.table-head{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid var(--line);gap:10px}.table-head strong{color:var(--navy)}table{border-collapse:collapse;width:100%;font-size:12px}th{position:sticky;top:0;background:var(--navy);color:white;text-align:left;padding:9px 8px;white-space:nowrap}td{padding:8px;border-bottom:1px solid #edf1f5;vertical-align:top}tr:hover td{background:#f8fbff}
+.pill{display:inline-block;padding:3px 7px;border-radius:999px;font-weight:700;font-size:10px;background:#e8eef6}.pill.loan{background:var(--warn)}.pill.returned{background:var(--ok)}.pill.alert{background:var(--danger);color:#8a1414}.empty{padding:30px;text-align:center;color:var(--muted)}
+.summary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:10px}.summary-card{padding:12px 14px;display:flex;justify-content:space-between;align-items:center;cursor:pointer}.summary-card h3{margin:0;font-size:13px}.summary-card small{display:block;color:var(--muted);margin-top:3px}.summary-num{font-size:22px;font-weight:800;color:var(--navy)}
+.modal{display:none;position:fixed;inset:0;background:rgba(15,23,42,.60);z-index:30;align-items:center;justify-content:center;padding:18px}.modal.show{display:flex}.modal-box{background:white;border-radius:14px;max-width:1050px;width:100%;max-height:92vh;overflow:auto;padding:18px;box-shadow:0 24px 80px rgba(0,0,0,.25)}.modal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.modal-head h2{margin:0;color:var(--navy)}.form-grid{display:grid;grid-template-columns:repeat(4,minmax(160px,1fr));gap:10px}.span2{grid-column:span 2}.span4{grid-column:span 4}.modal-foot{display:flex;justify-content:flex-end;gap:8px;margin-top:14px;border-top:1px solid var(--line);padding-top:13px}
+.note{font-size:12px;color:var(--muted);padding:10px 12px;background:#f8fafc;border:1px solid var(--line);border-radius:8px}.hidden{display:none!important}.toast{position:fixed;right:22px;bottom:22px;z-index:60;background:var(--navy);color:#fff;padding:11px 15px;border-radius:9px;box-shadow:0 8px 24px rgba(23,54,93,.22);font-size:12px;font-weight:700;opacity:0;transform:translateY(8px);pointer-events:none;transition:.18s}.toast.show{opacity:1;transform:translateY(0)}
+.statusbar{font-size:12px;color:var(--muted);padding:8px 12px;margin-bottom:12px;background:#fff;border:1px solid var(--line);border-radius:8px}.pager{display:flex;align-items:center;gap:7px}.pager span{font-size:12px;color:var(--muted)}
+.history-summary{display:grid;grid-template-columns:repeat(4,minmax(130px,1fr));gap:10px;margin-bottom:14px}.history-summary .mini{background:#f8fafc;border:1px solid var(--line);border-radius:9px;padding:10px 12px}.history-summary .mini span{display:block;font-size:10px;text-transform:uppercase;font-weight:800;color:var(--muted);margin-bottom:4px}.history-summary .mini b{color:var(--navy);font-size:14px}
+.timeline{position:relative;margin:12px 0 4px;padding-left:24px}.timeline:before{content:"";position:absolute;left:8px;top:4px;bottom:4px;width:2px;background:#cbd5e1}.timeline-item{position:relative;background:#fff;border:1px solid var(--line);border-radius:10px;padding:11px 13px;margin-bottom:10px}.timeline-item:before{content:"";position:absolute;left:-21px;top:16px;width:10px;height:10px;border-radius:50%;background:var(--blue);border:2px solid #fff;box-shadow:0 0 0 2px #cbd5e1}.timeline-item .t-date{font-size:11px;color:var(--muted);font-weight:700}.timeline-item .t-action{font-size:13px;color:var(--navy);font-weight:800;margin:3px 0}.timeline-item .t-detail{font-size:12px;color:var(--text);line-height:1.45}.timeline-item .t-meta{font-size:11px;color:var(--muted);margin-top:5px}
+.auth-box{max-width:470px}.auth-logo{font-size:22px;color:var(--navy);font-weight:850;margin-bottom:3px}.config-help{font-size:11px;color:var(--muted);line-height:1.5;margin-top:7px}
+@media(max-width:980px){.app{grid-template-columns:1fr}.sidebar{position:relative;height:auto}.main{padding:14px}.kpis{grid-template-columns:repeat(2,1fr)}.form-grid{grid-template-columns:repeat(2,1fr)}.span4{grid-column:span 2}}
+@media(max-width:600px){.filters{grid-template-columns:1fr}.kpis{grid-template-columns:1fr}.form-grid{grid-template-columns:1fr}.span2,.span4{grid-column:span 1}.history-summary{grid-template-columns:repeat(2,1fr)}}
+
+.sel-count{font-size:12px;font-weight:750;color:var(--navy);padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:#fff}
+.cargo-preview-note{font-size:12px;color:var(--muted);margin-top:7px;line-height:1.45}
+.cargo-list{max-height:260px;overflow:auto;border:1px solid var(--line);border-radius:9px;margin-top:10px}
+.cargo-list table{font-size:11px}.cargo-list th{position:sticky;top:0}
+
+.people-grid{display:grid;grid-template-columns:1.5fr 1fr .7fr auto;gap:8px;align-items:end}
+.people-table{margin-top:14px;border:1px solid var(--line);border-radius:9px;overflow:auto;max-height:420px}
+.people-table table{font-size:12px}.people-actions{display:flex;gap:5px;white-space:nowrap}
+.status-active{color:#1f6b35;font-weight:800}.status-inactive{color:#9b1c1c;font-weight:800}
+@media(max-width:760px){.people-grid{grid-template-columns:1fr}.people-actions{flex-wrap:wrap}}
+
+.record-mode{display:flex;gap:8px;margin:0 0 14px;flex-wrap:wrap}
+.record-mode .mode-btn{border:1px solid var(--line);background:#fff;color:var(--navy);padding:8px 12px;border-radius:8px;font-weight:750;cursor:pointer}
+.record-mode .mode-btn.active{background:var(--navy);color:#fff;border-color:var(--navy)}
+.batch-box{border:1px solid var(--line);border-radius:10px;padding:12px;margin-top:12px;background:#fbfdff}
+.batch-head{display:grid;grid-template-columns:1.2fr .65fr .85fr .7fr 1.2fr 44px;gap:6px;font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;margin-bottom:5px}
+.batch-row{display:grid;grid-template-columns:1.2fr .65fr .85fr .7fr 1.2fr 44px;gap:6px;margin-bottom:6px;align-items:center}
+.batch-row input{width:100%;border:1px solid var(--line);border-radius:7px;padding:8px;font:inherit;background:white}
+.batch-remove{height:36px;border:1px solid #efcaca;background:#fff;color:#9b1c1c;border-radius:7px;cursor:pointer;font-weight:800}
+.batch-summary{font-size:12px;color:var(--muted);margin-top:8px}
+.batch-cargo-info{font-size:12px;margin-top:7px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:#f8fafc;color:var(--muted)}
+@media(max-width:850px){
+  .batch-head{display:none}
+  .batch-row{grid-template-columns:1fr 1fr}
+  .batch-row input:nth-child(5){grid-column:span 2}
+  .batch-remove{width:44px}
+}
+
+
+.states-kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px}
+.state-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(245px,1fr));gap:10px;margin-bottom:14px}
+.state-card{padding:14px;cursor:pointer;transition:.15s ease;border:1px solid var(--line)}
+.state-card:hover{transform:translateY(-1px)}
+.state-card.selected{outline:2px solid var(--navy);outline-offset:-2px}
+.state-card .state-name{font-size:12px;font-weight:850;color:var(--navy);min-height:30px}
+.state-card .state-count{font-size:28px;font-weight:900;margin-top:5px}
+.state-card .state-meta{font-size:11px;color:var(--muted);margin-top:4px}
+.state-progress{height:6px;background:#e9eef5;border-radius:999px;overflow:hidden;margin-top:9px}
+.state-progress span{display:block;height:100%;background:var(--navy);border-radius:999px}
+.state-detail-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+@media(max-width:760px){.states-kpis{grid-template-columns:1fr}.state-grid{grid-template-columns:1fr}}
+
+</style>
+</head>
+<body>
+<div class="app">
+<aside class="sidebar">
+  <div class="brand">CONTROL DE EXPEDIENTES<small>Base de datos en línea · multiusuario</small></div>
+  <div class="side-item active" id="sideAll" onclick="setOwner('')"><span>TODOS</span><span class="badge" id="countAll">0</span></div>
+  <div class="side-title">Personal</div><div id="sidePersonal"></div>
+  <div class="side-title">Áreas / etapas / ubicaciones</div><div id="sideAreas"></div>
+</aside>
+<main class="main">
+  <div class="topbar">
+    <div class="title"><h1>Sistema de Control y Trazabilidad de Expedientes</h1><p>EXPEDIENTE = número + año en una sola celda · EXTENSIÓN opcional y visible</p></div>
+    <div class="actions">
+      <button class="btn" onclick="openRecordModal()">+ Nuevo expediente</button>
+      <button class="btn secondary" id="cargoBtn" onclick="openCargoModal()" disabled>🖨 Imprimir cargo</button>
+      <span class="sel-count" id="selectedCount">0 seleccionados</span>
+      <button class="btn secondary" onclick="document.getElementById('csvFile').click()">Importar CSV</button>
+      <input class="hidden" id="csvFile" type="file" accept=".csv,text/csv" onchange="importCSV(event)">
+      <button class="btn secondary" onclick="exportCSV(this)">Exportar registro</button>
+      <button class="btn secondary" onclick="openPeopleModal()">👥 Administrar personal</button>
+      <button class="btn secondary" onclick="openConfig()">Base de datos</button>
+      <button class="btn secondary" onclick="logout()">Cerrar sesión</button>
+    </div>
+  </div>
+  <div class="statusbar">Base: <b>Supabase / PostgreSQL</b> · Usuario: <b id="currentUser">—</b> · Los cambios son compartidos por todos los usuarios autorizados.</div>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="panel" onclick="switchTab('panel',this)">Panel por personal</button>
+    <button class="tab" data-tab="summary" onclick="switchTab('summary',this)">Resumen</button>
+    <button class="tab" data-tab="states" onclick="switchTab('states',this);loadStates()">Estados</button>
+    <button class="tab" data-tab="all" onclick="switchTab('all',this)">Registro maestro</button>
+    <button class="tab" data-tab="cargos" onclick="switchTab('cargos',this);loadCargos()">Cargos</button>
+    <button class="tab" data-tab="history" onclick="switchTab('history',this)">Historial</button>
+  </div>
+
+  <section id="tab-panel">
+    <div class="card filters">
+      <div class="field"><label>Buscar</label><input id="searchInput" placeholder="Expediente, extensión, R.D., cargo, observación..." oninput="debouncePanel()"></div>
+      <div class="field"><label>Responsable / ubicación</label><select id="ownerSelect" onchange="setOwner(this.value)"></select></div>
+      <div style="display:flex;align-items:flex-end"><button class="btn secondary" onclick="setOwner('')">Limpiar</button></div>
+    </div>
+    <div class="kpis">
+      <div class="card kpi"><div class="label">Total registros</div><div class="value" id="kTotal">0</div></div>
+      <div class="card kpi"><div class="label">Pendientes de devolución</div><div class="value" id="kPending">0</div></div>
+      <div class="card kpi warn"><div class="label">En préstamo</div><div class="value" id="kLoan">0</div></div>
+      <div class="card kpi danger"><div class="label">Alertas > 30 días</div><div class="value" id="kAlert">0</div></div>
+    </div>
+    <div class="card table-wrap">
+      <div class="table-head"><strong id="panelTitle">Todos los expedientes</strong><div class="pager"><button class="btn secondary small" onclick="changePage(-1)">Anterior</button><span id="pageInfo">1</span><button class="btn secondary small" onclick="changePage(1)">Siguiente</button></div></div>
+      <div id="panelTable"><div class="empty">Conectando...</div></div>
+    </div>
+  </section>
+
+  <section id="tab-summary" class="hidden"><div id="summaryGrid" class="summary-grid"></div></section>
+
+
+  <section id="tab-states" class="hidden">
+    <div class="states-kpis">
+      <div class="card kpi">
+        <div class="label">Total de estados</div>
+        <div class="value" id="statesTotalTypes">0</div>
+      </div>
+      <div class="card kpi">
+        <div class="label">Total de expedientes</div>
+        <div class="value" id="statesTotalRecords">0</div>
+      </div>
+      <div class="card kpi">
+        <div class="label">Estado con mayor cantidad</div>
+        <div class="value" id="statesTopCount">0</div>
+        <div class="note" id="statesTopName">—</div>
+      </div>
+    </div>
+
+    <div class="card filters">
+      <div class="field">
+        <label>Buscar estado</label>
+        <input id="stateSearch" placeholder="Ej.: EN PRÉSTAMO, CUSTODIA..." oninput="renderStates()">
+      </div>
+      <div class="note">
+        Se muestran todos los estados configurados y cualquier otro estado existente en la base de datos.
+      </div>
+      <div style="display:flex;align-items:flex-end">
+        <button class="btn secondary" onclick="clearStateSelection()">Ver todos</button>
+      </div>
+    </div>
+
+    <div id="stateGrid" class="state-grid">
+      <div class="empty">Cargando estados...</div>
+    </div>
+
+    <div class="card table-wrap">
+      <div class="table-head state-detail-head">
+        <strong id="stateDetailTitle">Seleccione un estado para ver sus expedientes</strong>
+        <span id="stateDetailCount">0</span>
+      </div>
+      <div id="stateDetailTable">
+        <div class="empty">Pulse “Ver expedientes” en uno de los estados.</div>
+      </div>
+    </div>
+  </section>
+
+  <section id="tab-all" class="hidden">
+    <div class="card filters"><div class="field"><label>Buscar en registro maestro</label><input id="allSearch" placeholder="Buscar cualquier dato..." oninput="debounceAll()"></div><div class="note">EXTENSIÓN siempre visible. Si no existe, se muestra “—”. No existe columna AÑO.</div><div></div></div>
+    <div class="card table-wrap"><div class="table-head"><strong>Registro maestro</strong><span id="allCount">0</span></div><div id="allTable"></div></div>
+  </section>
+
+
+  <section id="tab-cargos" class="hidden">
+    <div class="card filters">
+      <div class="field">
+        <label>Buscar cargos</label>
+        <input id="cargoSearch" placeholder="Cargo, asunto o solicitante..." oninput="debounceCargos()">
+      </div>
+      <div class="note">Aquí se muestran los asuntos registrados para cada cargo.</div>
+      <div></div>
+    </div>
+    <div class="card table-wrap">
+      <div class="table-head"><strong>Relación de cargos</strong><span id="cargosCount">0</span></div>
+      <div id="cargosTable"><div class="empty">Seleccione la pestaña Cargos para consultar.</div></div>
+    </div>
+  </section>
+
+  <section id="tab-history" class="hidden">
+    <div class="card filters"><div class="field"><label>Buscar historial</label><input id="historySearch" placeholder="Expediente, extensión, acción, responsable..." oninput="debounceHistory()"></div><div class="note">El historial se genera en la base de datos; los usuarios no pueden editarlo ni eliminarlo desde esta aplicación.</div><div></div></div>
+    <div class="card table-wrap"><div class="table-head"><strong>Últimos movimientos</strong><span id="historyCount">0</span></div><div id="historyTable"></div></div>
+  </section>
+</main>
+</div>
+
+
+
+<datalist id="listaAsuntosCargo">
+  <option value="ACCESO A LA INFORMACIÓN"></option>
+  <option value="ANALISIS Y EVALUACIÓN DEL MEMORANDO DE CONCLUSIÓN DEL PROCESO CONTENCIOSO ADMINISTRATIVO, REMITIDO POR LA PROCURADURÍA PÚBLICA (PP)"></option>
+  <option value="ANEXADO DE CÉDULAS DE NOTIFICACIÓN"></option>
+  <option value="ANEXADO DE DOCUMENTOS"></option>
+  <option value="ATENCIÓN A LA DIRECCIÓN DE EXTRACCIÓN PARA CONSUMO HUMANO DIRECTO E INDIRECTO (DECHDI)"></option>
+  <option value="ATENCIÓN A LA DIRECCIÓN DE VIGILANCIA Y CONTROL (DVC) - RD ARCHIVAMIENTO"></option>
+  <option value="ATENCIÓN A LA OFICINA DE CONTROL INTERNO (OCI)"></option>
+  <option value="ATENCIÓN A LA OFICINA GENERAL DE ADMINISTRACIÓN (OGA)"></option>
+  <option value="ATENCIÓN A LA PROCURADURÍA PÚBLICA"></option>
+  <option value="ATENCIÓN AL MINISTERIO PÚBLICO (FISCALÍA)"></option>
+  <option value="ATENCIÓN DE ESCRITOS"></option>
+  <option value="ATENCIÓN DE ESCRITOS REMITIDOS POR EL CONSEJO DE APELACIÓN DE SANCIONES CALIDAD DE PRÉSTAMO (CONAS)"></option>
+  <option value="ATENCIÓN DE QUEJAS"></option>
+  <option value="CADUCIDAD"></option>
+  <option value="COMUNICACIÓN DE LAS SANCIONES A LA DIRECCIÓN GENERAL DE PESCA PARA CONSUMO HUMANO DIRECTO E INDIRECTO (DGPCHDI)"></option>
+  <option value="DESLINDE DE RESPONSABILIDAD"></option>
+  <option value="ELEVACIÓN DEL EXPEDIENTE AL CONSEJO DE APELACIÓN DE SANCIONES (CONAS)"></option>
+  <option value="ENMIENDA"></option>
+  <option value="EVALUACIÓN DE OFICIO"></option>
+  <option value="EVALUACIÓN DE PAGOS POR CONCEPTO DE DECOMISOS"></option>
+  <option value="EVALUACIÓN DEL EXPEDIENTE QUE RETORNA DEL CONSEJO DE APELACIÓN DE SANCIONES (CONAS)"></option>
+  <option value="INTERES PARTICULAR"></option>
+  <option value="LECTURA EN SALA (USUARIOS INTERNOS)"></option>
+  <option value="LECTURA EXPEDIENTE (USUARIOS EXTERNOS)"></option>
+  <option value="NULIDAD DE OFICIO"></option>
+  <option value="PERDIDA DE BENEFICIO"></option>
+  <option value="PETICIÓN ADMINISTRATIVA"></option>
+  <option value="RECOMENDACIÓN DE INICIO"></option>
+  <option value="RECONSIDERACIÓN"></option>
+  <option value="REINCIDENCIAS DEL PAS"></option>
+  <option value="REVISIÓN"></option>
+  <option value="REVISIÓN DEL PROCEDIMIENTO DE EJECUCIÓN COACTIVA (PEC) - OEC"></option>
+  <option value="SECRETARIA TÉCNICA DE LOS ORGANOS INSTRUCTORES (STOI)"></option>
+  <option value="SOLICITUD DE BENEFICIOS"></option>
+  <option value="TRAMITACIÓN DEL PAS (IFIS)"></option>
+  <option value="USO DE LA PALABRA O AUDIENCIA"></option>
+</datalist>
+
+<datalist id="listaAtiendeRequerimiento">
+  <option value="ARMANDO GARCIA"></option>
+  <option value="JAIME GRADOS"></option>
+  <option value="JHUVER RIMAC"></option>
+  <option value="ALAN VILA"></option>
+</datalist>
+
+
+<!-- Administración de personal, áreas y ubicaciones -->
+<div class="modal" id="peopleModal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <div>
+        <h2>Administrar personal</h2>
+        <div style="font-size:12px;color:#64748b;margin-top:3px">Agrega, edita, activa o inactiva nombres sin modificar el código.</div>
+      </div>
+      <button class="btn secondary small" onclick="closePeopleModal()">Cerrar</button>
+    </div>
+    <div class="people-grid">
+      <div class="field"><label>Nombre *</label><input id="pNombre" placeholder="Ej.: CARLOS PÉREZ"></div>
+      <div class="field"><label>Tipo *</label><select id="pTipo"><option>PERSONAL</option><option>ÁREA / UBICACIÓN</option><option>ETAPA / UBICACIÓN</option><option>UBICACIÓN</option></select></div>
+      <div class="field"><label>Estado</label><select id="pActivo"><option value="true">ACTIVO</option><option value="false">INACTIVO</option></select></div>
+      <button class="btn" onclick="savePerson()">+ Agregar</button>
+    </div>
+    <div id="peopleStatus" style="font-size:12px;color:#64748b;margin-top:9px"></div>
+    <div class="people-table"><table><thead><tr><th>Nombre</th><th>Tipo</th><th>Estado</th><th></th></tr></thead><tbody id="peopleBody"></tbody></table></div>
+  </div>
+</div>
+
+<!-- Configuración -->
+<div class="modal" id="configModal">
+  <div class="modal-box auth-box">
+    <div class="auth-logo">Conectar base de datos</div>
+    <div class="note" style="margin:10px 0">Ingresa la URL del proyecto Supabase y la <b>Publishable key</b>. No uses una Secret key.</div>
+    <div class="field"><label>Supabase URL</label><input id="cfgUrl" placeholder="https://xxxx.supabase.co"></div>
+    <div class="field" style="margin-top:10px"><label>Publishable key</label><textarea id="cfgKey" rows="4" placeholder="sb_publishable_..."></textarea></div>
+    <div class="config-help">La configuración se guarda únicamente en este navegador. Los datos de expedientes permanecen en PostgreSQL.</div>
+    <div class="modal-foot"><button class="btn" onclick="saveConfig()">Guardar y conectar</button></div>
+  </div>
+</div>
+
+<!-- Inicio de sesión -->
+<div class="modal" id="loginModal">
+  <div class="modal-box auth-box">
+    <div class="auth-logo">Iniciar sesión</div>
+    <div class="note" style="margin:10px 0">Solo usuarios creados/autorizados en Supabase Auth pueden acceder a los expedientes.</div>
+    <form onsubmit="login(event)">
+      <div class="field"><label>Correo</label><input id="loginEmail" type="email" required></div>
+      <div class="field" style="margin-top:10px"><label>Contraseña</label><input id="loginPassword" type="password" required></div>
+      <div id="loginStatus" style="font-size:12px;color:#a61b1b;margin-top:8px"></div>
+      <div class="modal-foot"><button class="btn" type="submit">Ingresar</button></div>
+    </form>
+  </div>
+</div>
+
+<!-- Formulario -->
+<div class="modal" id="recordModal">
+  <div class="modal-box">
+    <div class="modal-head"><h2 id="modalTitle">Nuevo expediente</h2><button class="btn secondary small" onclick="closeRecordModal()">Cerrar</button></div>
+    <div class="record-mode" id="recordModeBar">
+      <button type="button" class="mode-btn active" id="modeSingleBtn" onclick="setRecordMode('single')">Un expediente</button>
+      <button type="button" class="mode-btn" id="modeBatchBtn" onclick="setRecordMode('batch')">Varios del mismo cargo</button>
+    </div>
+
+    <form id="recordForm" onsubmit="saveRecord(event)">
+      <input type="hidden" id="fId">
+      <div class="form-grid" id="singleRecordFields">
+        <div class="field"><label>Expediente *</label><input id="fExpediente" required placeholder="Ej.: 0012-2025"></div>
+        <div class="field"><label>Extensión (opcional)</label><input id="fExtension" placeholder="Ej.: 01 o A"></div>
+        <div class="field"><label>R.D.</label><input id="fRd"></div>
+        <div class="field"><label>Serie / tipo</label><select id="fSerie"><option>PAS</option><option>RESOLUCIÓN DIRECTORAL</option><option>OTRO</option></select></div>
+        <div class="field"><label>Estado actual</label><select id="fEstado"></select></div>
+        <div class="field span2"><label>Responsable / ubicación actual *</label><select id="fResponsable" required></select></div>
+        <div class="field"><label>Modalidad</label><select id="fModalidad"><option>FÍSICO</option><option>COPIA DIGITAL</option></select></div>
+        <div class="field"><label>Fecha solicitud</label><input type="date" id="fSolicitud"></div>
+        <div class="field"><label>Fecha entrega</label><input type="date" id="fEntrega"></div>
+        <div class="field"><label>Fecha devolución</label><input type="date" id="fDevolucion"></div>
+        <div class="field"><label>Última reasignación</label><input type="date" id="fReasignacion"></div>
+        <div class="field"><label>Último folio</label><input id="fFolio"></div>
+        <div class="field"><label>Digitalizado</label><select id="fDigitalizado"><option>NO</option><option>SÍ</option><option>PARCIAL</option></select></div>
+        <div class="field span2"><label>Enlace digital</label><input id="fEnlace" placeholder="https://..."></div>
+        <div class="field"><label>Cargo N°</label><input id="fCargo"></div>
+        <div class="field span2"><label>Expediente acumulado / vinculado</label><input id="fAcumulado"></div>
+        <div class="field span4"><label>Observación</label><textarea id="fObservacion"></textarea></div>
+
+      </div>
+
+      <div id="batchRecordFields" class="hidden">
+        <div class="form-grid">
+          <div class="field">
+            <label>Cargo N°</label>
+            <input id="bCargo" value="AUTOMÁTICO" readonly title="Se asignará automáticamente con formato 0001-AÑO, por ejemplo 0152-2026">
+          </div>
+          <div class="field span2">
+            <label>Responsable / ubicación actual *</label>
+            <select id="bResponsable"></select>
+          </div>
+          <div class="field">
+            <label>Serie / tipo</label>
+            <select id="bSerie"><option>PAS</option><option>RESOLUCIÓN DIRECTORAL</option><option>OTRO</option></select>
+          </div>
+
+          <div class="field">
+            <label>Estado actual</label>
+            <select id="bEstado"></select>
+          </div>
+          <div class="field">
+            <label>Modalidad</label>
+            <select id="bModalidad"><option>FÍSICO</option><option>COPIA DIGITAL</option></select>
+          </div>
+          <div class="field">
+            <label>Fecha solicitud</label>
+            <input type="date" id="bSolicitud">
+          </div>
+          <div class="field">
+            <label>Fecha entrega</label>
+            <input type="date" id="bEntrega">
+          </div>
+
+          <div class="field span4">
+            <label>Asunto del cargo *</label>
+            <input id="bAsunto" list="listaAsuntosCargo" placeholder="Seleccione o escriba el asunto">
+          </div>
+
+          <div class="field span2">
+            <label>Atiende el requerimiento *</label>
+            <input id="bAtiende" list="listaAtiendeRequerimiento" placeholder="Seleccione quién atiende">
+          </div>
+
+          <div class="field span4">
+            <label>Observación general</label>
+            <textarea id="bObservacion" placeholder="Esta observación se aplicará a todos los expedientes, si corresponde"></textarea>
+          </div>
+        </div>
+
+        <div id="batchCargoInfo" class="batch-cargo-info">
+          Ingrese el número de cargo. Todos los expedientes registrados aquí quedarán vinculados al mismo cargo.
+        </div>
+
+        <div class="batch-box">
+          <div class="batch-head">
+            <div>Expediente *</div><div>Extensión</div><div>R.D.</div><div>Último folio</div><div>Observación individual</div><div></div>
+          </div>
+          <div id="batchRows"></div>
+          <button type="button" class="btn secondary small" onclick="addBatchRow()">+ Agregar expediente</button>
+          <div class="batch-summary" id="batchSummary">0 expedientes preparados</div>
+        </div>
+      </div>
+
+      <div class="modal-foot"><span id="saveStatus" style="margin-right:auto;font-size:12px;color:#64748b"></span><button type="button" class="btn secondary" onclick="closeRecordModal()">Cancelar</button><button class="btn" id="recordSaveBtn" type="submit">Guardar expediente</button></div>
+    </form>
+  </div>
+</div>
+
+
+<!-- Generación e impresión de cargo -->
+<div class="modal" id="cargoModal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <div>
+        <h2>Generar cargo de préstamo</h2>
+        <div style="font-size:12px;color:#64748b;margin-top:3px">El cargo incluirá todos los expedientes seleccionados.</div>
+      </div>
+      <button class="btn secondary small" onclick="closeCargoModal()">Cerrar</button>
+    </div>
+    <div class="form-grid">
+      <div class="field"><label>Cargo N°</label><input id="cNumero" value="AUTOMÁTICO" readonly title="Supabase asigna automáticamente el formato 0001-AÑO, por ejemplo 0152-2026"></div>
+      <div class="field span2">
+  <label>Solicitante *</label>
+  <input id="cSolicitante" placeholder="Nombre del solicitante"
+         title="Se carga automáticamente, pero puede corregirse antes de imprimir">
+</div>
+      <div class="field"><label>Fecha</label><input id="cFecha" type="date"></div>
+      <div class="field span4"><label>Asunto *</label><input id="cAsunto" list="listaAsuntosCargo" placeholder="Seleccione o escriba el asunto"></div>
+      <div class="field span2">
+        <label>Atiende el requerimiento *</label>
+        <input id="cAtiende" list="listaAtiendeRequerimiento" placeholder="Seleccione quién atiende">
+      </div>
+      <div class="field span4"><label>Observación general</label><textarea id="cObservacion" placeholder="Observación del cargo, de corresponder"></textarea></div>
+    </div>
+    <div class="cargo-preview-note">Al generar el cargo, el número se registrará también en los expedientes seleccionados y quedará reflejado en su historial.</div>
+    <div class="cargo-list" id="cargoSelectedList"></div>
+    <div class="modal-foot">
+      <span id="cargoStatus" style="margin-right:auto;font-size:12px;color:#64748b"></span>
+      <button class="btn secondary" onclick="closeCargoModal()">Cancelar</button>
+      <button class="btn" id="cargoPrintBtn" onclick="saveAndPrintCargo()">Guardar e imprimir</button>
+    </div>
+  </div>
+</div>
+
+<!-- Historial individual -->
+<div class="modal" id="expHistoryModal">
+  <div class="modal-box">
+    <div class="modal-head"><div><h2 id="expHistoryTitle">Historial del expediente</h2><div style="font-size:12px;color:#64748b;margin-top:3px">Trazabilidad almacenada en la base de datos</div></div><button class="btn secondary small" onclick="closeExpHistory()">Cerrar</button></div>
+    <div class="history-summary">
+      <div class="mini"><span>Expediente</span><b id="hExp">—</b></div>
+      <div class="mini"><span>Extensión</span><b id="hExt">—</b></div>
+      <div class="mini"><span>Responsable actual</span><b id="hResp">—</b></div>
+      <div class="mini"><span>Estado actual</span><b id="hEstado">—</b></div>
+    </div>
+    <div id="expTimeline"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast">Guardado correctamente</div>
+
+<script>
+const MASTER=[["MARCELA ALONZO", "PERSONAL"], ["ABRAHAN DAMAS", "PERSONAL"], ["ALMENDRA YALE", "PERSONAL"], ["ALVARO BOJORQUEZ", "PERSONAL"], ["ARCHIVO CENTRAL", "ÁREA / UBICACIÓN"], ["BRANDY MEZA", "PERSONAL"], ["CRISTINA ALZAMORA", "PERSONAL"], ["NINO CCALAHUILLY", "PERSONAL"], ["DANIELA FUENTES", "PERSONAL"], ["DSF-PA", "ÁREA / UBICACIÓN"], ["DVC", "ÁREA / UBICACIÓN"], ["ELEVADO AL CONAS", "ETAPA / UBICACIÓN"], ["GENARO LIZA", "PERSONAL"], ["HANS HUARACA", "PERSONAL"], ["HENRY AQUINO", "PERSONAL"], ["IGNACIO INFANTAS", "PERSONAL"], ["INSTRUCCIÓN", "ETAPA / UBICACIÓN"], ["JAIME GRADOS", "PERSONAL"], ["ALEXANDER ÑAUPARI", "PERSONAL"], ["JHUVER RIMAC", "PERSONAL"], ["JOAN VALDIVIESO", "PERSONAL"], ["JOHNNY ZAVALA", "PERSONAL"], ["JUAN GUTIERREZ", "PERSONAL"], ["LISSETH PRADO", "PERSONAL"], ["LOANY AQUINO", "PERSONAL"], ["MELISA LOPEZ", "PERSONAL"], ["MILAGRO SALINAS", "PERSONAL"], ["MILTON DIAZ", "PERSONAL"], ["MIRELLA ALEMAN", "PERSONAL"], ["MIRTHA DOMINGUEZ", "PERSONAL"], ["NOTIFICACIONES", "ÁREA / UBICACIÓN"], ["PAOLA ADANAQUE", "PERSONAL"], ["PAOLA MORENO", "PERSONAL"], ["PATRICIA MORALES", "PERSONAL"], ["PIERRE ARANDA", "PERSONAL"], ["RENEE BENITES", "PERSONAL"], ["RETORNO CONAS", "ETAPA / UBICACIÓN"], ["REVISAR OBSERVACIÓN", "ETAPA / UBICACIÓN"], ["RONALD HUARCAYA", "PERSONAL"], ["SAN LUIS", "UBICACIÓN"], ["SHEYLA GUZMAN", "PERSONAL"], ["STYVEN MEDINA", "PERSONAL"], ["VICTOR GARCIA", "PERSONAL"], ["ERICK MANTARI", "PERSONAL"], ["VICTORIA GAMBOA", "PERSONAL"], ["YRMA HUARINGA", "PERSONAL"], ["RUBYSOL RUIZ", "PERSONAL"], ["RAMIRO ARRIARAN", "PERSONAL"], ["FRANK TORRES", "PERSONAL"], ["ALBERT COLAN", "PERSONAL"], ["MARIA LAGOS", "PERSONAL"], ["IVETT SOLIS", "PERSONAL"], ["MINNEETH PACHERRES", "PERSONAL"], ["KARINA CARO", "PERSONAL"], ["GABRIELA AIQUIPA", "PERSONAL"], ["JUAN CARLOS CIFUENTES", "PERSONAL"], ["CESAR CHUQUIZUTA", "PERSONAL"], ["GISELL ESPINOZA", "PERSONAL"], ["GUSTAVO MARTIN RIOS - CASSTELL", "PERSONAL"], ["HILDA LEVANO", "PERSONAL"], ["JUAN HUAMAN", "PERSONAL"]];
+const ASUNTOS_PREDETERMINADOS=["ACCESO A LA INFORMACIÓN", "ANALISIS Y EVALUACIÓN DEL MEMORANDO DE CONCLUSIÓN DEL PROCESO CONTENCIOSO ADMINISTRATIVO, REMITIDO POR LA PROCURADURÍA PÚBLICA (PP)", "ANEXADO DE CÉDULAS DE NOTIFICACIÓN", "ANEXADO DE DOCUMENTOS", "ATENCIÓN A LA DIRECCIÓN DE EXTRACCIÓN PARA CONSUMO HUMANO DIRECTO E INDIRECTO (DECHDI)", "ATENCIÓN A LA DIRECCIÓN DE VIGILANCIA Y CONTROL (DVC) - RD ARCHIVAMIENTO", "ATENCIÓN A LA OFICINA DE CONTROL INTERNO (OCI)", "ATENCIÓN A LA OFICINA GENERAL DE ADMINISTRACIÓN (OGA)", "ATENCIÓN A LA PROCURADURÍA PÚBLICA", "ATENCIÓN AL MINISTERIO PÚBLICO (FISCALÍA)", "ATENCIÓN DE ESCRITOS", "ATENCIÓN DE ESCRITOS REMITIDOS POR EL CONSEJO DE APELACIÓN DE SANCIONES CALIDAD DE PRÉSTAMO (CONAS)", "ATENCIÓN DE QUEJAS", "CADUCIDAD", "COMUNICACIÓN DE LAS SANCIONES A LA DIRECCIÓN GENERAL DE PESCA PARA CONSUMO HUMANO DIRECTO E INDIRECTO (DGPCHDI)", "DESLINDE DE RESPONSABILIDAD", "ELEVACIÓN DEL EXPEDIENTE AL CONSEJO DE APELACIÓN DE SANCIONES (CONAS)", "ENMIENDA", "EVALUACIÓN DE OFICIO", "EVALUACIÓN DE PAGOS POR CONCEPTO DE DECOMISOS", "EVALUACIÓN DEL EXPEDIENTE QUE RETORNA DEL CONSEJO DE APELACIÓN DE SANCIONES (CONAS)", "INTERES PARTICULAR", "LECTURA EN SALA (USUARIOS INTERNOS)", "LECTURA EXPEDIENTE (USUARIOS EXTERNOS)", "NULIDAD DE OFICIO", "PERDIDA DE BENEFICIO", "PETICIÓN ADMINISTRATIVA", "RECOMENDACIÓN DE INICIO", "RECONSIDERACIÓN", "REINCIDENCIAS DEL PAS", "REVISIÓN", "REVISIÓN DEL PROCEDIMIENTO DE EJECUCIÓN COACTIVA (PEC) - OEC", "SECRETARIA TÉCNICA DE LOS ORGANOS INSTRUCTORES (STOI)", "SOLICITUD DE BENEFICIOS", "TRAMITACIÓN DEL PAS (IFIS)", "USO DE LA PALABRA O AUDIENCIA"];
+const STATUSES=['CUSTODIA','EN PRÉSTAMO','DEVUELTO','REASIGNADO','EN TRÁMITE','PENDIENTE DE ORGANIZAR','TRANSFERIDO','EN NOTIFICACIONES'];
+const PAGE_SIZE=200;
+let sb=null, session=null, summaryRows=[], panelRows=[], allRows=[], historyRows=[], cargosRows=[], stateRows=[], stateDetailRows=[];
+let catalogo=MASTER.map(([nombre,tipo],i)=>({id:'fallback-'+i,nombre,tipo,activo:true}));
+let selectedIds=new Set(), cargoRows=[];
+let recordMode='single', batchCargoHeader=null;
+let selectedOwner='', selectedState='', page=0, panelCount=0, allCountValue=0, stateDetailCount=0, panelTimer=null, allTimer=null, historyTimer=null, cargosTimer=null;
+
+function el(id){return document.getElementById(id)}
+function norm(v){return String(v??'').trim().toUpperCase()}
+function esc(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
+function expBase(v){let s=String(v??'').trim().replace(/\s+/g,'');const m=s.match(/^(\d+)[-\/]([12]\d{3})$/);if(m){let n=m[1];if(n.length<4)n=n.padStart(4,'0');return n+'-'+m[2]}return s.replace('/','-')}
+function expKey(r){return r.extension?expBase(r.expediente)+'-'+r.extension:expBase(r.expediente)}
+function fmtDate(v){if(!v)return '';const s=String(v).slice(0,10);return s.slice(8,10)+'/'+s.slice(5,7)+'/'+s.slice(0,4)}
+function businessDays(start,end){
+  if(!start)return 0;
+  let a=new Date(String(start).slice(0,10)+'T00:00:00');
+  let b=end?new Date(String(end).slice(0,10)+'T00:00:00'):new Date();
+  if(isNaN(a)||isNaN(b)||b<a)return 0;
+  let n=0,d=new Date(a);
+  while(d<=b){const w=d.getDay();if(w!==0&&w!==6)n++;d.setDate(d.getDate()+1)}
+  return n;
+}
+function rowDays(r){return businessDays(r.fecha_entrega,r.fecha_devolucion)}
+function rowAlert(r){return !r.fecha_devolucion&&r.estado!=='DEVUELTO'&&r.modalidad!=='COPIA DIGITAL'&&r.fecha_entrega&&rowDays(r)>30}
+function normalizeDate(v){
+  const s=String(v||'').trim();
+  if(!s)return null;
+  if(/^\d{4}-\d{2}-\d{2}$/.test(s))return s;
+  const m=s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if(m)return `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+  return s;
+}
+function typeOf(n){const x=catalogo.find(r=>norm(r.nombre)===norm(n));return x?x.tipo:''}
+function showToast(t){const x=el('toast');x.textContent=t;x.classList.add('show');clearTimeout(window.__toast);window.__toast=setTimeout(()=>x.classList.remove('show'),1800)}
+function cleanSearch(q){return String(q||'').replace(/[,%()]/g,' ').trim()}
+function serverError(err){console.error(err);alert(err?.message||String(err||'Error inesperado'))}
+
+function config(){try{return JSON.parse(localStorage.getItem('ds_pa_supabase_config')||'null')}catch{return null}}
+function openConfig(){const c=config()||{};el('cfgUrl').value=c.url||'';el('cfgKey').value=c.key||'';el('configModal').classList.add('show')}
+async function saveConfig(){
+  const url=el('cfgUrl').value.trim(),key=el('cfgKey').value.trim();
+  if(!url||!key){alert('Complete URL y Publishable key.');return}
+  localStorage.setItem('ds_pa_supabase_config',JSON.stringify({url,key}));
+  el('configModal').classList.remove('show');
+  await connect();
+}
+async function connect(){
+  const c=config();
+  if(!c){openConfig();return}
+  try{
+    sb=window.supabase.createClient(c.url,c.key,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
+    const {data:{session:s}}=await sb.auth.getSession();
+    session=s;
+    sb.auth.onAuthStateChange((_event,sess)=>{session=sess;if(sess){afterLogin()}else{el('loginModal').classList.add('show')}});
+    if(session)await afterLogin();else el('loginModal').classList.add('show');
+  }catch(err){serverError(err);openConfig()}
+}
+async function login(e){
+  e.preventDefault();el('loginStatus').textContent='Ingresando...';
+  const {data,error}=await sb.auth.signInWithPassword({email:el('loginEmail').value.trim(),password:el('loginPassword').value});
+  if(error){el('loginStatus').textContent=error.message;return}
+  session=data.session;el('loginStatus').textContent='';el('loginModal').classList.remove('show');await afterLogin()
+}
+async function logout(){if(sb)await sb.auth.signOut();session=null;location.reload()}
+async function afterLogin(){
+  if(!session)return;
+  el('loginModal').classList.remove('show');
+  el('currentUser').textContent=session.user.email||session.user.id;
+  await loadCatalogo();
+  fillSelects();
+  updateSelectionUI();
+  await Promise.all([loadSummary(),loadPanel(),loadAll(),loadStates(),loadCargos(),loadHistory()]);
+}
+function fillSelects(){
+  const activos=catalogo.filter(x=>x.activo!==false);
+  el('ownerSelect').innerHTML='<option value="">TODOS</option>'+activos.map(x=>`<option>${esc(x.nombre)}</option>`).join('');
+  el('fResponsable').innerHTML=activos.map(x=>`<option>${esc(x.nombre)}</option>`).join('');
+  el('fEstado').innerHTML=STATUSES.map(x=>`<option>${esc(x)}</option>`).join('');
+
+  if(el('bResponsable')) el('bResponsable').innerHTML=activos.map(x=>`<option>${esc(x.nombre)}</option>`).join('');
+  if(el('bEstado')) el('bEstado').innerHTML=STATUSES.map(x=>`<option>${esc(x)}</option>`).join('');
+}
+
+
+async function loadCatalogo(){
+  if(!sb||!session)return;
+  const {data,error}=await sb.from('catalogo_responsables').select('*').order('tipo').order('nombre');
+  if(error){
+    console.warn('catalogo_responsables:',error.message);
+    catalogo=MASTER.map(([nombre,tipo],i)=>({id:'fallback-'+i,nombre,tipo,activo:true}));
+    return;
+  }
+  catalogo=(data||[]).map(x=>({id:x.id,nombre:x.nombre,tipo:x.tipo,activo:x.activo}));
+}
+async function openPeopleModal(){
+  if(!sb||!session){alert('Debe iniciar sesión.');return}
+  el('pNombre').value='';el('pTipo').value='PERSONAL';el('pActivo').value='true';
+  el('peopleModal').classList.add('show');el('peopleStatus').textContent='Cargando...';
+  await loadCatalogo();renderPeople();el('peopleStatus').textContent='';
+}
+function closePeopleModal(){el('peopleModal').classList.remove('show')}
+function renderPeople(){
+  if(!catalogo.length){el('peopleBody').innerHTML='<tr><td colspan="4" class="empty">No hay registros.</td></tr>';return}
+  el('peopleBody').innerHTML=catalogo.slice().sort((a,b)=>a.tipo.localeCompare(b.tipo)||a.nombre.localeCompare(b.nombre)).map(x=>`<tr>
+    <td><b>${esc(x.nombre)}</b></td><td>${esc(x.tipo)}</td>
+    <td class="${x.activo?'status-active':'status-inactive'}">${x.activo?'ACTIVO':'INACTIVO'}</td>
+    <td><div class="people-actions"><button class="btn secondary small" onclick="editPerson('${x.id}')">Editar</button><button class="btn secondary small" onclick="togglePerson('${x.id}',${x.activo?'false':'true'})">${x.activo?'Inactivar':'Activar'}</button></div></td>
+  </tr>`).join('');
+}
+async function savePerson(){
+  const nombre=el('pNombre').value.trim().toUpperCase(),tipo=el('pTipo').value,activo=el('pActivo').value==='true';
+  if(!nombre){el('peopleStatus').textContent='Ingrese el nombre.';el('pNombre').focus();return}
+  el('peopleStatus').textContent='Guardando...';
+  const {error}=await sb.from('catalogo_responsables').insert({nombre,tipo,activo});
+  if(error){el('peopleStatus').textContent=String(error.message||'Error al guardar');return}
+  el('pNombre').value='';await refreshCatalogoUI();el('peopleStatus').textContent='Nombre agregado correctamente.';
+}
+async function editPerson(id){
+  const x=catalogo.find(p=>String(p.id)===String(id));if(!x)return;
+  const nuevo=prompt('Editar nombre:',x.nombre);if(nuevo===null)return;
+  const nombre=nuevo.trim().toUpperCase();if(!nombre){alert('El nombre no puede quedar vacío.');return}
+  const tipo=prompt('Tipo: PERSONAL / ÁREA / UBICACIÓN / ETAPA / UBICACIÓN',x.tipo);if(tipo===null)return;
+  const tipoNorm=tipo.trim().toUpperCase(),permitidos=['PERSONAL','ÁREA / UBICACIÓN','ETAPA / UBICACIÓN','UBICACIÓN'];
+  if(!permitidos.includes(tipoNorm)){alert('Tipo no válido.');return}
+  const {error}=await sb.from('catalogo_responsables').update({nombre,tipo:tipoNorm}).eq('id',id);
+  if(error){alert(error.message);return}await refreshCatalogoUI();showToast('Registro actualizado');
+}
+async function togglePerson(id,activo){
+  const {error}=await sb.from('catalogo_responsables').update({activo}).eq('id',id);
+  if(error){alert(error.message);return}await refreshCatalogoUI();showToast(activo?'Registro activado':'Registro inactivado');
+}
+async function refreshCatalogoUI(){
+  await loadCatalogo();fillSelects();renderSidebar();renderSummary();renderPeople();
+  if(selectedOwner&&!catalogo.some(x=>x.nombre===selectedOwner&&x.activo)){selectedOwner='';el('ownerSelect').value='';page=0;await loadPanel()}
+}
+
+async function loadSummary(){
+  const {data,error}=await sb.rpc('resumen_responsables');
+  if(error){serverError(error);return}
+  summaryRows=data||[];
+  renderSidebar();renderSummary();renderKpis()
+}
+function summaryFor(name){
+  if(!name){
+    return summaryRows.reduce((a,x)=>({total:a.total+Number(x.total||0),pendientes:a.pendientes+Number(x.pendientes||0),en_prestamo:a.en_prestamo+Number(x.en_prestamo||0),alertas:a.alertas+Number(x.alertas||0)}),{total:0,pendientes:0,en_prestamo:0,alertas:0})
+  }
+  const x=summaryRows.find(s=>s.responsable===name);
+  return x?{total:Number(x.total||0),pendientes:Number(x.pendientes||0),en_prestamo:Number(x.en_prestamo||0),alertas:Number(x.alertas||0)}:{total:0,pendientes:0,en_prestamo:0,alertas:0}
+}
+function renderKpis(){const s=summaryFor(selectedOwner);el('kTotal').textContent=s.total;el('kPending').textContent=s.pendientes;el('kLoan').textContent=s.en_prestamo;el('kAlert').textContent=s.alertas}
+function renderSidebar(){
+  const activos=catalogo.filter(x=>x.activo!==false);
+  const map=new Map(summaryRows.map(x=>[x.responsable,Number(x.pendientes||0)]));
+  const make=x=>`<div class="side-item ${selectedOwner===x.nombre?'active':''}" onclick="setOwner('${x.nombre.replace(/'/g,"\\'")}')"><span>${esc(x.nombre)}</span><span class="badge">${map.get(x.nombre)||0}</span></div>`;
+  el('sidePersonal').innerHTML=activos.filter(x=>x.tipo==='PERSONAL').map(make).join('');
+  el('sideAreas').innerHTML=activos.filter(x=>x.tipo!=='PERSONAL').map(make).join('');
+  el('countAll').textContent=summaryFor('').pendientes;el('sideAll').classList.toggle('active',!selectedOwner)
+}
+function renderSummary(){
+  const activos=catalogo.filter(x=>x.activo!==false);
+  const map=new Map(summaryRows.map(x=>[x.responsable,x]));
+  const data=activos.map(x=>{const s=map.get(x.nombre)||{};return{name:x.nombre,type:x.tipo,total:Number(s.total||0),pending:Number(s.pendientes||0),alerts:Number(s.alertas||0)}}).sort((a,b)=>b.pending-a.pending||a.name.localeCompare(b.name));
+  el('summaryGrid').innerHTML=data.map(x=>`<div class="card summary-card" onclick="setOwner('${x.name.replace(/'/g,"\\'")}')"><div><h3>${esc(x.name)}</h3><small>${esc(x.type)} · ${x.pending} pendientes · ${x.alerts} alertas</small></div><div class="summary-num">${x.total}</div></div>`).join('')
+}
+
+function applySearch(query,q){
+  q=cleanSearch(q);if(!q)return query;
+  const p=`%${q}%`;
+  return query.or(`expediente.ilike.${p},extension.ilike.${p},rd.ilike.${p},responsable.ilike.${p},cargo.ilike.${p},observacion.ilike.${p},acumulado.ilike.${p},ultimo_folio.ilike.${p}`)
+}
+async function loadPanel(){
+  if(!sb||!session)return;
+  const from=page*PAGE_SIZE,to=from+PAGE_SIZE-1;
+  let q=sb.from('expedientes').select('*',{count:'exact'}).order('updated_at',{ascending:false}).range(from,to);
+  if(selectedOwner)q=q.eq('responsable',selectedOwner);
+  q=applySearch(q,el('searchInput').value);
+  const {data,error,count}=await q;
+  if(error){serverError(error);return}
+  panelRows=data||[];panelCount=count||0;
+  el('panelTitle').textContent=selectedOwner?`Expedientes de ${selectedOwner} · ${typeOf(selectedOwner)}`:'Todos los expedientes';
+  el('pageInfo').textContent=`${page+1} · ${panelCount} registros`;
+  el('panelTable').innerHTML=recordTable(panelRows,false,'panel')
+}
+function debouncePanel(){clearTimeout(panelTimer);page=0;panelTimer=setTimeout(loadPanel,300)}
+async function setOwner(v){selectedOwner=v||'';page=0;el('ownerSelect').value=selectedOwner;switchTab('panel',document.querySelector('[data-tab="panel"]'));renderSidebar();renderKpis();await loadPanel()}
+async function changePage(d){const next=page+d;if(next<0)return;if(next*PAGE_SIZE>=panelCount&&d>0)return;page=next;await loadPanel()}
+
+
+async function loadStates(){
+  if(!sb||!session)return;
+
+  const {data,error}=await sb.rpc('resumen_estados');
+  if(error){
+    el('stateGrid').innerHTML=`<div class="empty">${esc(error.message)}</div>`;
+    return;
+  }
+
+  const dbRows=(data||[]).map(x=>({
+    estado:(x.estado||'SIN ESTADO').trim()||'SIN ESTADO',
+    total:Number(x.total||0)
+  }));
+
+  // Incluir siempre los estados configurados, aunque tengan cero registros.
+  const map=new Map();
+  STATUSES.forEach(s=>map.set(s,0));
+  dbRows.forEach(x=>map.set(x.estado,x.total));
+
+  stateRows=[...map.entries()]
+    .map(([estado,total])=>({estado,total:Number(total||0)}))
+    .sort((a,b)=>b.total-a.total||a.estado.localeCompare(b.estado));
+
+  const total=stateRows.reduce((a,x)=>a+x.total,0);
+  const top=stateRows.slice().sort((a,b)=>b.total-a.total)[0]||{estado:'—',total:0};
+
+  el('statesTotalTypes').textContent=stateRows.length;
+  el('statesTotalRecords').textContent=total;
+  el('statesTopCount').textContent=top.total;
+  el('statesTopName').textContent=top.estado;
+
+  renderStates();
+
+  if(selectedState){
+    await loadStateDetail(selectedState);
+  }
+}
+
+function renderStates(){
+  if(!el('stateGrid'))return;
+
+  const q=norm(el('stateSearch')?.value||'');
+  const data=stateRows.filter(x=>!q||norm(x.estado).includes(q));
+  const total=stateRows.reduce((a,x)=>a+x.total,0);
+
+  if(!data.length){
+    el('stateGrid').innerHTML='<div class="empty">No se encontraron estados.</div>';
+    return;
+  }
+
+  el('stateGrid').innerHTML=data.map(x=>{
+    const pct=total?((x.total/total)*100):0;
+    const stateArg=x.estado.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+    return `<div class="card state-card ${selectedState===x.estado?'selected':''}">
+      <div class="state-name">${esc(x.estado)}</div>
+      <div class="state-count">${x.total}</div>
+      <div class="state-meta">${pct.toFixed(1)}% del total</div>
+      <div class="state-progress"><span style="width:${Math.min(100,pct)}%"></span></div>
+      <div style="margin-top:10px">
+        <button class="btn secondary small" onclick="loadStateDetail('${stateArg}')">Ver expedientes</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function loadStateDetail(estado){
+  selectedState=estado;
+  renderStates();
+
+  el('stateDetailTitle').textContent=`Expedientes en estado: ${estado}`;
+  el('stateDetailTable').innerHTML='<div class="empty">Cargando expedientes...</div>';
+
+  let q=sb
+    .from('expedientes')
+    .select('*',{count:'exact'})
+    .order('updated_at',{ascending:false})
+    .limit(500);
+
+  if(estado==='SIN ESTADO'){
+    q=q.or('estado.is.null,estado.eq.');
+  }else{
+    q=q.eq('estado',estado);
+  }
+
+  const {data,error,count}=await q;
+  if(error){
+    el('stateDetailTable').innerHTML=`<div class="empty">${esc(error.message)}</div>`;
+    return;
+  }
+
+  stateDetailRows=data||[];
+  stateDetailCount=count||0;
+  el('stateDetailCount').textContent=`${stateDetailCount} expedientes`;
+  el('stateDetailTable').innerHTML=recordTable(stateDetailRows,true,'states');
+}
+
+function clearStateSelection(){
+  selectedState='';
+  if(el('stateSearch'))el('stateSearch').value='';
+  renderStates();
+  el('stateDetailTitle').textContent='Seleccione un estado para ver sus expedientes';
+  el('stateDetailCount').textContent='0';
+  el('stateDetailTable').innerHTML='<div class="empty">Pulse “Ver expedientes” en uno de los estados.</div>';
+}
+
+async function loadAll(){
+  if(!sb||!session)return;
+  let q=sb.from('expedientes').select('*',{count:'exact'}).order('updated_at',{ascending:false}).limit(500);
+  q=applySearch(q,el('allSearch').value);
+  const {data,error,count}=await q;
+  if(error){serverError(error);return}
+  allRows=data||[];allCountValue=count||0;el('allCount').textContent=`${allCountValue} registros · mostrando ${allRows.length}`;el('allTable').innerHTML=recordTable(allRows,true,'all')
+}
+function debounceAll(){clearTimeout(allTimer);allTimer=setTimeout(loadAll,300)}
+
+
+async function loadCargos(){
+  if(!sb||!session)return;
+
+  let q=sb
+    .from('cargos')
+    .select('id,numero,solicitante,asunto,atiende_requerimiento,fecha,observacion,created_at')
+    .order('fecha',{ascending:false})
+    .order('numero',{ascending:false})
+    .limit(1000);
+
+  const s=cleanSearch(el('cargoSearch')?.value||'');
+  if(s){
+    const p=`%${s}%`;
+    q=q.or(`numero.ilike.${p},solicitante.ilike.${p},asunto.ilike.${p},atiende_requerimiento.ilike.${p},observacion.ilike.${p}`);
+  }
+
+  const {data,error}=await q;
+  if(error){
+    el('cargosTable').innerHTML=`<div class="empty">${esc(error.message)}</div>`;
+    return;
+  }
+
+  cargosRows=data||[];
+  el('cargosCount').textContent=cargosRows.length+' cargos';
+  renderCargos();
+}
+
+function debounceCargos(){
+  clearTimeout(cargosTimer);
+  cargosTimer=setTimeout(loadCargos,300);
+}
+
+function renderCargos(){
+  if(!cargosRows.length){
+    el('cargosTable').innerHTML='<div class="empty">No hay cargos registrados.</div>';
+    return;
+  }
+
+  el('cargosTable').innerHTML=`<table>
+    <thead>
+      <tr>
+        <th>Cargo N°</th>
+        <th>Asunto</th>
+        <th>Solicitante</th>
+        <th>Fecha</th>
+        <th>Observación</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      ${cargosRows.map(c=>`<tr>
+        <td><b>${esc(c.numero)}</b></td>
+        <td>${esc(c.asunto||'—')}</td>
+        <td>${esc(c.solicitante||'')}</td>
+        <td>${fmtDate(c.fecha)}</td>
+        <td>${esc(c.observacion||'')}</td>
+        <td><button class="btn secondary small" onclick="verExpedientesCargo('${String(c.numero).replace(/'/g,"\\'")}')">Ver expedientes</button></td>
+      </tr>`).join('')}
+    </tbody>
+  </table>`;
+}
+
+async function verExpedientesCargo(numero){
+  switchTab('all',document.querySelector('[data-tab="all"]'));
+  el('allSearch').value=numero;
+  await loadAll();
+}
+
+async function loadHistory(){
+  if(!sb||!session)return;
+  let q=sb.from('historial_expedientes').select('*').order('created_at',{ascending:false}).limit(500);
+  const s=cleanSearch(el('historySearch').value);
+  if(s){const p=`%${s}%`;q=q.or(`expediente.ilike.${p},extension.ilike.${p},accion.ilike.${p},desde.ilike.${p},hacia.ilike.${p},cargo.ilike.${p},detalle.ilike.${p}`)}
+  const {data,error}=await q;if(error){serverError(error);return}
+  historyRows=data||[];el('historyCount').textContent=historyRows.length;renderHistory()
+}
+function debounceHistory(){clearTimeout(historyTimer);historyTimer=setTimeout(loadHistory,300)}
+
+
+function updateSelectionUI(){
+  const n=selectedIds.size;
+  el('selectedCount').textContent=n+' seleccionado'+(n===1?'':'s');
+  el('cargoBtn').disabled=n===0;
+}
+function toggleSelect(id,checked){
+  if(checked)selectedIds.add(id);else selectedIds.delete(id);
+  updateSelectionUI();
+}
+function toggleAllRows(checked,source){
+  const rows=source==='all'?allRows:(source==='states'?stateDetailRows:panelRows);
+  rows.forEach(r=>checked?selectedIds.add(r.id):selectedIds.delete(r.id));
+  updateSelectionUI();
+  if(source==='all')el('allTable').innerHTML=recordTable(allRows,true,'all');
+  else if(source==='states')el('stateDetailTable').innerHTML=recordTable(stateDetailRows,true,'states');
+  else el('panelTable').innerHTML=recordTable(panelRows,false,'panel');
+}
+
+function rowStatus(r){const c=r.estado==='EN PRÉSTAMO'?'loan':r.estado==='DEVUELTO'?'returned':'';return `<span class="pill ${c}">${esc(r.estado||'')}</span>`}
+function recordTable(data,withOwner=false,source='panel'){
+  if(!data.length)return '<div class="empty">No hay expedientes registrados para esta selección.</div>';
+  const ownerHead=withOwner?'<th>Responsable / ubicación</th>':'';
+  const allChecked=data.length>0&&data.every(r=>selectedIds.has(r.id));
+  const body=data.map(r=>`<tr>
+    <td><input type="checkbox" aria-label="Seleccionar ${esc(expKey(r))}" ${selectedIds.has(r.id)?'checked':''} onchange="toggleSelect('${r.id}',this.checked)"></td>
+    <td><b>${esc(expBase(r.expediente))}</b></td><td>${r.extension?esc(r.extension):'—'}</td><td>${esc(r.rd)}</td>
+    ${withOwner?`<td>${esc(r.responsable)}</td>`:''}<td>${rowStatus(r)}</td>
+    <td>${fmtDate(r.fecha_entrega)}</td><td>${fmtDate(r.fecha_devolucion)}</td><td>${rowDays(r)||''}</td>
+    <td>${esc(r.modalidad)}</td><td>${esc(r.ultimo_folio)}</td>
+    <td>${esc(r.digitalizado)}${r.enlace?` · <a href="${esc(r.enlace)}" target="_blank">Abrir</a>`:''}</td>
+    <td>${esc(r.cargo)}</td><td>${rowAlert(r)?'<span class="pill alert">ALERTA >30 DÍAS</span>':''}</td><td>${esc(r.observacion)}</td>
+    <td><div style="display:flex;gap:5px;white-space:nowrap"><button class="btn secondary small" onclick="showExpHistory('${r.id}')">Historial</button><button class="btn secondary small" onclick="editRecord('${r.id}')">Editar</button></div></td>
+  </tr>`).join('');
+  return `<table><thead><tr>
+    <th><input type="checkbox" aria-label="Seleccionar todos" ${allChecked?'checked':''} onchange="toggleAllRows(this.checked,'${source}')"></th>
+    <th>Expediente</th><th>Extensión</th><th>R.D.</th>${ownerHead}<th>Estado</th><th>F. entrega</th><th>F. devolución</th><th>Días háb.</th><th>Modalidad</th><th>Últ. folio</th><th>Digitalizado</th><th>Cargo</th><th>Alerta</th><th>Observación</th><th></th>
+  </tr></thead><tbody>${body}</tbody></table>`
+}
+
+function renderHistory(){
+  if(!historyRows.length){el('historyTable').innerHTML='<div class="empty">No hay movimientos para mostrar.</div>';return}
+  el('historyTable').innerHTML=`<table><thead><tr><th>Fecha</th><th>Expediente</th><th>Extensión</th><th>Acción</th><th>Desde</th><th>Hacia</th><th>Cargo</th><th>Detalle</th></tr></thead><tbody>${historyRows.map(h=>`<tr><td>${fmtDate(h.created_at)}</td><td><b>${esc(h.expediente)}</b></td><td>${h.extension?esc(h.extension):'—'}</td><td>${esc(h.accion)}</td><td>${esc(h.desde)}</td><td>${esc(h.hacia)}</td><td>${esc(h.cargo)}</td><td>${esc(h.detalle)}</td></tr>`).join('')}</tbody></table>`
+}
+function switchTab(name,btn){['panel','summary','states','all','cargos','history'].forEach(x=>el('tab-'+x).classList.toggle('hidden',x!==name));document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));if(btn)btn.classList.add('active')}
+
+
+function autoCargoNumber(){ return ''; }
+
+async function loadCargoHeaderByNumber(){
+  if(!sb)return false;
+
+  const numero=(el('cNumero').dataset.numeroExistente||'').trim();
+  if(!numero)return false;
+
+  el('cargoStatus').textContent='Buscando datos del cargo...';
+
+  // 1. Buscar el encabezado oficial del cargo.
+  const {data,error}=await sb
+    .from('cargos')
+    .select('*')
+    .eq('numero',numero)
+    .maybeSingle();
+
+  if(error){
+    el('cargoStatus').textContent=error.message;
+    return false;
+  }
+
+  if(!data){
+    return false;
+  }
+
+  let solicitante=(data.solicitante||'').trim();
+
+  // 2. Si el cargo existe pero el nombre está vacío, intentar recuperarlo del historial.
+  if(!solicitante){
+    const {data:hist,error:histError}=await sb
+      .from('historial_expedientes')
+      .select('hacia,created_at')
+      .eq('cargo',numero)
+      .eq('accion','CARGO ASOCIADO')
+      .not('hacia','is',null)
+      .order('created_at',{ascending:true});
+
+    if(!histError && hist && hist.length){
+      const nombres=[...new Set(hist.map(x=>(x.hacia||'').trim()).filter(Boolean))];
+      if(nombres.length===1)solicitante=nombres[0];
+    }
+  }
+
+  // 3. Segundo fallback: expedientes vinculados al cargo.
+  if(!solicitante){
+    const {data:exp,error:expError}=await sb
+      .from('expedientes')
+      .select('responsable')
+      .eq('cargo',numero);
+
+    if(!expError && exp && exp.length){
+      const nombres=[...new Set(exp.map(x=>(x.responsable||'').trim()).filter(Boolean))];
+      if(nombres.length===1)solicitante=nombres[0];
+    }
+  }
+
+  el('cNumero').value=data.numero;
+  el('cNumero').dataset.numeroExistente=data.numero;
+  el('cNumero').readOnly=true;
+
+  // El nombre se carga automáticamente PERO sigue siendo editable.
+  el('cSolicitante').value=solicitante;
+  el('cSolicitante').readOnly=false;
+  el('cSolicitante').title='Nombre cargado automáticamente. Puede corregirlo antes de imprimir.';
+
+  if(data.fecha)el('cFecha').value=data.fecha;
+  el('cAsunto').value=(data.asunto||'').trim();
+  el('cAtiende').value=(data.atiende_requerimiento||'').trim();
+  if(data.observacion)el('cObservacion').value=data.observacion;
+
+  if(solicitante){
+    el('cargoStatus').textContent='Solicitante cargado automáticamente. Puede corregirlo antes de imprimir.';
+  }else{
+    el('cargoStatus').textContent='No se encontró un solicitante guardado. Escriba el nombre antes de imprimir; al guardar quedará asociado al cargo.';
+    setTimeout(()=>el('cSolicitante').focus(),50);
+  }
+
+  return true;
+}
+async function openCargoModal(){
+  if(!selectedIds.size){alert('Seleccione al menos un expediente.');return}
+  el('cargoStatus').textContent='Cargando expedientes seleccionados...';
+  el('cargoModal').classList.add('show');
+
+  const ids=[...selectedIds];
+  const {data,error}=await sb.from('expedientes').select('*').in('id',ids).order('expediente');
+  if(error){el('cargoStatus').textContent=error.message;return}
+  cargoRows=data||[];
+
+  const cargosExistentes=[...new Set(cargoRows.map(r=>(r.cargo||'').trim()).filter(Boolean))];
+  const responsables=[...new Set(cargoRows.map(r=>(r.responsable||'').trim()).filter(Boolean))];
+
+  el('cNumero').readOnly=true;
+  el('cNumero').dataset.numeroExistente=cargosExistentes.length===1?cargosExistentes[0]:'';
+  el('cNumero').value=cargosExistentes.length===1?cargosExistentes[0]:'AUTOMÁTICO';
+  el('cSolicitante').readOnly=false;
+  el('cSolicitante').value='';
+  el('cFecha').value=new Date().toISOString().slice(0,10);
+  el('cAsunto').value='';
+  el('cAtiende').value='';
+  el('cObservacion').value='';
+  el('cargoStatus').textContent='';
+
+  // Si el cargo ya existe, recuperar SIEMPRE el encabezado original desde la tabla cargos.
+  if(cargosExistentes.length===1){
+    const encontrado=await loadCargoHeaderByNumber();
+    if(!encontrado){
+      // Compatibilidad con cargos antiguos que aún no fueron migrados.
+      if(responsables.length===1){
+        el('cSolicitante').value=responsables[0];
+        el('cargoStatus').textContent='Cargo antiguo sin encabezado almacenado. Se usará el responsable registrado y se guardará como solicitante del cargo.';
+      }else{
+        el('cargoStatus').textContent='Cargo antiguo con responsables actuales distintos. Ejecute MIGRACION_CARGOS.sql para recuperar el solicitante desde el historial.';
+      }
+    }
+  }else if(cargosExistentes.length>1){
+    el('cNumero').readOnly=true;
+    el('cargoStatus').textContent='Los expedientes seleccionados pertenecen a cargos distintos. Seleccione un solo cargo.';
+  }else{
+    // Nuevo cargo: el solicitante se toma del panel por personal si existe;
+    // si no, se usa el responsable común de los expedientes seleccionados.
+    const panelPersona=selectedOwner && typeOf(selectedOwner)==='PERSONAL' ? selectedOwner : '';
+    if(panelPersona){
+      el('cSolicitante').value=panelPersona;
+      el('cargoStatus').textContent='Solicitante cargado automáticamente. El número de cargo se asignará al guardar.';
+    }else if(responsables.length===1){
+      el('cSolicitante').value=responsables[0];
+      el('cargoStatus').textContent='Solicitante cargado automáticamente. El número de cargo se asignará al guardar.';
+    }else{
+      el('cargoStatus').textContent='El número de cargo se generará automáticamente con formato 0001-AÑO, por ejemplo 0152-2026.';
+    }
+  }
+
+  el('cargoSelectedList').innerHTML=`<table><thead><tr><th>N°</th><th>Expediente</th><th>Ext.</th><th>R.D.</th><th>Último folio</th><th>Observación</th></tr></thead><tbody>${
+    cargoRows.map((r,i)=>`<tr><td>${i+1}</td><td><b>${esc(r.expediente)}</b></td><td>${r.extension?esc(r.extension):'—'}</td><td>${esc(r.rd)}</td><td>${esc(r.ultimo_folio)}</td><td>${esc(r.observacion)}</td></tr>`).join('')
+  }</tbody></table>`;
+}
+
+function closeCargoModal(){el('cargoModal').classList.remove('show')}
+function cargoPrintHtml(cargo,solicitante,asunto,atiende,fecha,observacion,rows){
+  const user=session?.user?.email||'';
+  const rowsHtml=rows.map((r,i)=>`<tr><td>${i+1}</td><td><b>${esc(r.expediente)}</b></td><td>${r.extension?esc(r.extension):'—'}</td><td>${esc(r.rd||'')}</td><td>${esc(r.ultimo_folio||'')}</td><td>${esc(r.observacion||'')}</td></tr>`).join('');
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(cargo)}</title><style>
+  @page{size:A4;margin:15mm}body{font-family:Arial,sans-serif;color:#111;font-size:11px;margin:0}
+  h1{text-align:center;font-size:16px;margin:0 0 4px}h2{text-align:center;font-size:12px;font-weight:normal;margin:0 0 18px}
+  .meta{width:100%;border-collapse:collapse;margin-bottom:12px}.meta td{padding:5px 6px;border:1px solid #777}.sign-top{height:48px;vertical-align:bottom}
+  .sign-line{display:inline-block;min-width:190px;border-top:1px solid #111;padding-top:3px;text-align:center}
+  table.list{width:100%;border-collapse:collapse}.list th,.list td{border:1px solid #555;padding:5px;vertical-align:top}.list th{background:#eee}
+  .total{margin-top:8px;font-weight:bold}.obs{margin-top:12px;border:1px solid #777;padding:8px;min-height:35px}
+  .signatures{display:flex;justify-content:space-between;margin-top:58px;gap:60px}.signature{flex:1;text-align:center;border-top:1px solid #111;padding-top:5px}
+  .footer{margin-top:20px;font-size:9px;color:#555;text-align:right}</style></head><body>
+  <h1>CARGO DE PRÉSTAMO DE EXPEDIENTES</h1><h2>DIRECCIÓN DE SANCIONES - DS-PA</h2>
+  <table class="meta">
+    <tr><td><b>Cargo N°:</b> ${esc(cargo)}</td><td><b>Fecha:</b> ${esc(fmtDate(fecha))}</td></tr>
+    <tr><td><b>Solicitante:</b> ${esc(solicitante)}</td><td class="sign-top"><span class="sign-line">Firma del solicitante</span></td></tr>
+    <tr><td colspan="2"><b>Asunto:</b> ${esc(asunto||'')}</td></tr>
+    <tr><td colspan="2"><b>Atiende el requerimiento:</b> ${esc(atiende||'')}</td></tr>
+  </table>
+  <table class="list"><thead><tr><th>N°</th><th>Expediente</th><th>Ext.</th><th>R.D.</th><th>Último folio</th><th>Observación</th></tr></thead><tbody>${rowsHtml}</tbody></table>
+  <div class="total">Total de expedientes: ${rows.length}</div>
+  <div class="obs"><b>Observación general:</b><br>${esc(observacion||'')}</div>
+  <div class="signatures"><div class="signature">ENTREGADO POR - ARCHIVO</div><div class="signature">RECIBIDO POR - SOLICITANTE</div></div>
+  <div class="footer">Generado por: ${esc(user)} · ${new Date().toLocaleString('es-PE')}</div>
+  <script>window.onload=()=>{setTimeout(()=>window.print(),250)}<\/script></body></html>`;
+}
+async function saveAndPrintCargo(){
+  const numeroExistente=(el('cNumero').dataset.numeroExistente||'').trim()||null;
+  const solicitante=el('cSolicitante').value.trim();
+  const asunto=el('cAsunto').value.trim();
+  const atiende=el('cAtiende').value.trim();
+  const fecha=el('cFecha').value;
+  const observacion=el('cObservacion').value.trim();
+
+  if(!solicitante){el('cargoStatus').textContent='Ingrese o corrija el nombre del solicitante.';el('cSolicitante').focus();return}
+  if(!asunto){el('cargoStatus').textContent='Ingrese el asunto del cargo.';el('cAsunto').focus();return}
+  if(!atiende){el('cargoStatus').textContent='Seleccione quién atiende el requerimiento.';el('cAtiende').focus();return}
+  if(!cargoRows.length){el('cargoStatus').textContent='No hay expedientes seleccionados.';return}
+
+  const cargosSeleccionados=[...new Set(cargoRows.map(r=>(r.cargo||'').trim()).filter(Boolean))];
+  if(cargosSeleccionados.length>1){
+    el('cargoStatus').textContent='No se pueden unir expedientes pertenecientes a cargos distintos.';
+    return;
+  }
+
+  const btn=el('cargoPrintBtn');
+  btn.disabled=true;
+  btn.textContent='Generando cargo...';
+  el('cargoStatus').textContent=numeroExistente
+    ? `Actualizando Cargo N.° ${numeroExistente}...`
+    : 'Generando el siguiente número de cargo disponible...';
+
+  try{
+    const ids=cargoRows.map(r=>r.id);
+
+    const {data:resultado,error}=await sb.rpc('guardar_cargo_automatico',{
+      p_numero_existente:numeroExistente,
+      p_solicitante:solicitante,
+      p_asunto:asunto,
+      p_atiende_requerimiento:atiende,
+      p_fecha:fecha||null,
+      p_observacion:observacion||null,
+      p_expediente_ids:ids
+    });
+    if(error)throw error;
+
+    const cargoId=resultado?.id;
+    const numeroGenerado=String(resultado?.numero||numeroExistente||'').trim();
+    if(!cargoId||!numeroGenerado)throw new Error('No se pudo obtener el número de cargo generado.');
+
+    el('cNumero').value=numeroGenerado;
+    el('cNumero').dataset.numeroExistente=numeroGenerado;
+
+    const {data:header,error:headError}=await sb.from('cargos').select('*').eq('id',cargoId).single();
+    if(headError)throw headError;
+
+    const w=window.open('','_blank','width=980,height=800');
+    if(!w)throw new Error('El navegador bloqueó la ventana de impresión. Permita ventanas emergentes para este sitio.');
+
+    w.document.open();
+    w.document.write(cargoPrintHtml(
+      header.numero,
+      header.solicitante,
+      header.asunto||asunto,
+      header.atiende_requerimiento||atiende,
+      header.fecha,
+      header.observacion||'',
+      cargoRows
+    ));
+    w.document.close();
+
+    selectedIds.clear();
+    cargoRows=[];
+    updateSelectionUI();
+    closeCargoModal();
+    showToast(`Cargo N.° ${numeroGenerado} guardado sin duplicidad`);
+    await Promise.all([loadSummary(),loadPanel(),loadAll(),loadStates(),loadCargos(),loadHistory()]);
+  }catch(err){
+    el('cargoStatus').textContent=err?.message||String(err);
+  }finally{
+    btn.disabled=false;
+    btn.textContent='Guardar e imprimir';
+  }
+}
+
+function setRecordMode(mode){
+  recordMode=mode==='batch'?'batch':'single';
+
+  el('modeSingleBtn').classList.toggle('active',recordMode==='single');
+  el('modeBatchBtn').classList.toggle('active',recordMode==='batch');
+  el('singleRecordFields').classList.toggle('hidden',recordMode!=='single');
+  el('batchRecordFields').classList.toggle('hidden',recordMode!=='batch');
+
+  // Los campos obligatorios del modo individual no deben bloquear el guardado múltiple.
+  el('fExpediente').required=recordMode==='single';
+  el('fResponsable').required=recordMode==='single';
+
+  el('recordSaveBtn').textContent=recordMode==='single'?'Guardar expediente':'Guardar expedientes';
+  el('modalTitle').textContent=recordMode==='single'?'Nuevo expediente':'Nuevos expedientes vinculados a un cargo';
+  el('saveStatus').textContent='';
+
+  if(recordMode==='batch' && !el('batchRows').children.length){
+    addBatchRow();
+    addBatchRow();
+  }
+  updateBatchSummary();
+}
+
+function addBatchRow(values={}){
+  const row=document.createElement('div');
+  row.className='batch-row';
+  row.innerHTML=`
+    <input class="be-exp" placeholder="0012-2025" value="${esc(values.expediente||'')}" oninput="updateBatchSummary()">
+    <input class="be-ext" placeholder="01 / A" value="${esc(values.extension||'')}">
+    <input class="be-rd" placeholder="202-2026" value="${esc(values.rd||'')}">
+    <input class="be-folio" placeholder="102" value="${esc(values.ultimo_folio||'')}">
+    <input class="be-obs" placeholder="Observación" value="${esc(values.observacion||'')}">
+    <button type="button" class="batch-remove" title="Quitar fila" onclick="removeBatchRow(this)">×</button>`;
+  el('batchRows').appendChild(row);
+  updateBatchSummary();
+}
+
+function removeBatchRow(btn){
+  const rows=[...el('batchRows').querySelectorAll('.batch-row')];
+  if(rows.length<=1){
+    rows[0].querySelectorAll('input').forEach(x=>x.value='');
+  }else{
+    btn.closest('.batch-row').remove();
+  }
+  updateBatchSummary();
+}
+
+function updateBatchSummary(){
+  if(!el('batchRows'))return;
+  const rows=[...el('batchRows').querySelectorAll('.batch-row')];
+  const n=rows.filter(r=>r.querySelector('.be-exp').value.trim()).length;
+  el('batchSummary').textContent=n+' expediente'+(n===1?'':'s')+' preparado'+(n===1?'':'s');
+}
+
+function getBatchRows(){
+  return [...el('batchRows').querySelectorAll('.batch-row')]
+    .map(r=>({
+      expediente:expBase(r.querySelector('.be-exp').value.trim()),
+      extension:r.querySelector('.be-ext').value.trim()||null,
+      rd:r.querySelector('.be-rd').value.trim()||null,
+      ultimo_folio:r.querySelector('.be-folio').value.trim()||null,
+      observacion:r.querySelector('.be-obs').value.trim()||null
+    }))
+    .filter(x=>x.expediente);
+}
+
+async function checkBatchCargo(){
+  batchCargoHeader=null;
+  el('bCargo').value='AUTOMÁTICO';
+  el('batchCargoInfo').textContent='Supabase asignará automáticamente el siguiente cargo con formato 0001-AÑO, por ejemplo 0152-2026.';
+}
+
+async function saveBatchRecords(btn){
+  const responsable=el('bResponsable').value.trim();
+  const asunto=el('bAsunto').value.trim();
+  const atiende=el('bAtiende').value.trim();
+  const rows=getBatchRows();
+
+  if(!responsable){el('saveStatus').textContent='Seleccione el responsable / ubicación.';return}
+  if(!asunto){el('saveStatus').textContent='Ingrese el asunto del cargo.';el('bAsunto').focus();return}
+  if(!atiende){el('saveStatus').textContent='Seleccione quién atiende el requerimiento.';el('bAtiende').focus();return}
+  if(!rows.length){el('saveStatus').textContent='Agregue al menos un expediente.';return}
+
+  const invalidos=rows.filter(x=>!/^\d+-[12]\d{3}$/.test(x.expediente));
+  if(invalidos.length){
+    el('saveStatus').textContent='Revise el formato de expediente. Use NÚMERO-AÑO, por ejemplo 0012-2025.';
+    return;
+  }
+
+  const claves=new Set();
+  for(const x of rows){
+    const k=norm(x.expediente)+'|'+norm(x.extension||'');
+    if(claves.has(k)){
+      el('saveStatus').textContent='Hay expedientes repetidos dentro de la lista.';
+      return;
+    }
+    claves.add(k);
+  }
+
+  const generalObs=el('bObservacion').value.trim();
+  const expedientes=rows.map(x=>({
+    expediente:x.expediente,
+    extension:x.extension,
+    rd:x.rd,
+    serie:el('bSerie').value,
+    estado:el('bEstado').value,
+    responsable,
+    modalidad:el('bModalidad').value,
+    fecha_solicitud:el('bSolicitud').value||null,
+    fecha_entrega:el('bEntrega').value||null,
+    fecha_devolucion:null,
+    fecha_reasignacion:null,
+    ultimo_folio:x.ultimo_folio,
+    digitalizado:'NO',
+    enlace:null,
+    acumulado:null,
+    observacion:[generalObs,x.observacion].filter(Boolean).join(' | ')||null
+  }));
+
+  if(btn){btn.disabled=true;btn.textContent='Generando cargo...'}
+  el('saveStatus').textContent=`Generando cargo automático para ${expedientes.length} expedientes...`;
+
+  try{
+    const {data:resultado,error}=await sb.rpc('registrar_lote_cargo_automatico',{
+      p_solicitante:responsable,
+      p_asunto:asunto,
+      p_atiende_requerimiento:atiende,
+      p_fecha:el('bEntrega').value||el('bSolicitud').value||new Date().toISOString().slice(0,10),
+      p_observacion:generalObs||null,
+      p_expedientes:expedientes
+    });
+    if(error)throw error;
+
+    const numero=String(resultado?.numero||'').trim();
+    const cantidad=Number(resultado?.cantidad||expedientes.length);
+
+    showToast(`Cargo N.° ${numero} generado con ${cantidad} expedientes`);
+    closeRecordModal();
+    await Promise.all([loadSummary(),loadPanel(),loadAll(),loadStates(),loadCargos(),loadHistory()]);
+  }catch(err){
+    let msg=err?.message||String(err);
+    if(String(msg).toLowerCase().includes('duplicate') || String(msg).includes('expedientes_identificador_unico')){
+      msg='Uno o más expedientes ya existen. No se generó el cargo. Revise número y extensión.';
+    }
+    el('saveStatus').textContent=msg;
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent='Guardar expedientes'}
+  }
+}
+
+function openRecordModal(){
+  el('recordForm').reset();
+  el('fId').value='';
+  el('fSerie').value='PAS';
+  el('fEstado').value='CUSTODIA';
+  el('fModalidad').value='FÍSICO';
+  el('fDigitalizado').value='NO';
+  el('saveStatus').textContent='';
+
+  // Reiniciar modo múltiple.
+  el('batchRows').innerHTML='';
+  el('bCargo').value='AUTOMÁTICO';
+  el('bSerie').value='PAS';
+  el('bEstado').value='EN PRÉSTAMO';
+  el('bModalidad').value='FÍSICO';
+  el('bSolicitud').value='';
+  el('bEntrega').value='';
+  el('bAsunto').value='';
+  el('bAtiende').value='';
+  el('bObservacion').value='';
+  batchCargoHeader=null;
+
+  // Si se abrió desde el panel de una persona, usarla como responsable por defecto.
+  if(selectedOwner && [...el('bResponsable').options].some(o=>o.value===selectedOwner)){
+    el('bResponsable').value=selectedOwner;
+  }
+
+  setRecordMode('single');
+  el('recordModal').classList.add('show');
+}
+function closeRecordModal(){el('recordModal').classList.remove('show')}
+async function editRecord(id){
+  setRecordMode('single');
+  const {data,error}=await sb.from('expedientes').select('*').eq('id',id).single();
+  if(error){serverError(error);return}
+  const r=data,map={fId:r.id,fExpediente:r.expediente,fExtension:r.extension,fRd:r.rd,fSerie:r.serie,fEstado:r.estado,fResponsable:r.responsable,fModalidad:r.modalidad,fSolicitud:r.fecha_solicitud,fEntrega:r.fecha_entrega,fDevolucion:r.fecha_devolucion,fReasignacion:r.fecha_reasignacion,fFolio:r.ultimo_folio,fDigitalizado:r.digitalizado,fEnlace:r.enlace,fCargo:r.cargo,fAcumulado:r.acumulado,fObservacion:r.observacion};
+  Object.entries(map).forEach(([id,v])=>{const x=el(id);if(x)x.value=v||''});el('modalTitle').textContent='Editar '+expKey(r);el('saveStatus').textContent='';el('recordModal').classList.add('show')
+}
+async function saveRecord(e){
+  e.preventDefault();
+  if(recordMode==='batch'){ await saveBatchRecords(e.submitter); return; }const btn=e.submitter,get=id=>el(id).value.trim();const expediente=expBase(get('fExpediente'));el('fExpediente').value=expediente;
+  if(!/^\d+-[12]\d{3}$/.test(expediente)){el('saveStatus').textContent='Use NÚMERO-AÑO. Ej.: 0012-2025.';return}
+  const row={expediente,extension:get('fExtension')||null,rd:get('fRd')||null,serie:get('fSerie'),estado:get('fEstado'),responsable:get('fResponsable'),modalidad:get('fModalidad'),fecha_solicitud:get('fSolicitud')||null,fecha_entrega:get('fEntrega')||null,fecha_devolucion:get('fDevolucion')||null,fecha_reasignacion:get('fReasignacion')||null,ultimo_folio:get('fFolio')||null,digitalizado:get('fDigitalizado'),enlace:get('fEnlace')||null,cargo:get('fCargo')||null,acumulado:get('fAcumulado')||null,observacion:get('fObservacion')||null};
+  if(btn){btn.disabled=true;btn.textContent='Guardando...'}el('saveStatus').textContent='Guardando en la base de datos...';
+  let result;
+  const id=get('fId');
+  if(id)result=await sb.from('expedientes').update(row).eq('id',id).select().single();
+  else result=await sb.from('expedientes').insert(row).select().single();
+  if(btn){btn.disabled=false;btn.textContent='Guardar expediente'}
+  if(result.error){el('saveStatus').textContent=result.error.message;return}
+  closeRecordModal();showToast('Guardado correctamente');await Promise.all([loadSummary(),loadPanel(),loadAll(),loadStates(),loadHistory()])
+}
+
+async function showExpHistory(id){
+  const [{data:r,error:e1},{data:h,error:e2}]=await Promise.all([
+    sb.from('expedientes').select('*').eq('id',id).single(),
+    sb.from('historial_expedientes').select('*').eq('expediente_id',id).order('created_at',{ascending:false})
+  ]);
+  if(e1||e2){serverError(e1||e2);return}
+  el('hExp').textContent=r.expediente||'—';el('hExt').textContent=r.extension||'—';el('hResp').textContent=r.responsable||'—';el('hEstado').textContent=r.estado||'—';el('expHistoryTitle').textContent='Historial del expediente '+expKey(r);
+  el('expTimeline').innerHTML=!h.length?'<div class="empty">Sin movimientos.</div>':'<div class="timeline">'+h.map(x=>{const meta=[x.desde?`Desde: ${esc(x.desde)}`:'',x.hacia?`Hacia: ${esc(x.hacia)}`:'',x.cargo?`Cargo: ${esc(x.cargo)}`:''].filter(Boolean).join(' · ');return `<div class="timeline-item"><div class="t-date">${fmtDate(x.created_at)}</div><div class="t-action">${esc(x.accion)}</div><div class="t-detail">${esc(x.detalle||'Sin detalle')}</div>${meta?`<div class="t-meta">${meta}</div>`:''}</div>`}).join('')+'</div>';
+  el('expHistoryModal').classList.add('show')
+}
+function closeExpHistory(){el('expHistoryModal').classList.remove('show')}
+
+const CSV_HEADERS=['EXPEDIENTE','EXTENSIÓN','R.D.','SERIE / TIPO','ESTADO ACTUAL','RESPONSABLE / UBICACIÓN ACTUAL','FECHA SOLICITUD','FECHA ENTREGA','FECHA DEVOLUCIÓN','FECHA ÚLTIMA REASIGNACIÓN','MODALIDAD','ÚLTIMO FOLIO','DIGITALIZADO','ENLACE DIGITAL','CARGO N°','EXPEDIENTE ACUMULADO / VINCULADO','OBSERVACIÓN'];
+function csvEscape(v){let s=String(v??'');return /[",\n;]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s}
+function downloadBlob(name,text){const b=new Blob(['\ufeff'+text],{type:'text/csv;charset=utf-8'}),u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download=name;a.click();URL.revokeObjectURL(u)}
+async function fetchAllRecords(){
+  let all=[],from=0;
+  while(true){const {data,error}=await sb.from('expedientes').select('*').order('updated_at',{ascending:false}).range(from,from+999);if(error)throw error;all.push(...data);if(data.length<1000)break;from+=1000}
+  return all
+}
+async function exportCSV(btn){
+  const old=btn.textContent;btn.disabled=true;btn.textContent='Exportando...';
+  try{const rows=await fetchAllRecords();const vals=rows.map(r=>[r.expediente,r.extension,r.rd,r.serie,r.estado,r.responsable,r.fecha_solicitud,r.fecha_entrega,r.fecha_devolucion,r.fecha_reasignacion,r.modalidad,r.ultimo_folio,r.digitalizado,r.enlace,r.cargo,r.acumulado,r.observacion]);downloadBlob('REGISTRO_EXPEDIENTES.csv',[CSV_HEADERS.join(';'),...vals.map(x=>x.map(csvEscape).join(';'))].join('\n'))}catch(e){serverError(e)}finally{btn.disabled=false;btn.textContent=old}
+}
+function parseCSV(text){let rows=[],row=[],cell='',q=false;for(let i=0;i<text.length;i++){let c=text[i];if(c==='"'){if(q&&text[i+1]==='"'){cell+='"';i++}else q=!q}else if((c===';'||c===',')&&!q){row.push(cell.trim());cell=''}else if((c==='\n'||c==='\r')&&!q){if(c==='\r'&&text[i+1]==='\n')i++;row.push(cell.trim());cell='';if(row.some(x=>x!==''))rows.push(row);row=[]}else cell+=c}if(cell||row.length){row.push(cell.trim());rows.push(row)}return rows}
+async function importCSV(ev){
+  const f=ev.target.files[0];if(!f)return;const rd=new FileReader();
+  rd.onload=async()=>{
+    try{
+      const rows=parseCSV(rd.result);if(rows.length<2){alert('El archivo no contiene registros.');return}
+      const header=rows[0].map(norm),idx=n=>header.indexOf(norm(n)),items=[];
+      for(const row of rows.slice(1)){
+        const val=n=>{const i=idx(n);return i>=0?(row[i]||'').trim():''};const expediente=expBase(val('EXPEDIENTE'));if(!/^\d+-[12]\d{3}$/.test(expediente))continue;
+        let responsable=val('RESPONSABLE / UBICACIÓN ACTUAL');const found=catalogo.find(x=>norm(x.nombre)===norm(responsable));if(found)responsable=found.nombre;
+        items.push({expediente,extension:val('EXTENSIÓN')||val('EXTENSION')||null,rd:val('R.D.')||null,serie:val('SERIE / TIPO')||'PAS',estado:val('ESTADO ACTUAL')||'CUSTODIA',responsable,fecha_solicitud:normalizeDate(val('FECHA SOLICITUD')),fecha_entrega:normalizeDate(val('FECHA ENTREGA')),fecha_devolucion:normalizeDate(val('FECHA DEVOLUCIÓN')),fecha_reasignacion:normalizeDate(val('FECHA ÚLTIMA REASIGNACIÓN')),modalidad:val('MODALIDAD')||'FÍSICO',ultimo_folio:val('ÚLTIMO FOLIO')||null,digitalizado:val('DIGITALIZADO')||'NO',enlace:val('ENLACE DIGITAL')||null,cargo:val('CARGO N°')||null,acumulado:val('EXPEDIENTE ACUMULADO / VINCULADO')||null,observacion:val('OBSERVACIÓN')||null})
+      }
+      let inserted=0;
+      for(let i=0;i<items.length;i+=200){const batch=items.slice(i,i+200);const {error}=await sb.from('expedientes').insert(batch);if(error)throw error;inserted+=batch.length}
+      alert(inserted+' registros importados.');ev.target.value='';await Promise.all([loadSummary(),loadPanel(),loadAll(),loadStates(),loadHistory()])
+    }catch(e){serverError(e)}
+  };
+  rd.readAsText(f,'UTF-8')
+}
+
+connect();
+</script>
+</body>
+</html>
