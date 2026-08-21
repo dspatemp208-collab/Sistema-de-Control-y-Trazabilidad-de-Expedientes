@@ -72,6 +72,28 @@
 .state-detail-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
 @media(max-width:760px){.states-kpis{grid-template-columns:1fr}.state-grid{grid-template-columns:1fr}}
 
+
+.req-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px}
+.req-state{font-size:10px;font-weight:850;padding:4px 8px;border-radius:999px;display:inline-block;white-space:nowrap}
+.req-solicitado{background:#fff4cc;color:#6d5100}
+.req-atencion{background:#e9f2ff;color:#174c8a}
+.req-prestamo{background:#fee8d5;color:#8a4100}
+.req-devuelto{background:#e6f5ea;color:#21613a}
+.req-cancelado{background:#f2f2f2;color:#555}
+.req-summary{display:grid;grid-template-columns:repeat(4,minmax(120px,1fr));gap:8px;margin:10px 0}
+.req-summary .mini{border:1px solid var(--line);border-radius:8px;padding:9px;background:#fbfdff}
+.req-summary .mini b{display:block;font-size:18px;margin-top:3px}
+.req-actions{display:flex;gap:6px;flex-wrap:wrap}
+.req-detail-controls{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:12px 0}
+.req-detail-controls .span3{grid-column:span 3}
+.req-movements{max-height:230px;overflow:auto;border:1px solid var(--line);border-radius:8px;margin-top:10px}
+@media(max-width:800px){
+  .req-kpis,.req-summary{grid-template-columns:1fr 1fr}
+  .req-detail-controls{grid-template-columns:1fr}
+  .req-detail-controls .span3{grid-column:span 1}
+}
+@media(max-width:480px){.req-kpis,.req-summary{grid-template-columns:1fr}}
+
 </style>
 </head>
 <body>
@@ -88,6 +110,7 @@
     <div class="actions">
       <button class="btn" onclick="openRecordModal()">+ Nuevo expediente</button>
       <button class="btn secondary" id="cargoBtn" onclick="openCargoModal()" disabled>🖨 Imprimir cargo</button>
+      <button class="btn secondary" id="requestBtn" onclick="openNewRequestModal()" disabled>📥 Solicitar seleccionados</button>
       <span class="sel-count" id="selectedCount">0 seleccionados</span>
       <button class="btn secondary" onclick="document.getElementById('csvFile').click()">Importar CSV</button>
       <input class="hidden" id="csvFile" type="file" accept=".csv,text/csv" onchange="importCSV(event)">
@@ -103,6 +126,7 @@
     <button class="tab active" data-tab="panel" onclick="switchTab('panel',this)">Panel por personal</button>
     <button class="tab" data-tab="summary" onclick="switchTab('summary',this)">Resumen</button>
     <button class="tab" data-tab="states" onclick="switchTab('states',this);loadStates()">Estados</button>
+    <button class="tab" data-tab="requests" onclick="switchTab('requests',this);loadRequests()">Solicitudes</button>
     <button class="tab" data-tab="all" onclick="switchTab('all',this)">Registro maestro</button>
     <button class="tab" data-tab="cargos" onclick="switchTab('cargos',this);loadCargos()">Cargos</button>
     <button class="tab" data-tab="history" onclick="switchTab('history',this)">Historial</button>
@@ -171,6 +195,44 @@
       <div id="stateDetailTable">
         <div class="empty">Pulse “Ver expedientes” en uno de los estados.</div>
       </div>
+    </div>
+  </section>
+
+
+  <section id="tab-requests" class="hidden">
+    <div class="req-kpis">
+      <div class="card kpi"><div class="label">Solicitadas</div><div class="value" id="rqSolicitado">0</div></div>
+      <div class="card kpi"><div class="label">En atención</div><div class="value" id="rqAtencion">0</div></div>
+      <div class="card kpi warn"><div class="label">En préstamo</div><div class="value" id="rqPrestamo">0</div></div>
+      <div class="card kpi"><div class="label">Devueltas</div><div class="value" id="rqDevuelto">0</div></div>
+    </div>
+
+    <div class="card filters">
+      <div class="field">
+        <label>Buscar solicitud</label>
+        <input id="requestSearch" placeholder="Solicitud, solicitante, asunto, cargo..." oninput="debounceRequests()">
+      </div>
+      <div class="field">
+        <label>Estado</label>
+        <select id="requestStateFilter" onchange="loadRequests()">
+          <option value="">TODOS</option>
+          <option>SOLICITADO</option>
+          <option>EN ATENCIÓN</option>
+          <option>EN PRÉSTAMO</option>
+          <option>DEVUELTO</option>
+        </select>
+      </div>
+      <div style="display:flex;align-items:flex-end">
+        <button class="btn" onclick="openNewRequestModal()">+ Nueva solicitud</button>
+      </div>
+    </div>
+
+    <div class="card table-wrap">
+      <div class="table-head">
+        <strong>Solicitudes de expedientes</strong>
+        <span id="requestsCount">0</span>
+      </div>
+      <div id="requestsTable"><div class="empty">Cargando solicitudes...</div></div>
     </div>
   </section>
 
@@ -249,6 +311,108 @@
   <option value="JHUVER RIMAC"></option>
   <option value="ALAN VILA"></option>
 </datalist>
+
+
+
+<!-- Nueva solicitud de préstamo -->
+<div class="modal" id="newRequestModal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <div>
+        <h2>Nueva solicitud de expedientes</h2>
+        <div class="note">La solicitud no cambia la ubicación física. El cargo se genera recién cuando Archivo entrega los expedientes.</div>
+      </div>
+      <button class="btn secondary small" onclick="closeNewRequestModal()">Cerrar</button>
+    </div>
+
+    <div class="form-grid">
+      <div class="field span2">
+        <label>Solicitante *</label>
+        <select id="rqSolicitante"></select>
+      </div>
+      <div class="field span2">
+        <label>Asunto *</label>
+        <input id="rqAsunto" list="listaAsuntosCargo" placeholder="Seleccione o escriba el asunto">
+      </div>
+      <div class="field span4">
+        <label>Observación</label>
+        <textarea id="rqObservacion" placeholder="Observación de la solicitud, si corresponde"></textarea>
+      </div>
+    </div>
+
+    <div class="card table-wrap" style="margin-top:12px">
+      <div class="table-head"><strong>Expedientes solicitados</strong><span id="rqSelectedCount">0</span></div>
+      <div id="rqSelectedTable"></div>
+    </div>
+
+    <div class="modal-foot">
+      <span id="rqSaveStatus" class="note"></span>
+      <div style="display:flex;gap:8px">
+        <button class="btn secondary" onclick="closeNewRequestModal()">Cancelar</button>
+        <button class="btn" id="rqSaveBtn" onclick="saveNewRequest()">Enviar solicitud</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Detalle y gestión de solicitud -->
+<div class="modal" id="requestDetailModal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <div>
+        <h2 id="rqDetailTitle">Solicitud</h2>
+        <div id="rqDetailMeta" class="note"></div>
+      </div>
+      <button class="btn secondary small" onclick="closeRequestDetail()">Cerrar</button>
+    </div>
+
+    <div class="req-summary">
+      <div class="mini">Estado<b id="rqDState">—</b></div>
+      <div class="mini">Expedientes<b id="rqDTotal">0</b></div>
+      <div class="mini">Cargo<b id="rqDCargo">—</b></div>
+      <div class="mini">Solicitante<b id="rqDSolicitante" style="font-size:12px">—</b></div>
+    </div>
+
+    <div class="req-detail-controls">
+      <div class="field">
+        <label>Atiende el requerimiento</label>
+        <input id="rqDAtiende" list="listaAtiendeRequerimiento" placeholder="Seleccione quién atiende">
+      </div>
+      <div class="field">
+        <label>Nuevo responsable (reasignación)</label>
+        <select id="rqDNuevoResponsable"></select>
+      </div>
+      <div class="field">
+        <label>Ubicación al devolver</label>
+        <select id="rqDRetorno"></select>
+      </div>
+      <div class="field span3">
+        <label>Observación del movimiento</label>
+        <input id="rqDObservacion" placeholder="Opcional">
+      </div>
+    </div>
+
+    <div id="rqWorkflowActions" class="req-actions" style="margin-bottom:12px"></div>
+
+    <div class="card table-wrap">
+      <div class="table-head">
+        <strong>Expedientes de la solicitud</strong>
+        <span id="rqDSelectedCount">0 seleccionados</span>
+      </div>
+      <div id="rqDetailItems"></div>
+    </div>
+
+    <div style="margin-top:14px">
+      <strong>Historial del ciclo</strong>
+      <div id="rqMovements" class="req-movements"><div class="empty">Sin movimientos.</div></div>
+    </div>
+
+    <div class="modal-foot">
+      <span id="rqActionStatus" class="note"></span>
+      <button class="btn secondary" onclick="closeRequestDetail()">Cerrar</button>
+    </div>
+  </div>
+</div>
 
 
 <!-- Administración de personal, áreas y ubicaciones -->
@@ -469,11 +633,11 @@ const MASTER=[["MARCELA ALONZO", "PERSONAL"], ["ABRAHAN DAMAS", "PERSONAL"], ["A
 const ASUNTOS_PREDETERMINADOS=["ACCESO A LA INFORMACIÓN", "ANALISIS Y EVALUACIÓN DEL MEMORANDO DE CONCLUSIÓN DEL PROCESO CONTENCIOSO ADMINISTRATIVO, REMITIDO POR LA PROCURADURÍA PÚBLICA (PP)", "ANEXADO DE CÉDULAS DE NOTIFICACIÓN", "ANEXADO DE DOCUMENTOS", "ATENCIÓN A LA DIRECCIÓN DE EXTRACCIÓN PARA CONSUMO HUMANO DIRECTO E INDIRECTO (DECHDI)", "ATENCIÓN A LA DIRECCIÓN DE VIGILANCIA Y CONTROL (DVC) - RD ARCHIVAMIENTO", "ATENCIÓN A LA OFICINA DE CONTROL INTERNO (OCI)", "ATENCIÓN A LA OFICINA GENERAL DE ADMINISTRACIÓN (OGA)", "ATENCIÓN A LA PROCURADURÍA PÚBLICA", "ATENCIÓN AL MINISTERIO PÚBLICO (FISCALÍA)", "ATENCIÓN DE ESCRITOS", "ATENCIÓN DE ESCRITOS REMITIDOS POR EL CONSEJO DE APELACIÓN DE SANCIONES CALIDAD DE PRÉSTAMO (CONAS)", "ATENCIÓN DE QUEJAS", "CADUCIDAD", "COMUNICACIÓN DE LAS SANCIONES A LA DIRECCIÓN GENERAL DE PESCA PARA CONSUMO HUMANO DIRECTO E INDIRECTO (DGPCHDI)", "DESLINDE DE RESPONSABILIDAD", "ELEVACIÓN DEL EXPEDIENTE AL CONSEJO DE APELACIÓN DE SANCIONES (CONAS)", "ENMIENDA", "EVALUACIÓN DE OFICIO", "EVALUACIÓN DE PAGOS POR CONCEPTO DE DECOMISOS", "EVALUACIÓN DEL EXPEDIENTE QUE RETORNA DEL CONSEJO DE APELACIÓN DE SANCIONES (CONAS)", "INTERES PARTICULAR", "LECTURA EN SALA (USUARIOS INTERNOS)", "LECTURA EXPEDIENTE (USUARIOS EXTERNOS)", "NULIDAD DE OFICIO", "PERDIDA DE BENEFICIO", "PETICIÓN ADMINISTRATIVA", "RECOMENDACIÓN DE INICIO", "RECONSIDERACIÓN", "REINCIDENCIAS DEL PAS", "REVISIÓN", "REVISIÓN DEL PROCEDIMIENTO DE EJECUCIÓN COACTIVA (PEC) - OEC", "SECRETARIA TÉCNICA DE LOS ORGANOS INSTRUCTORES (STOI)", "SOLICITUD DE BENEFICIOS", "TRAMITACIÓN DEL PAS (IFIS)", "USO DE LA PALABRA O AUDIENCIA"];
 const STATUSES=['CUSTODIA','EN PRÉSTAMO','DEVUELTO','REASIGNADO','EN TRÁMITE','PENDIENTE DE ORGANIZAR','TRANSFERIDO','EN NOTIFICACIONES'];
 const PAGE_SIZE=200;
-let sb=null, session=null, summaryRows=[], panelRows=[], allRows=[], historyRows=[], cargosRows=[], stateRows=[], stateDetailRows=[];
+let sb=null, session=null, summaryRows=[], panelRows=[], allRows=[], historyRows=[], cargosRows=[], stateRows=[], stateDetailRows=[], requestRows=[], requestDetailRows=[], requestMovementRows=[];
 let catalogo=MASTER.map(([nombre,tipo],i)=>({id:'fallback-'+i,nombre,tipo,activo:true}));
 let selectedIds=new Set(), cargoRows=[];
 let recordMode='single', batchCargoHeader=null;
-let selectedOwner='', selectedState='', page=0, panelCount=0, allCountValue=0, stateDetailCount=0, panelTimer=null, allTimer=null, historyTimer=null, cargosTimer=null;
+let selectedOwner='', selectedState='', currentRequestId='', currentRequest=null, requestSelectedIds=new Set(), page=0, panelCount=0, allCountValue=0, stateDetailCount=0, panelTimer=null, allTimer=null, historyTimer=null, cargosTimer=null, requestsTimer=null;
 
 function el(id){return document.getElementById(id)}
 function norm(v){return String(v??'').trim().toUpperCase()}
@@ -539,7 +703,7 @@ async function afterLogin(){
   await loadCatalogo();
   fillSelects();
   updateSelectionUI();
-  await Promise.all([loadSummary(),loadPanel(),loadAll(),loadStates(),loadCargos(),loadHistory()]);
+  await Promise.all([loadSummary(),loadPanel(),loadAll(),loadStates(),loadRequests(),loadCargos(),loadHistory()]);
 }
 function fillSelects(){
   const activos=catalogo.filter(x=>x.activo!==false);
@@ -549,6 +713,10 @@ function fillSelects(){
 
   if(el('bResponsable')) el('bResponsable').innerHTML=activos.map(x=>`<option>${esc(x.nombre)}</option>`).join('');
   if(el('bEstado')) el('bEstado').innerHTML=STATUSES.map(x=>`<option>${esc(x)}</option>`).join('');
+
+  if(el('rqSolicitante')) el('rqSolicitante').innerHTML=activos.filter(x=>x.tipo==='PERSONAL').map(x=>`<option>${esc(x.nombre)}</option>`).join('');
+  if(el('rqDNuevoResponsable')) el('rqDNuevoResponsable').innerHTML=activos.map(x=>`<option>${esc(x.nombre)}</option>`).join('');
+  if(el('rqDRetorno')) el('rqDRetorno').innerHTML=activos.filter(x=>x.tipo!=='PERSONAL').map(x=>`<option>${esc(x.nombre)}</option>`).join('');
 }
 
 
@@ -761,6 +929,452 @@ function clearStateSelection(){
   el('stateDetailTable').innerHTML='<div class="empty">Pulse “Ver expedientes” en uno de los estados.</div>';
 }
 
+
+function reqStatePill(state){
+  const cls=state==='SOLICITADO'?'req-solicitado':
+    state==='EN ATENCIÓN'?'req-atencion':
+    state==='EN PRÉSTAMO'?'req-prestamo':
+    state==='DEVUELTO'?'req-devuelto':'req-cancelado';
+  return `<span class="req-state ${cls}">${esc(state||'')}</span>`;
+}
+
+async function loadRequests(){
+  if(!sb||!session)return;
+
+  const search=cleanSearch(el('requestSearch')?.value||'');
+  const state=el('requestStateFilter')?.value||'';
+
+  const {data,error}=await sb.rpc('listar_solicitudes_prestamo',{
+    p_busqueda:search||null,
+    p_estado:state||null
+  });
+
+  if(error){
+    if(el('requestsTable'))el('requestsTable').innerHTML=`<div class="empty">${esc(error.message)}</div>`;
+    return;
+  }
+
+  requestRows=data||[];
+
+  const counts={SOLICITADO:0,'EN ATENCIÓN':0,'EN PRÉSTAMO':0,DEVUELTO:0};
+  requestRows.forEach(x=>{if(counts[x.estado]!==undefined)counts[x.estado]++});
+
+  if(el('rqSolicitado'))el('rqSolicitado').textContent=counts.SOLICITADO;
+  if(el('rqAtencion'))el('rqAtencion').textContent=counts['EN ATENCIÓN'];
+  if(el('rqPrestamo'))el('rqPrestamo').textContent=counts['EN PRÉSTAMO'];
+  if(el('rqDevuelto'))el('rqDevuelto').textContent=counts.DEVUELTO;
+  if(el('requestsCount'))el('requestsCount').textContent=requestRows.length+' solicitudes';
+
+  renderRequests();
+}
+
+function debounceRequests(){
+  clearTimeout(requestsTimer);
+  requestsTimer=setTimeout(loadRequests,300);
+}
+
+function renderRequests(){
+  if(!el('requestsTable'))return;
+
+  if(!requestRows.length){
+    el('requestsTable').innerHTML='<div class="empty">No hay solicitudes para mostrar.</div>';
+    return;
+  }
+
+  el('requestsTable').innerHTML=`<table>
+    <thead><tr>
+      <th>Solicitud</th>
+      <th>Solicitante</th>
+      <th>Asunto</th>
+      <th>Estado</th>
+      <th>Expedientes</th>
+      <th>Cargo</th>
+      <th>Atiende</th>
+      <th>F. solicitud</th>
+      <th></th>
+    </tr></thead>
+    <tbody>
+      ${requestRows.map(r=>`<tr>
+        <td><b>${esc(r.numero)}</b></td>
+        <td>${esc(r.solicitante)}</td>
+        <td>${esc(r.asunto)}</td>
+        <td>${reqStatePill(r.estado)}</td>
+        <td>${Number(r.total_expedientes||0)}</td>
+        <td>${esc(r.cargo_numero||'—')}</td>
+        <td>${esc(r.atiende||'—')}</td>
+        <td>${fmtDate(r.fecha_solicitud)}</td>
+        <td><button class="btn secondary small" onclick="openRequestDetail('${r.id}')">${r.estado==='DEVUELTO'?'Ver':'Gestionar'}</button></td>
+      </tr>`).join('')}
+    </tbody>
+  </table>`;
+}
+
+async function openNewRequestModal(){
+  if(!sb||!session){alert('Debe iniciar sesión.');return}
+
+  let ids=[...selectedIds];
+  let rows=[];
+
+  if(ids.length){
+    const {data,error}=await sb.from('expedientes').select('*').in('id',ids);
+    if(error){alert(error.message);return}
+    rows=data||[];
+  }
+
+  if(!rows.length){
+    alert('Seleccione primero uno o más expedientes desde el Panel, Estados o Registro maestro.');
+    return;
+  }
+
+  const activos=catalogo.filter(x=>x.activo!==false&&x.tipo==='PERSONAL');
+  if(selectedOwner && activos.some(x=>x.nombre===selectedOwner)){
+    el('rqSolicitante').value=selectedOwner;
+  }else if(!el('rqSolicitante').value && activos.length){
+    el('rqSolicitante').value=activos[0].nombre;
+  }
+
+  el('rqAsunto').value='';
+  el('rqObservacion').value='';
+  el('rqSaveStatus').textContent='';
+  el('rqSelectedCount').textContent=rows.length+' expediente'+(rows.length===1?'':'s');
+
+  el('rqSelectedTable').innerHTML=`<table>
+    <thead><tr><th>Expediente</th><th>Ext.</th><th>Estado físico</th><th>Ubicación actual</th></tr></thead>
+    <tbody>${rows.map(r=>`<tr>
+      <td><b>${esc(expBase(r.expediente))}</b></td>
+      <td>${r.extension?esc(r.extension):'—'}</td>
+      <td>${rowStatus(r)}</td>
+      <td>${esc(r.responsable||'')}</td>
+    </tr>`).join('')}</tbody>
+  </table>`;
+
+  el('newRequestModal').dataset.ids=JSON.stringify(rows.map(r=>r.id));
+  el('newRequestModal').classList.add('show');
+}
+
+function closeNewRequestModal(){
+  el('newRequestModal').classList.remove('show');
+}
+
+async function saveNewRequest(){
+  const solicitante=el('rqSolicitante').value.trim();
+  const asunto=el('rqAsunto').value.trim();
+  const observacion=el('rqObservacion').value.trim();
+  let ids=[];
+
+  try{ids=JSON.parse(el('newRequestModal').dataset.ids||'[]')}catch(_){}
+
+  if(!solicitante){
+    el('rqSaveStatus').textContent='Seleccione el solicitante.';
+    return;
+  }
+  if(!asunto){
+    el('rqSaveStatus').textContent='Seleccione o escriba el asunto.';
+    el('rqAsunto').focus();
+    return;
+  }
+  if(!ids.length){
+    el('rqSaveStatus').textContent='No hay expedientes seleccionados.';
+    return;
+  }
+
+  const btn=el('rqSaveBtn');
+  btn.disabled=true;
+  btn.textContent='Enviando...';
+  el('rqSaveStatus').textContent='Registrando solicitud...';
+
+  try{
+    const {data,error}=await sb.rpc('crear_solicitud_prestamo',{
+      p_solicitante:solicitante,
+      p_asunto:asunto,
+      p_observacion:observacion||null,
+      p_expediente_ids:ids
+    });
+    if(error)throw error;
+
+    selectedIds.clear();
+    updateSelectionUI();
+    closeNewRequestModal();
+    showToast(`Solicitud ${data?.numero||''} registrada`);
+    await loadRequests();
+    switchTab('requests',document.querySelector('[data-tab="requests"]'));
+  }catch(err){
+    el('rqSaveStatus').textContent=err?.message||String(err);
+  }finally{
+    btn.disabled=false;
+    btn.textContent='Enviar solicitud';
+  }
+}
+
+async function openRequestDetail(id){
+  currentRequestId=id;
+  requestSelectedIds.clear();
+  el('rqActionStatus').textContent='';
+  el('rqDObservacion').value='';
+
+  const header=requestRows.find(x=>x.id===id);
+  if(!header){
+    await loadRequests();
+  }
+  currentRequest=requestRows.find(x=>x.id===id)||null;
+
+  const {data:items,error}=await sb.rpc('detalle_solicitud_prestamo',{
+    p_solicitud_id:id
+  });
+  if(error){alert(error.message);return}
+
+  requestDetailRows=items||[];
+
+  const {data:mov,error:movErr}=await sb
+    .from('movimientos_prestamo')
+    .select('*')
+    .eq('solicitud_id',id)
+    .order('created_at',{ascending:false})
+    .limit(300);
+
+  requestMovementRows=movErr?[]:(mov||[]);
+
+  if(!currentRequest){
+    const {data:list}=await sb.rpc('listar_solicitudes_prestamo',{p_busqueda:null,p_estado:null});
+    requestRows=list||[];
+    currentRequest=requestRows.find(x=>x.id===id)||{};
+  }
+
+  const r=currentRequest||{};
+
+  el('rqDetailTitle').textContent=`Solicitud ${r.numero||''}`;
+  el('rqDetailMeta').textContent=`${r.asunto||''} · Fecha: ${fmtDate(r.fecha_solicitud)}`;
+  el('rqDState').innerHTML=reqStatePill(r.estado||'');
+  el('rqDTotal').textContent=Number(r.total_expedientes||requestDetailRows.length);
+  el('rqDCargo').textContent=r.cargo_numero||'—';
+  el('rqDSolicitante').textContent=r.solicitante||'—';
+  el('rqDAtiende').value=r.atiende||'';
+
+  // Valor de retorno por defecto: primera ubicación que contenga ARCHIVO.
+  const retornoOpts=[...el('rqDRetorno').options].map(o=>o.value);
+  const archivo=retornoOpts.find(x=>norm(x).includes('ARCHIVO'));
+  if(archivo)el('rqDRetorno').value=archivo;
+
+  renderRequestDetailItems();
+  renderRequestMovements();
+  renderRequestActions();
+  el('requestDetailModal').classList.add('show');
+}
+
+function closeRequestDetail(){
+  el('requestDetailModal').classList.remove('show');
+  currentRequestId='';
+  currentRequest=null;
+  requestSelectedIds.clear();
+}
+
+function toggleRequestItem(id,checked){
+  if(checked)requestSelectedIds.add(id);else requestSelectedIds.delete(id);
+  renderRequestDetailItems();
+}
+
+function toggleAllRequestItems(checked){
+  requestDetailRows
+    .filter(x=>x.estado_item==='EN PRÉSTAMO')
+    .forEach(x=>checked?requestSelectedIds.add(x.expediente_id):requestSelectedIds.delete(x.expediente_id));
+  renderRequestDetailItems();
+}
+
+function renderRequestDetailItems(){
+  const data=requestDetailRows||[];
+  const active=data.filter(x=>x.estado_item==='EN PRÉSTAMO');
+  const allActiveChecked=active.length>0&&active.every(x=>requestSelectedIds.has(x.expediente_id));
+  el('rqDSelectedCount').textContent=requestSelectedIds.size+' seleccionado'+(requestSelectedIds.size===1?'':'s');
+
+  if(!data.length){
+    el('rqDetailItems').innerHTML='<div class="empty">No hay expedientes.</div>';
+    return;
+  }
+
+  el('rqDetailItems').innerHTML=`<table>
+    <thead><tr>
+      <th><input type="checkbox" ${allActiveChecked?'checked':''} onchange="toggleAllRequestItems(this.checked)"></th>
+      <th>Expediente</th><th>Ext.</th><th>Estado solicitud</th><th>Estado físico</th>
+      <th>Responsable actual</th><th>F. entrega</th><th>F. devolución</th>
+    </tr></thead>
+    <tbody>${data.map(x=>{
+      const selectable=x.estado_item==='EN PRÉSTAMO';
+      return `<tr>
+        <td><input type="checkbox" ${selectable?'':'disabled'} ${requestSelectedIds.has(x.expediente_id)?'checked':''} onchange="toggleRequestItem('${x.expediente_id}',this.checked)"></td>
+        <td><b>${esc(x.expediente)}</b></td>
+        <td>${x.extension?esc(x.extension):'—'}</td>
+        <td>${reqStatePill(x.estado_item)}</td>
+        <td>${esc(x.estado_fisico||'')}</td>
+        <td>${esc(x.responsable_actual||x.ubicacion_actual||'')}</td>
+        <td>${fmtDate(x.fecha_entrega)}</td>
+        <td>${fmtDate(x.fecha_devolucion)}</td>
+      </tr>`;
+    }).join('')}</tbody>
+  </table>`;
+}
+
+function renderRequestMovements(){
+  if(!requestMovementRows.length){
+    el('rqMovements').innerHTML='<div class="empty">Sin movimientos registrados.</div>';
+    return;
+  }
+
+  el('rqMovements').innerHTML=`<table>
+    <thead><tr><th>Fecha</th><th>Expediente</th><th>Acción</th><th>Desde</th><th>Hacia</th><th>Estado</th><th>Cargo</th><th>Observación</th></tr></thead>
+    <tbody>${requestMovementRows.map(m=>`<tr>
+      <td>${fmtDate(m.created_at)}</td>
+      <td>${esc(m.expediente||'')}</td>
+      <td>${esc(m.accion||'')}</td>
+      <td>${esc(m.desde||'')}</td>
+      <td>${esc(m.hacia||'')}</td>
+      <td>${esc(m.estado||'')}</td>
+      <td>${esc(m.cargo_numero||'')}</td>
+      <td>${esc(m.observacion||'')}</td>
+    </tr>`).join('')}</tbody>
+  </table>`;
+}
+
+function renderRequestActions(){
+  const r=currentRequest||{};
+  let html='';
+
+  if(r.estado==='SOLICITADO'){
+    html=`<button class="btn" onclick="attendRequest()">Pasar a EN ATENCIÓN</button>`;
+  }else if(r.estado==='EN ATENCIÓN'){
+    html=`<button class="btn" onclick="deliverRequest()">Entregar y generar cargo</button>`;
+  }else if(r.estado==='EN PRÉSTAMO'){
+    html=`
+      <button class="btn secondary" onclick="reassignRequestItems()">Reasignar seleccionados</button>
+      <button class="btn" onclick="returnRequestItems()">Registrar devolución</button>`;
+  }else if(r.estado==='DEVUELTO'){
+    html='<span class="note">Solicitud cerrada: todos los expedientes fueron devueltos.</span>';
+  }
+
+  el('rqWorkflowActions').innerHTML=html;
+}
+
+async function attendRequest(){
+  const atiende=el('rqDAtiende').value.trim();
+  const obs=el('rqDObservacion').value.trim();
+
+  if(!atiende){
+    el('rqActionStatus').textContent='Indique quién atiende el requerimiento.';
+    el('rqDAtiende').focus();
+    return;
+  }
+
+  el('rqActionStatus').textContent='Actualizando a EN ATENCIÓN...';
+
+  const {error}=await sb.rpc('poner_solicitud_en_atencion',{
+    p_solicitud_id:currentRequestId,
+    p_atiende:atiende,
+    p_observacion:obs||null
+  });
+
+  if(error){el('rqActionStatus').textContent=error.message;return}
+
+  showToast('Solicitud en atención');
+  await refreshRequestDetail();
+}
+
+async function deliverRequest(){
+  const atiende=el('rqDAtiende').value.trim();
+  const obs=el('rqDObservacion').value.trim();
+
+  if(!atiende){
+    el('rqActionStatus').textContent='Indique quién atiende el requerimiento.';
+    el('rqDAtiende').focus();
+    return;
+  }
+
+  if(!confirm('¿Confirmar la entrega física de los expedientes y generar el cargo automático?'))return;
+
+  el('rqActionStatus').textContent='Generando cargo y registrando préstamo...';
+
+  const {data,error}=await sb.rpc('entregar_solicitud_prestamo',{
+    p_solicitud_id:currentRequestId,
+    p_atiende:atiende,
+    p_observacion:obs||null
+  });
+
+  if(error){el('rqActionStatus').textContent=error.message;return}
+
+  showToast(`Entregado · Cargo ${data?.cargo_numero||''}`);
+  await Promise.all([loadSummary(),loadPanel(),loadAll(),loadStates(),loadCargos(),loadHistory()]);
+  await refreshRequestDetail();
+}
+
+async function reassignRequestItems(){
+  const ids=[...requestSelectedIds];
+  const nuevo=el('rqDNuevoResponsable').value.trim();
+  const obs=el('rqDObservacion').value.trim();
+
+  if(!ids.length){
+    el('rqActionStatus').textContent='Seleccione uno o más expedientes EN PRÉSTAMO.';
+    return;
+  }
+  if(!nuevo){
+    el('rqActionStatus').textContent='Seleccione el nuevo responsable.';
+    return;
+  }
+
+  if(!confirm(`¿Reasignar ${ids.length} expediente(s) a ${nuevo}?`))return;
+
+  el('rqActionStatus').textContent='Registrando reasignación...';
+
+  const {error}=await sb.rpc('reasignar_solicitud_expedientes',{
+    p_solicitud_id:currentRequestId,
+    p_expediente_ids:ids,
+    p_nuevo_responsable:nuevo,
+    p_observacion:obs||null
+  });
+
+  if(error){el('rqActionStatus').textContent=error.message;return}
+
+  requestSelectedIds.clear();
+  showToast('Reasignación registrada');
+  await Promise.all([loadSummary(),loadPanel(),loadAll(),loadStates(),loadHistory()]);
+  await refreshRequestDetail();
+}
+
+async function returnRequestItems(){
+  const ids=[...requestSelectedIds];
+  const retorno=el('rqDRetorno').value.trim();
+  const obs=el('rqDObservacion').value.trim();
+
+  if(!ids.length){
+    el('rqActionStatus').textContent='Seleccione uno o más expedientes EN PRÉSTAMO.';
+    return;
+  }
+  if(!retorno){
+    el('rqActionStatus').textContent='Seleccione la ubicación de retorno.';
+    return;
+  }
+
+  if(!confirm(`¿Registrar la devolución de ${ids.length} expediente(s) a ${retorno}?`))return;
+
+  el('rqActionStatus').textContent='Registrando devolución...';
+
+  const {data,error}=await sb.rpc('devolver_solicitud_expedientes',{
+    p_solicitud_id:currentRequestId,
+    p_expediente_ids:ids,
+    p_ubicacion_retorno:retorno,
+    p_observacion:obs||null
+  });
+
+  if(error){el('rqActionStatus').textContent=error.message;return}
+
+  requestSelectedIds.clear();
+  showToast(data?.cerrada?'Solicitud cerrada: todos devueltos':'Devolución registrada');
+  await Promise.all([loadSummary(),loadPanel(),loadAll(),loadStates(),loadHistory()]);
+  await refreshRequestDetail();
+}
+
+async function refreshRequestDetail(){
+  await loadRequests();
+  await openRequestDetail(currentRequestId);
+}
+
 async function loadAll(){
   if(!sb||!session)return;
   let q=sb.from('expedientes').select('*',{count:'exact'}).order('updated_at',{ascending:false}).limit(500);
@@ -855,6 +1469,7 @@ function updateSelectionUI(){
   const n=selectedIds.size;
   el('selectedCount').textContent=n+' seleccionado'+(n===1?'':'s');
   el('cargoBtn').disabled=n===0;
+  if(el('requestBtn'))el('requestBtn').disabled=n===0;
 }
 function toggleSelect(id,checked){
   if(checked)selectedIds.add(id);else selectedIds.delete(id);
@@ -894,7 +1509,7 @@ function renderHistory(){
   if(!historyRows.length){el('historyTable').innerHTML='<div class="empty">No hay movimientos para mostrar.</div>';return}
   el('historyTable').innerHTML=`<table><thead><tr><th>Fecha</th><th>Expediente</th><th>Extensión</th><th>Acción</th><th>Desde</th><th>Hacia</th><th>Cargo</th><th>Detalle</th></tr></thead><tbody>${historyRows.map(h=>`<tr><td>${fmtDate(h.created_at)}</td><td><b>${esc(h.expediente)}</b></td><td>${h.extension?esc(h.extension):'—'}</td><td>${esc(h.accion)}</td><td>${esc(h.desde)}</td><td>${esc(h.hacia)}</td><td>${esc(h.cargo)}</td><td>${esc(h.detalle)}</td></tr>`).join('')}</tbody></table>`
 }
-function switchTab(name,btn){['panel','summary','states','all','cargos','history'].forEach(x=>el('tab-'+x).classList.toggle('hidden',x!==name));document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));if(btn)btn.classList.add('active')}
+function switchTab(name,btn){['panel','summary','states','requests','all','cargos','history'].forEach(x=>el('tab-'+x).classList.toggle('hidden',x!==name));document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));if(btn)btn.classList.add('active')}
 
 
 function autoCargoNumber(){ return ''; }
@@ -1133,7 +1748,7 @@ async function saveAndPrintCargo(){
     updateSelectionUI();
     closeCargoModal();
     showToast(`Cargo N.° ${numeroGenerado} guardado sin duplicidad`);
-    await Promise.all([loadSummary(),loadPanel(),loadAll(),loadStates(),loadCargos(),loadHistory()]);
+    await Promise.all([loadSummary(),loadPanel(),loadAll(),loadStates(),loadRequests(),loadCargos(),loadHistory()]);
   }catch(err){
     el('cargoStatus').textContent=err?.message||String(err);
   }finally{
@@ -1280,7 +1895,7 @@ async function saveBatchRecords(btn){
 
     showToast(`Cargo N.° ${numero} generado con ${cantidad} expedientes`);
     closeRecordModal();
-    await Promise.all([loadSummary(),loadPanel(),loadAll(),loadStates(),loadCargos(),loadHistory()]);
+    await Promise.all([loadSummary(),loadPanel(),loadAll(),loadStates(),loadRequests(),loadCargos(),loadHistory()]);
   }catch(err){
     let msg=err?.message||String(err);
     if(String(msg).toLowerCase().includes('duplicate') || String(msg).includes('expedientes_identificador_unico')){
@@ -1449,7 +2064,7 @@ async function saveRecord(e){
 
     closeRecordModal();
     showToast('Expediente actualizado');
-    await Promise.all([loadSummary(),loadPanel(),loadAll(),loadStates(),loadCargos(),loadHistory()]);
+    await Promise.all([loadSummary(),loadPanel(),loadAll(),loadStates(),loadRequests(),loadCargos(),loadHistory()]);
     return;
   }
 
@@ -1523,7 +2138,7 @@ async function saveRecord(e){
 
     closeRecordModal();
     showToast(`Expediente registrado · Cargo N.° ${numero}`);
-    await Promise.all([loadSummary(),loadPanel(),loadAll(),loadStates(),loadCargos(),loadHistory()]);
+    await Promise.all([loadSummary(),loadPanel(),loadAll(),loadStates(),loadRequests(),loadCargos(),loadHistory()]);
   }catch(err){
     let msg=err?.message||String(err);
 
