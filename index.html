@@ -3291,8 +3291,7 @@ function cargoPrintHtml(cargo,solicitante,asunto,atiende,fecha,observacion,rows)
   return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(cargo)}</title><style>
   @page{size:A4;margin:15mm}body{font-family:Arial,sans-serif;color:#111;font-size:11px;margin:0}
   h1{text-align:center;font-size:16px;margin:0 0 4px}h2{text-align:center;font-size:12px;font-weight:normal;margin:0 0 18px}
-  .meta{width:100%;border-collapse:collapse;margin-bottom:12px}.meta td{padding:5px 6px;border:1px solid #777}.sign-top{height:48px;vertical-align:bottom}
-  .sign-line{display:inline-block;min-width:190px;border-top:1px solid #111;padding-top:3px;text-align:center}
+  .meta{width:100%;border-collapse:collapse;margin-bottom:12px}.meta td{padding:5px 6px;border:1px solid #777}
   table.list{width:100%;border-collapse:collapse}.list th,.list td{border:1px solid #555;padding:5px;vertical-align:top}.list th{background:#eee}
   .total{margin-top:8px;font-weight:bold}.obs{margin-top:12px;border:1px solid #777;padding:8px;min-height:35px}
   .signatures{display:flex;justify-content:space-between;margin-top:58px;gap:60px}.signature{flex:1;text-align:center;border-top:1px solid #111;padding-top:5px}
@@ -3300,14 +3299,17 @@ function cargoPrintHtml(cargo,solicitante,asunto,atiende,fecha,observacion,rows)
   <h1>CARGO DE PRÉSTAMO DE EXPEDIENTES</h1><h2>DIRECCIÓN DE SANCIONES - DS-PA</h2>
   <table class="meta">
     <tr><td><b>Cargo N°:</b> ${esc(cargo)}</td><td><b>Fecha:</b> ${esc(fmtDate(fecha))}</td></tr>
-    <tr><td><b>Solicitante:</b> ${esc(solicitante)}</td><td class="sign-top"><span class="sign-line">Firma del solicitante</span></td></tr>
+    <tr><td colspan="2"><b>Solicitante:</b> ${esc(solicitante)}</td></tr>
     <tr><td colspan="2"><b>Asunto:</b> ${esc(asunto||'')}</td></tr>
     <tr><td colspan="2"><b>Atiende el requerimiento:</b> ${esc(atiende||'')}</td></tr>
   </table>
   <table class="list"><thead><tr><th>N°</th><th>Expediente</th><th>Ext.</th><th>R.D.</th><th>Último folio</th><th>Observación</th></tr></thead><tbody>${rowsHtml}</tbody></table>
   <div class="total">Total de expedientes: ${rows.length}</div>
   <div class="obs"><b>Observación general:</b><br>${esc(observacion||'')}</div>
-  <div class="signatures"><div class="signature">ENTREGADO POR - ARCHIVO</div><div class="signature">RECIBIDO POR - SOLICITANTE</div></div>
+  <div class="signatures">
+    <div class="signature">FIRMA DE RECEPCIÓN</div>
+    <div class="signature">FIRMA DE DEVOLUCIÓN</div>
+  </div>
   <div class="footer">Generado por: ${esc(user)} · ${new Date().toLocaleString('es-PE')}</div>
   <script>window.onload=()=>{setTimeout(()=>window.print(),250)}<\/script></body></html>`;
 }
