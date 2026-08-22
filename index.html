@@ -73,10 +73,11 @@
 @media(max-width:760px){.states-kpis{grid-template-columns:1fr}.state-grid{grid-template-columns:1fr}}
 
 
-.req-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px}
+.req-kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:12px}
 .req-state{font-size:10px;font-weight:850;padding:4px 8px;border-radius:999px;display:inline-block;white-space:nowrap}
 .req-solicitado{background:#fff4cc;color:#6d5100}
 .req-atencion{background:#e9f2ff;color:#174c8a}
+.req-aceptado{background:#e9f2ff;color:#174c8a}
 .req-prestamo{background:#fee8d5;color:#8a4100}
 .req-devuelto{background:#e6f5ea;color:#21613a}
 .req-devolucion-solicitada{background:#f4eaff;color:#6b2c91}
@@ -234,6 +235,7 @@
   <section id="tab-requests" class="hidden">
     <div class="req-kpis">
       <div class="card kpi"><div class="label">Solicitadas</div><div class="value" id="rqSolicitado">0</div></div>
+      <div class="card kpi"><div class="label">Aceptadas / sin cargo</div><div class="value" id="rqAceptado">0</div></div>
       <div class="card kpi warn"><div class="label">En préstamo</div><div class="value" id="rqPrestamo">0</div></div>
       <div class="card kpi"><div class="label">Por recibir en Archivo</div><div class="value" id="rqPendienteRecepcion">0</div></div>
       <div class="card kpi"><div class="label">Devueltas</div><div class="value" id="rqDevuelto">0</div></div>
@@ -249,6 +251,7 @@
         <select id="requestStateFilter" onchange="loadRequests()">
           <option value="">TODOS</option>
           <option>SOLICITADO</option>
+          <option>ACEPTADO</option>
           <option>EN PRÉSTAMO</option>
           <option>DEVOLUCIÓN SOLICITADA</option>
           <option>DEVUELTO</option>
@@ -370,7 +373,7 @@
     <div class="modal-head">
       <div>
         <h2>Nueva solicitud de expedientes</h2>
-        <div class="note">La solicitud no cambia la ubicación física. Archivo verifica y atiende la solicitud; en ese momento se genera el cargo automático y los expedientes pasan a EN PRÉSTAMO.</div>
+        <div class="note">La solicitud no cambia la ubicación física. Archivo acepta y verifica la solicitud sin generar cargo. Luego decide si cada expediente se atiende con un cargo nuevo o con un cargo ya existente.</div>
       </div>
       <button class="btn secondary small" onclick="closeNewRequestModal()">Cerrar</button>
     </div>
@@ -435,6 +438,10 @@
       <div class="field">
         <label>Ubicación al devolver</label>
         <select id="rqDRetorno"></select>
+      </div>
+      <div class="field">
+        <label>Cargo existente</label>
+        <input id="rqDCargoExistente" placeholder="Ej.: 0126-2026">
       </div>
       <div class="field span3">
         <label>Observación del movimiento</label>
@@ -1348,6 +1355,7 @@ function clearStateSelection(){
 
 function reqStatePill(state){
   const cls=state==='SOLICITADO'?'req-solicitado':
+    state==='ACEPTADO'?'req-aceptado':
     state==='EN ATENCIÓN'?'req-atencion':
     state==='EN PRÉSTAMO'?'req-prestamo':
     state==='DEVOLUCIÓN SOLICITADA'?'req-devolucion-solicitada':
@@ -1735,6 +1743,7 @@ function renderRequestsByLawyer(){
 
       <div class="lawyer-stats">
         <div>SOLICITADO<b>${Number(x.solicitado||0)}</b></div>
+        <div>PEND. CARGO<b>${Number(x.aceptado||0)}</b></div>
         <div>EN PRÉSTAMO<b>${Number(x.en_prestamo||0)}</b></div>
         <div>POR RECIBIR<b>${Number(x.por_recibir||0)}</b></div>
         <div>DEVUELTO<b>${Number(x.devuelto||0)}</b></div>
@@ -1774,10 +1783,11 @@ async function loadRequests(){
 
   requestRows=data||[];
 
-  const counts={SOLICITADO:0,'EN ATENCIÓN':0,'EN PRÉSTAMO':0,DEVUELTO:0};
+  const counts={SOLICITADO:0,ACEPTADO:0,'EN ATENCIÓN':0,'EN PRÉSTAMO':0,DEVUELTO:0};
   requestRows.forEach(x=>{if(counts[x.estado]!==undefined)counts[x.estado]++});
 
   if(el('rqSolicitado'))el('rqSolicitado').textContent=counts.SOLICITADO;
+  if(el('rqAceptado'))el('rqAceptado').textContent=counts.ACEPTADO;
   if(el('rqPrestamo'))el('rqPrestamo').textContent=counts['EN PRÉSTAMO'];
   if(el('rqPendienteRecepcion')){
     el('rqPendienteRecepcion').textContent=requestRows.reduce((a,x)=>a+Number(x.devoluciones_pendientes||0),0);
@@ -1980,6 +1990,7 @@ async function openRequestDetail(id){
   requestSelectedIds.clear();
   el('rqActionStatus').textContent='';
   el('rqDObservacion').value='';
+  if(el('rqDCargoExistente'))el('rqDCargoExistente').value='';
 
   const header=requestRows.find(x=>x.id===id);
   if(!header){
@@ -2049,6 +2060,10 @@ function toggleAllRequestItems(checked){
   renderRequestDetailItems();
 }
 
+function requestItemCanAssignCargo(x){
+  return hasFullAccess() && x.estado_item==='ACEPTADO';
+}
+
 function requestItemCanReassign(x){
   if(x.estado_item!=='EN PRÉSTAMO')return false;
   if(hasFullAccess())return true;
@@ -2059,7 +2074,6 @@ function requestItemCanReassign(x){
 
 function requestItemCanRequestReturn(x){
   if(x.estado_item!=='EN PRÉSTAMO')return false;
-
   if(hasFullAccess())return true;
 
   const mine=currentProfile?.nombre_personal||'';
@@ -2072,7 +2086,9 @@ function requestItemCanConfirmReturn(x){
 
 function requestItemSelectable(x){
   if(hasFullAccess()){
-    return requestItemCanReassign(x) || requestItemCanConfirmReturn(x);
+    return requestItemCanAssignCargo(x) ||
+      requestItemCanReassign(x) ||
+      requestItemCanConfirmReturn(x);
   }
   return requestItemCanReassign(x) || requestItemCanRequestReturn(x);
 }
@@ -2095,7 +2111,7 @@ function renderRequestDetailItems(){
     <thead><tr>
       <th><input type="checkbox" ${selectableRows.length?'':'disabled'} ${allChecked?'checked':''} onchange="toggleAllRequestItems(this.checked)"></th>
       <th>Expediente</th><th>Ext.</th><th>Estado solicitud</th><th>Estado físico</th>
-      <th>Responsable actual</th><th>F. entrega</th><th>F. sol. devolución</th><th>F. devolución</th>
+      <th>Responsable actual</th><th>Cargo</th><th>F. entrega</th><th>F. sol. devolución</th><th>F. devolución</th>
     </tr></thead>
     <tbody>${data.map(x=>{
       const selectable=requestItemSelectable(x);
@@ -2108,6 +2124,7 @@ function renderRequestDetailItems(){
         <td>${reqStatePill(x.estado_item)}</td>
         <td>${esc(x.estado_fisico||'')}</td>
         <td>${esc(x.responsable_actual||x.ubicacion_actual||'')}</td>
+        <td><b>${esc(x.cargo_numero||'—')}</b></td>
         <td>${fmtDate(x.fecha_entrega)}</td>
         <td>${fmtDate(x.fecha_solicitud_devolucion)}</td>
         <td>${fmtDate(x.fecha_devolucion)}</td>
@@ -2147,33 +2164,40 @@ function renderRequestMovements(){
 
 function renderRequestActions(){
   const r=currentRequest||{};
+  const hasMyLoan=requestDetailRows.some(x=>requestItemCanReassign(x));
 
   if(isLimitedUser()){
     el('rqDAtiende').disabled=true;
     el('rqDRetorno').disabled=true;
+    el('rqDCargoExistente').disabled=true;
     el('rqDNuevoResponsable').disabled=false;
     el('rqDObservacion').disabled=false;
 
-    if(r.estado==='EN PRÉSTAMO'){
-      el('rqWorkflowActions').innerHTML=`
-        <button class="btn secondary" onclick="reassignRequestItems()">Reasignar seleccionados</button>
-        <button class="btn" onclick="requestReturnItems()">Solicitar devolución</button>
-        <span class="note">Puede reasignar o solicitar la devolución de los expedientes que actualmente están bajo su responsabilidad.</span>`;
-    }else if(r.estado==='SOLICITADO'){
-      el('rqWorkflowActions').innerHTML=`
+    let actions='';
+
+    if(r.estado==='SOLICITADO'){
+      actions=`
         <button class="btn secondary" onclick="openAddItemsToExistingRequest()">+ Agregar expedientes</button>
-        <span class="note">Puede agregar más expedientes mientras Archivo todavía no haya atendido la solicitud.</span>`;
-    }else if(r.estado==='DEVUELTO'){
-      el('rqWorkflowActions').innerHTML=
-        '<span class="note">Solicitud cerrada. El expediente ya fue recibido por Archivo.</span>';
-    }else{
-      el('rqWorkflowActions').innerHTML=
-        '<span class="note">Consulte el estado de la solicitud.</span>';
+        <span class="note">Solicitud registrada. Archivo debe aceptarla y verificarla. Todavía no existe cargo.</span>`;
+    }else if(r.estado==='ACEPTADO'){
+      actions='<span class="note">Solicitud aceptada por Archivo. Los expedientes están pendientes de ser atendidos con un cargo.</span>';
     }
+
+    if(hasMyLoan){
+      actions += `
+        <button class="btn secondary" onclick="reassignRequestItems()">Reasignar seleccionados</button>
+        <button class="btn" onclick="requestReturnItems()">Solicitar devolución</button>`;
+    }
+
+    if(r.estado==='DEVUELTO'){
+      actions='<span class="note">Solicitud cerrada. Todos los expedientes fueron recibidos por Archivo.</span>';
+    }
+
+    el('rqWorkflowActions').innerHTML=actions||'<span class="note">Consulte el estado de la solicitud.</span>';
     return;
   }
 
-  ['rqDAtiende','rqDNuevoResponsable','rqDRetorno','rqDObservacion'].forEach(id=>{
+  ['rqDAtiende','rqDNuevoResponsable','rqDRetorno','rqDCargoExistente','rqDObservacion'].forEach(id=>{
     if(el(id))el(id).disabled=false;
   });
 
@@ -2182,39 +2206,53 @@ function renderRequestActions(){
   if(r.estado==='SOLICITADO'){
     actions=`
       <button class="btn secondary" onclick="openAddItemsToExistingRequest()">+ Agregar expedientes</button>
-      <button class="btn" onclick="verifyAndAttendRequest()">Verificar y atender solicitud</button>
-      <span class="note">Puede ampliar la solicitud antes de atenderla. Al atender, se genera el cargo automático para todos los expedientes incluidos.</span>`;
-  }else if(r.estado==='EN PRÉSTAMO'){
-    actions=`
-      <button class="btn secondary" onclick="reassignRequestItems()">Reasignar seleccionados</button>
-      <button class="btn" onclick="confirmReturnItems()">Confirmar devolución física</button>
-      <span class="note">La devolución se confirma únicamente cuando el expediente llega físicamente a Archivo.</span>`;
-  }else if(r.estado==='DEVUELTO'){
+      <button class="btn" onclick="acceptRequestWithoutCargo()">Aceptar / verificar solicitud</button>
+      <span class="note">Aceptar la solicitud NO genera cargo ni cambia todavía el estado físico del expediente.</span>`;
+  }
+
+  if(r.estado==='ACEPTADO'){
+    actions += `
+      <button class="btn" onclick="assignNewCargoToAccepted()">Generar cargo nuevo para seleccionados</button>
+      <button class="btn secondary" onclick="assignExistingCargoToAccepted()">Atender con cargo existente</button>
+      <span class="note">Seleccione uno o varios expedientes ACEPTADOS. Pueden ser atendidos con cargos distintos.</span>`;
+  }
+
+  if(requestDetailRows.some(x=>x.estado_item==='EN PRÉSTAMO')){
+    actions += `
+      <button class="btn secondary" onclick="reassignRequestItems()">Reasignar seleccionados</button>`;
+  }
+
+  if(requestDetailRows.some(x=>x.estado_item==='DEVOLUCIÓN SOLICITADA')){
+    actions += `
+      <button class="btn" onclick="confirmReturnItems()">Confirmar devolución física</button>`;
+  }
+
+  if(r.estado==='DEVUELTO'){
     actions='<span class="note">Solicitud cerrada: todos los expedientes fueron recibidos físicamente y devueltos a custodia.</span>';
   }
 
-  el('rqWorkflowActions').innerHTML=actions;
+  el('rqWorkflowActions').innerHTML=actions||'<span class="note">Sin acciones pendientes.</span>';
 }
-async function verifyAndAttendRequest(){
+async function acceptRequestWithoutCargo(){
   const atiende=el('rqDAtiende').value.trim();
   const obs=el('rqDObservacion').value.trim();
 
   if(!hasFullAccess()){
-    el('rqActionStatus').textContent='Solo Archivo o Administrador puede atender solicitudes.';
+    el('rqActionStatus').textContent='Solo Archivo o Administrador puede aceptar solicitudes.';
     return;
   }
 
   if(!atiende){
-    el('rqActionStatus').textContent='Indique quién atiende el requerimiento.';
+    el('rqActionStatus').textContent='Indique quién verifica / atiende el requerimiento.';
     el('rqDAtiende').focus();
     return;
   }
 
-  if(!confirm('¿Confirmar que Archivo verificó la solicitud y entregará los expedientes? Se generará el cargo automático.'))return;
+  if(!confirm('¿Aceptar y verificar esta solicitud? Todavía NO se generará ningún cargo.'))return;
 
-  el('rqActionStatus').textContent='Verificando solicitud, generando cargo y registrando préstamo...';
+  el('rqActionStatus').textContent='Aceptando y verificando solicitud...';
 
-  const {data,error}=await sb.rpc('verificar_y_atender_solicitud',{
+  const {data,error}=await sb.rpc('aceptar_solicitud_sin_cargo',{
     p_solicitud_id:currentRequestId,
     p_atiende:atiende,
     p_observacion:obs||null
@@ -2225,24 +2263,136 @@ async function verifyAndAttendRequest(){
     return;
   }
 
-  showToast(`Solicitud atendida · Cargo ${data?.cargo_numero||''}`);
+  showToast('Solicitud aceptada · pendiente de asignación de cargo');
 
   await Promise.all([
-    loadSummary(),
-    loadPanel(),
-    loadAll(),
-    loadStates(),
-    loadRequestsByLawyer(),
-    loadCargos(),
-    loadHistory()
+    loadSummary(),loadPanel(),loadAll(),loadStates(),
+    loadRequestsByLawyer(),loadCargos(),loadHistory()
   ]);
 
   await refreshRequestDetail();
 }
 
-// Compatibilidad con botones/versiones anteriores.
-async function attendRequest(){ return verifyAndAttendRequest(); }
-async function deliverRequest(){ return verifyAndAttendRequest(); }
+function selectedAcceptedIds(){
+  const ids=[...requestSelectedIds];
+  return requestDetailRows
+    .filter(x=>ids.includes(x.expediente_id) && x.estado_item==='ACEPTADO')
+    .map(x=>x.expediente_id);
+}
+
+async function assignNewCargoToAccepted(){
+  if(!hasFullAccess())return;
+
+  const ids=[...requestSelectedIds];
+  const accepted=selectedAcceptedIds();
+  const atiende=el('rqDAtiende').value.trim();
+  const obs=el('rqDObservacion').value.trim();
+
+  if(!ids.length){
+    el('rqActionStatus').textContent='Seleccione uno o más expedientes ACEPTADOS.';
+    return;
+  }
+
+  if(accepted.length!==ids.length){
+    el('rqActionStatus').textContent='Para generar un cargo nuevo, seleccione únicamente expedientes con estado ACEPTADO.';
+    return;
+  }
+
+  if(!atiende){
+    el('rqActionStatus').textContent='Indique quién atiende el requerimiento.';
+    return;
+  }
+
+  if(!confirm(`¿Generar un cargo nuevo para ${accepted.length} expediente(s) seleccionado(s)?`))return;
+
+  el('rqActionStatus').textContent='Generando cargo y registrando entrega...';
+
+  const {data,error}=await sb.rpc('atender_expedientes_cargo_nuevo',{
+    p_solicitud_id:currentRequestId,
+    p_expediente_ids:accepted,
+    p_atiende:atiende,
+    p_observacion:obs||null
+  });
+
+  if(error){
+    el('rqActionStatus').textContent=error.message;
+    return;
+  }
+
+  requestSelectedIds.clear();
+  showToast(`Cargo ${data?.cargo_numero||''} generado para ${accepted.length} expediente(s)`);
+
+  await Promise.all([
+    loadSummary(),loadPanel(),loadAll(),loadStates(),
+    loadRequestsByLawyer(),loadCargos(),loadHistory()
+  ]);
+
+  await refreshRequestDetail();
+}
+
+async function assignExistingCargoToAccepted(){
+  if(!hasFullAccess())return;
+
+  const ids=[...requestSelectedIds];
+  const accepted=selectedAcceptedIds();
+  const cargo=el('rqDCargoExistente').value.trim();
+  const obs=el('rqDObservacion').value.trim();
+
+  if(!ids.length){
+    el('rqActionStatus').textContent='Seleccione uno o más expedientes ACEPTADOS.';
+    return;
+  }
+
+  if(accepted.length!==ids.length){
+    el('rqActionStatus').textContent='Para usar un cargo existente, seleccione únicamente expedientes con estado ACEPTADO.';
+    return;
+  }
+
+  if(!cargo){
+    el('rqActionStatus').textContent='Ingrese el número del cargo existente.';
+    el('rqDCargoExistente').focus();
+    return;
+  }
+
+  if(!confirm(`¿Atender ${accepted.length} expediente(s) con el Cargo N.° ${cargo}?`))return;
+
+  el('rqActionStatus').textContent='Vinculando expedientes al cargo existente...';
+
+  const {data,error}=await sb.rpc('atender_expedientes_cargo_existente',{
+    p_solicitud_id:currentRequestId,
+    p_expediente_ids:accepted,
+    p_cargo_numero:cargo,
+    p_observacion:obs||null
+  });
+
+  if(error){
+    el('rqActionStatus').textContent=error.message;
+    return;
+  }
+
+  requestSelectedIds.clear();
+  el('rqDCargoExistente').value='';
+  showToast(`${accepted.length} expediente(s) atendidos con Cargo ${data?.cargo_numero||cargo}`);
+
+  await Promise.all([
+    loadSummary(),loadPanel(),loadAll(),loadStates(),
+    loadRequestsByLawyer(),loadCargos(),loadHistory()
+  ]);
+
+  await refreshRequestDetail();
+}
+
+// Compatibilidad con versiones anteriores del frontend:
+// "Verificar y atender" ahora SOLO acepta la solicitud; no genera cargo.
+async function verifyAndAttendRequest(){
+  return acceptRequestWithoutCargo();
+}
+async function attendRequest(){
+  return acceptRequestWithoutCargo();
+}
+async function deliverRequest(){
+  el('rqActionStatus').textContent='Primero acepte la solicitud y luego asigne un cargo nuevo o existente.';
+}
 
 async function reassignRequestItems(){
   const ids=[...requestSelectedIds];
