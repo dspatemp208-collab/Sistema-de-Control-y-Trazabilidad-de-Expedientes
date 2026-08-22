@@ -133,6 +133,11 @@
 .status-attn.returning{background:#fee8d5;color:#8a4100}
 .status-attn.received{background:#dff4e6;color:#175c35}
 
+
+.pill.reassigned{background:#f4eaff;color:#6b2c91}
+.pill.return-requested{background:#fee8d5;color:#8a4100}
+.pill.returned-archive{background:#e6f5ea;color:#21613a}
+
 </style>
 </head>
 <body>
@@ -2852,7 +2857,50 @@ function toggleAllRows(checked,source){
   else el('panelTable').innerHTML=recordTable(panelRows,false,'panel');
 }
 
-function rowStatus(r){const c=r.estado==='EN PRÉSTAMO'?'loan':r.estado==='DEVUELTO'?'returned':'';return `<span class="pill ${c}">${esc(r.estado||'')}</span>`}
+function operationalStatus(r){
+  // Para Archivo/Admin se conserva el estado físico/técnico.
+  if(!isLimitedUser())return r.estado||'';
+
+  const action=norm(r.ultimo_movimiento||'');
+
+  // Último movimiento confirmado por Archivo.
+  if(action.includes('DEVOLUCIÓN CONFIRMADA') ||
+     action.includes('RECIBIDO EN ARCHIVO')){
+    return 'DEVUELTO AL ARCHIVO';
+  }
+
+  // El abogado comunicó la devolución, pero Archivo aún no confirma.
+  if(action.includes('DEVOLUCIÓN SOLICITADA')){
+    return 'DEVOLUCIÓN SOLICITADA';
+  }
+
+  // El expediente cambió de responsable.
+  if(action.includes('REASIGNACIÓN')){
+    return 'REASIGNADO';
+  }
+
+  // Archivo ya realizó la entrega física al abogado.
+  if(action.includes('EN PRÉSTAMO') ||
+     action.includes('ATENDIDO CON CARGO')){
+    return 'EN PRÉSTAMO';
+  }
+
+  // Si aún no hay un movimiento operativo específico,
+  // mostrar el estado físico actual de la base.
+  return r.estado||'';
+}
+
+function rowStatus(r){
+  const state=operationalStatus(r);
+
+  const c=state==='EN PRÉSTAMO'?'loan':
+    state==='DEVUELTO AL ARCHIVO'?'returned-archive':
+    state==='REASIGNADO'?'reassigned':
+    state==='DEVOLUCIÓN SOLICITADA'?'return-requested':
+    state==='DEVUELTO'?'returned':'';
+
+  return `<span class="pill ${c}">${esc(state)}</span>`;
+}
 function recordTable(data,withOwner=false,source='panel'){
   if(!data.length)return '<div class="empty">No hay expedientes registrados para esta selección.</div>';
 
