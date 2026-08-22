@@ -138,6 +138,10 @@
 .pill.return-requested{background:#fee8d5;color:#8a4100}
 .pill.returned-archive{background:#e6f5ea;color:#21613a}
 
+
+.cargo-toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.cargo-selected-row{background:#f7fbff}
+
 </style>
 </head>
 <body>
@@ -316,9 +320,22 @@
         <label>Buscar cargos</label>
         <input id="cargoSearch" placeholder="Cargo, asunto o solicitante..." oninput="debounceCargos()">
       </div>
-      <div class="note">Aquí se muestran los asuntos registrados para cada cargo.</div>
+      <div class="note">Seleccione un cargo de la relación para visualizarlo o imprimirlo.</div>
       <div></div>
     </div>
+
+    <div class="card" style="margin-bottom:12px">
+      <div class="cargo-toolbar">
+        <div>
+          <strong>Cargo seleccionado:</strong>
+          <span id="selectedCargoLabel">Ninguno</span>
+        </div>
+        <button class="btn" id="printSelectedCargoBtn" onclick="printSelectedCargo()" disabled>
+          🖨 Imprimir cargo seleccionado
+        </button>
+      </div>
+    </div>
+
     <div class="card table-wrap">
       <div class="table-head"><strong>Relación de cargos</strong><span id="cargosCount">0</span></div>
       <div id="cargosTable"><div class="empty">Seleccione la pestaña Cargos para consultar.</div></div>
@@ -820,7 +837,7 @@ const MASTER=[["MARCELA ALONZO", "PERSONAL"], ["ABRAHAN DAMAS", "PERSONAL"], ["A
 const ASUNTOS_PREDETERMINADOS=["ACCESO A LA INFORMACIÓN", "ANALISIS Y EVALUACIÓN DEL MEMORANDO DE CONCLUSIÓN DEL PROCESO CONTENCIOSO ADMINISTRATIVO, REMITIDO POR LA PROCURADURÍA PÚBLICA (PP)", "ANEXADO DE CÉDULAS DE NOTIFICACIÓN", "ANEXADO DE DOCUMENTOS", "ATENCIÓN A LA DIRECCIÓN DE EXTRACCIÓN PARA CONSUMO HUMANO DIRECTO E INDIRECTO (DECHDI)", "ATENCIÓN A LA DIRECCIÓN DE VIGILANCIA Y CONTROL (DVC) - RD ARCHIVAMIENTO", "ATENCIÓN A LA OFICINA DE CONTROL INTERNO (OCI)", "ATENCIÓN A LA OFICINA GENERAL DE ADMINISTRACIÓN (OGA)", "ATENCIÓN A LA PROCURADURÍA PÚBLICA", "ATENCIÓN AL MINISTERIO PÚBLICO (FISCALÍA)", "ATENCIÓN DE ESCRITOS", "ATENCIÓN DE ESCRITOS REMITIDOS POR EL CONSEJO DE APELACIÓN DE SANCIONES CALIDAD DE PRÉSTAMO (CONAS)", "ATENCIÓN DE QUEJAS", "CADUCIDAD", "COMUNICACIÓN DE LAS SANCIONES A LA DIRECCIÓN GENERAL DE PESCA PARA CONSUMO HUMANO DIRECTO E INDIRECTO (DGPCHDI)", "DESLINDE DE RESPONSABILIDAD", "ELEVACIÓN DEL EXPEDIENTE AL CONSEJO DE APELACIÓN DE SANCIONES (CONAS)", "ENMIENDA", "EVALUACIÓN DE OFICIO", "EVALUACIÓN DE PAGOS POR CONCEPTO DE DECOMISOS", "EVALUACIÓN DEL EXPEDIENTE QUE RETORNA DEL CONSEJO DE APELACIÓN DE SANCIONES (CONAS)", "INTERES PARTICULAR", "LECTURA EN SALA (USUARIOS INTERNOS)", "LECTURA EXPEDIENTE (USUARIOS EXTERNOS)", "NULIDAD DE OFICIO", "PERDIDA DE BENEFICIO", "PETICIÓN ADMINISTRATIVA", "RECOMENDACIÓN DE INICIO", "RECONSIDERACIÓN", "REINCIDENCIAS DEL PAS", "REVISIÓN", "REVISIÓN DEL PROCEDIMIENTO DE EJECUCIÓN COACTIVA (PEC) - OEC", "SECRETARIA TÉCNICA DE LOS ORGANOS INSTRUCTORES (STOI)", "SOLICITUD DE BENEFICIOS", "TRAMITACIÓN DEL PAS (IFIS)", "USO DE LA PALABRA O AUDIENCIA"];
 const STATUSES=['CUSTODIA','EN PRÉSTAMO','DEVUELTO','REASIGNADO','EN TRÁMITE','PENDIENTE DE ORGANIZAR','TRANSFERIDO','EN NOTIFICACIONES'];
 const PAGE_SIZE=200;
-let sb=null, session=null, currentProfile=null, userProfiles=[], summaryRows=[], panelRows=[], allRows=[], historyRows=[], cargosRows=[], stateRows=[], stateDetailRows=[], requestRows=[], requestDetailRows=[], requestMovementRows=[], requestSearchRows=[], requestsByLawyerRows=[];
+let sb=null, session=null, currentProfile=null, userProfiles=[], summaryRows=[], panelRows=[], allRows=[], historyRows=[], cargosRows=[], selectedCargoNumero='', stateRows=[], stateDetailRows=[], requestRows=[], requestDetailRows=[], requestMovementRows=[], requestSearchRows=[], requestsByLawyerRows=[];
 let catalogo=MASTER.map(([nombre,tipo],i)=>({id:'fallback-'+i,nombre,tipo,activo:true}));
 let selectedIds=new Set(), cargoRows=[];
 let recordMode='single', batchCargoHeader=null;
@@ -2386,17 +2403,6 @@ function renderRequestActions(){
 
   let actions='';
 
-  const cargosImprimibles=[...new Set(
-    (requestDetailRows||[])
-      .map(x=>(x.cargo_numero||'').trim())
-      .filter(Boolean)
-  )];
-
-  if(cargosImprimibles.length){
-    actions += `
-      <button class="btn secondary" onclick="printCargoFromRequest()">🖨 Imprimir cargo</button>`;
-  }
-
   if(r.estado==='SOLICITADO'){
     actions=`
       <button class="btn secondary" onclick="openAddItemsToExistingRequest()">+ Agregar expedientes</button>
@@ -2767,19 +2773,73 @@ async function loadCargos(){
   }
 
   const {data,error}=await q;
+
   if(error){
     el('cargosTable').innerHTML=`<div class="empty">${esc(error.message)}</div>`;
     return;
   }
 
   cargosRows=data||[];
+
+  // Contar expedientes vinculados a cada cargo.
+  const cargoIds=cargosRows.map(c=>c.id).filter(Boolean);
+
+  if(cargoIds.length){
+    const {data:links,error:linksErr}=await sb
+      .from('cargo_expedientes')
+      .select('cargo_id,expediente_id')
+      .in('cargo_id',cargoIds);
+
+    if(!linksErr){
+      const counts=new Map();
+
+      (links||[]).forEach(x=>{
+        counts.set(x.cargo_id,(counts.get(x.cargo_id)||0)+1);
+      });
+
+      cargosRows=cargosRows.map(c=>({
+        ...c,
+        total_expedientes:counts.get(c.id)||0
+      }));
+    }
+  }
+
+  // Si el cargo seleccionado desapareció del resultado del filtro,
+  // limpiar la selección.
+  if(selectedCargoNumero &&
+     !cargosRows.some(c=>c.numero===selectedCargoNumero)){
+    selectCargoForPrint('');
+  }
+
   el('cargosCount').textContent=cargosRows.length+' cargos';
   renderCargos();
 }
-
 function debounceCargos(){
   clearTimeout(cargosTimer);
   cargosTimer=setTimeout(loadCargos,300);
+}
+
+function selectCargoForPrint(numero){
+  selectedCargoNumero=(numero||'').trim();
+
+  if(el('selectedCargoLabel')){
+    el('selectedCargoLabel').textContent=selectedCargoNumero||'Ninguno';
+  }
+
+  if(el('printSelectedCargoBtn')){
+    el('printSelectedCargoBtn').disabled=!selectedCargoNumero;
+  }
+
+  renderCargos();
+}
+
+async function printSelectedCargo(){
+  if(!selectedCargoNumero){
+    alert('Seleccione un cargo de la relación.');
+    return;
+  }
+
+  await openExistingCargoForPrint(selectedCargoNumero);
 }
 
 function renderCargos(){
@@ -2791,27 +2851,49 @@ function renderCargos(){
   el('cargosTable').innerHTML=`<table>
     <thead>
       <tr>
+        <th style="width:42px">Sel.</th>
         <th>Cargo N°</th>
+        <th>Expedientes</th>
         <th>Asunto</th>
         <th>Solicitante</th>
+        <th>Atiende</th>
         <th>Fecha</th>
         <th>Observación</th>
         <th></th>
       </tr>
     </thead>
     <tbody>
-      ${cargosRows.map(c=>`<tr>
-        <td><b>${esc(c.numero)}</b></td>
-        <td>${esc(c.asunto||'—')}</td>
-        <td>${esc(c.solicitante||'')}</td>
-        <td>${fmtDate(c.fecha)}</td>
-        <td>${esc(c.observacion||'')}</td>
-        <td><button class="btn secondary small" onclick="verExpedientesCargo('${String(c.numero).replace(/'/g,"\\'")}')">Ver expedientes</button></td>
-      </tr>`).join('')}
+      ${cargosRows.map(c=>{
+        const selected=c.numero===selectedCargoNumero;
+
+        return `<tr class="${selected?'cargo-selected-row':''}">
+          <td>
+            <input
+              type="radio"
+              name="cargoParaImprimir"
+              aria-label="Seleccionar cargo ${esc(c.numero)}"
+              ${selected?'checked':''}
+              onchange="selectCargoForPrint('${String(c.numero).replace(/'/g,"\\'")}')">
+          </td>
+          <td><b>${esc(c.numero)}</b></td>
+          <td><b>${Number(c.total_expedientes||0)}</b></td>
+          <td>${esc(c.asunto||'—')}</td>
+          <td>${esc(c.solicitante||'')}</td>
+          <td>${esc(c.atiende_requerimiento||'—')}</td>
+          <td>${fmtDate(c.fecha)}</td>
+          <td>${esc(c.observacion||'')}</td>
+          <td>
+            <button
+              class="btn secondary small"
+              onclick="verExpedientesCargo('${String(c.numero).replace(/'/g,"\\'")}')">
+              Ver expedientes
+            </button>
+          </td>
+        </tr>`;
+      }).join('')}
     </tbody>
   </table>`;
 }
-
 async function verExpedientesCargo(numero){
   switchTab('all',document.querySelector('[data-tab="all"]'));
   el('allSearch').value=numero;
@@ -2966,9 +3048,6 @@ function recordTable(data,withOwner=false,source='panel'){
     <td><div style="display:flex;gap:5px;white-space:nowrap">
       <button class="btn secondary small" onclick="showExpHistory('${r.id}')">Historial</button>
       <button class="btn small" onclick="manageExpedienteFromPanel('${r.id}')">Gestionar</button>
-      ${hasFullAccess() && r.cargo
-        ?`<button class="btn secondary small" onclick="openExistingCargoForPrint('${esc(r.cargo)}')">🖨 Cargo</button>`
-        :''}
       ${hasFullAccess()?`<button class="btn secondary small" onclick="editRecord('${r.id}')">Editar</button>`:''}
     </div></td>
   </tr>`).join('');
@@ -3145,50 +3224,6 @@ async function openExistingCargoForPrint(numero){
   }
 }
 
-async function printCargoFromRequest(){
-  if(!hasFullAccess()){
-    alert('Solo Archivo o Administrador puede imprimir cargos.');
-    return;
-  }
-
-  const selected=[...requestSelectedIds];
-
-  let rows=requestDetailRows||[];
-
-  if(selected.length){
-    rows=rows.filter(x=>selected.includes(x.expediente_id));
-  }
-
-  let cargos=[...new Set(
-    rows.map(x=>(x.cargo_numero||'').trim()).filter(Boolean)
-  )];
-
-  // Si no se seleccionó nada y la solicitud contiene exactamente un cargo,
-  // permitir imprimirlo directamente.
-  if(!selected.length){
-    cargos=[...new Set(
-      (requestDetailRows||[])
-        .map(x=>(x.cargo_numero||'').trim())
-        .filter(Boolean)
-    )];
-  }
-
-  if(!cargos.length){
-    if(el('rqActionStatus')){
-      el('rqActionStatus').textContent='Los expedientes seleccionados todavía no tienen un cargo para imprimir.';
-    }
-    return;
-  }
-
-  if(cargos.length>1){
-    if(el('rqActionStatus')){
-      el('rqActionStatus').textContent='Hay más de un cargo. Seleccione expedientes pertenecientes a un solo cargo.';
-    }
-    return;
-  }
-
-  await openExistingCargoForPrint(cargos[0]);
-}
 
 async function openCargoModal(){
   if(!selectedIds.size){alert('Seleccione al menos un expediente.');return}
