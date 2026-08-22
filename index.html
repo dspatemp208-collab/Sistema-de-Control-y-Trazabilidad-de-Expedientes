@@ -514,6 +514,41 @@
       Escriba al menos 4 caracteres del número de expediente.
     </div>
 
+    <div id="newExpRequestBox" class="card hidden" style="margin-top:10px;padding:12px">
+      <strong>El expediente no está registrado</strong>
+      <div class="note" style="margin:4px 0 10px">
+        Puede registrarlo por primera vez y generar inmediatamente la solicitud.
+        Archivo verificará el expediente antes de atenderlo.
+      </div>
+
+      <div class="form-grid">
+        <div class="field">
+          <label>Expediente *</label>
+          <input id="newReqExpediente" readonly>
+        </div>
+        <div class="field">
+          <label>Extensión</label>
+          <input id="newReqExtension" placeholder="Opcional">
+        </div>
+        <div class="field">
+          <label>R.D.</label>
+          <input id="newReqRd" placeholder="Opcional">
+        </div>
+        <div class="field">
+          <label>Último folio</label>
+          <input id="newReqFolio" placeholder="Opcional">
+        </div>
+        <div class="field span4">
+          <label>Observación del expediente</label>
+          <input id="newReqExpObs" placeholder="Dato adicional, si corresponde">
+        </div>
+      </div>
+
+      <div style="margin-top:10px">
+        <button class="btn" onclick="openNewFirstTimeRequest()">Registrar expediente nuevo y solicitar</button>
+      </div>
+    </div>
+
     <div class="request-search-results" id="requestLookupResults">
       <div class="empty">Sin búsqueda.</div>
     </div>
@@ -1321,6 +1356,7 @@ function openRequestSearchModal(){
   el('requestLookupInput').value='';
   el('requestLookupStatus').textContent='Escriba al menos 4 caracteres del número de expediente.';
   el('requestLookupResults').innerHTML='<div class="empty">Sin búsqueda.</div>';
+  showNewExpRequestOption(false);
   updateRequestLookupSelection();
   el('requestSearchModal').classList.add('show');
   setTimeout(()=>el('requestLookupInput').focus(),50);
@@ -1330,16 +1366,102 @@ function closeRequestSearchModal(){
   el('requestSearchModal').classList.remove('show');
 }
 
-async function searchRequestCandidates(){
-  const q=el('requestLookupInput').value.trim();
 
-  if(q.length<4){
-    el('requestLookupStatus').textContent='Ingrese al menos 4 caracteres.';
+function normalizeRequestExpediente(value){
+  const raw=(value||'').trim().toUpperCase().replace(/\s+/g,'');
+  const m=raw.match(/^(\d+)-(\d{4})$/);
+  if(!m)return raw;
+  return m[1].padStart(4,'0')+'-'+m[2];
+}
+
+function showNewExpRequestOption(show,expediente=''){
+  const box=el('newExpRequestBox');
+  if(!box)return;
+  box.classList.toggle('hidden',!show);
+
+  if(show){
+    el('newReqExpediente').value=normalizeRequestExpediente(expediente);
+    el('newReqExtension').value='';
+    el('newReqRd').value='';
+    el('newReqFolio').value='';
+    el('newReqExpObs').value='';
+  }
+}
+
+async function openNewFirstTimeRequest(){
+  if(isLimitedUser() && !currentProfile?.nombre_personal){
+    alert('Su cuenta no está asociada a un nombre de personal.');
     return;
   }
 
+  const expediente=normalizeRequestExpediente(el('newReqExpediente').value);
+
+  if(!/^\d{4}-\d{4}$/.test(expediente)){
+    el('requestLookupStatus').textContent='Use el formato NÚMERO-AÑO. Ej.: 0352-2026.';
+    return;
+  }
+
+  const newData={
+    expediente,
+    extension:el('newReqExtension').value.trim()||null,
+    rd:el('newReqRd').value.trim()||null,
+    ultimo_folio:el('newReqFolio').value.trim()||null,
+    observacion:el('newReqExpObs').value.trim()||null,
+    estado:'PENDIENTE DE VERIFICACIÓN',
+    _nuevo:true
+  };
+
+  closeRequestSearchModal();
+
+  const activos=catalogo.filter(x=>x.activo!==false&&x.tipo==='PERSONAL');
+
+  if(isLimitedUser()){
+    el('rqSolicitante').innerHTML=`<option>${esc(currentProfile.nombre_personal)}</option>`;
+    el('rqSolicitante').value=currentProfile.nombre_personal;
+    el('rqSolicitante').disabled=true;
+  }else{
+    el('rqSolicitante').disabled=false;
+    if(selectedOwner && activos.some(x=>x.nombre===selectedOwner)){
+      el('rqSolicitante').value=selectedOwner;
+    }else if(activos.length){
+      el('rqSolicitante').value=activos[0].nombre;
+    }
+  }
+
+  el('rqAsunto').value='';
+  el('rqObservacion').value='';
+  el('rqSaveStatus').textContent='';
+  el('rqSelectedCount').textContent='1 expediente nuevo';
+
+  el('rqSelectedTable').innerHTML=`<table>
+    <thead><tr><th>Expediente</th><th>Ext.</th><th>R.D.</th><th>Estado</th></tr></thead>
+    <tbody><tr>
+      <td><b>${esc(newData.expediente)}</b></td>
+      <td>${newData.extension?esc(newData.extension):'—'}</td>
+      <td>${newData.rd?esc(newData.rd):'—'}</td>
+      <td><span class="pill">PENDIENTE DE VERIFICACIÓN</span></td>
+    </tr></tbody>
+  </table>`;
+
+  el('newRequestModal').dataset.ids='[]';
+  el('newRequestModal').dataset.newExp=JSON.stringify(newData);
+  el('newRequestModal').classList.add('show');
+}
+
+async function searchRequestCandidates(){
+  const raw=el('requestLookupInput').value.trim();
+  const q=normalizeRequestExpediente(raw);
+
+  if(q.length<4){
+    el('requestLookupStatus').textContent='Ingrese al menos 4 caracteres.';
+    showNewExpRequestOption(false);
+    return;
+  }
+
+  el('requestLookupInput').value=q;
   el('requestLookupStatus').textContent='Buscando...';
   el('requestLookupResults').innerHTML='<div class="empty">Buscando...</div>';
+  showNewExpRequestOption(false);
 
   const {data,error}=await sb.rpc('buscar_expedientes_para_solicitud',{
     p_busqueda:q
@@ -1353,9 +1475,17 @@ async function searchRequestCandidates(){
 
   requestSearchRows=data||[];
   requestSearchSelectedIds.clear();
+
+  if(!requestSearchRows.length && /^\d{4}-\d{4}$/.test(q)){
+    el('requestLookupStatus').textContent='El expediente no está registrado. Puede ingresarlo por primera vez.';
+    el('requestLookupResults').innerHTML='<div class="empty">No existe en la base de datos.</div>';
+    showNewExpRequestOption(true,q);
+    updateRequestLookupSelection();
+    return;
+  }
+
   renderRequestLookupResults();
 }
-
 function toggleRequestLookup(id,checked){
   if(checked)requestSearchSelectedIds.add(id);
   else requestSearchSelectedIds.delete(id);
@@ -1585,6 +1715,7 @@ async function openNewRequestModal(rowsOverride=null){
   </table>`;
 
   el('newRequestModal').dataset.ids=JSON.stringify(rows.map(r=>r.id));
+  el('newRequestModal').dataset.newExp='';
   el('newRequestModal').classList.add('show');
 }
 function closeNewRequestModal(){
@@ -1595,20 +1726,28 @@ async function saveNewRequest(){
   const solicitante=el('rqSolicitante').value.trim();
   const asunto=el('rqAsunto').value.trim();
   const observacion=el('rqObservacion').value.trim();
+
   let ids=[];
+  let newExp=null;
 
   try{ids=JSON.parse(el('newRequestModal').dataset.ids||'[]')}catch(_){}
+  try{
+    const raw=el('newRequestModal').dataset.newExp||'';
+    newExp=raw?JSON.parse(raw):null;
+  }catch(_){}
 
   if(!solicitante){
     el('rqSaveStatus').textContent='Seleccione el solicitante.';
     return;
   }
+
   if(!asunto){
     el('rqSaveStatus').textContent='Seleccione o escriba el asunto.';
     el('rqAsunto').focus();
     return;
   }
-  if(!ids.length){
+
+  if(!ids.length && !newExp){
     el('rqSaveStatus').textContent='No hay expedientes seleccionados.';
     return;
   }
@@ -1616,21 +1755,43 @@ async function saveNewRequest(){
   const btn=el('rqSaveBtn');
   btn.disabled=true;
   btn.textContent='Enviando...';
-  el('rqSaveStatus').textContent='Registrando solicitud...';
+  el('rqSaveStatus').textContent=newExp
+    ?'Registrando expediente nuevo y solicitud...'
+    :'Registrando solicitud...';
 
   try{
-    const {data,error}=await sb.rpc('crear_solicitud_prestamo',{
-      p_solicitante:solicitante,
-      p_asunto:asunto,
-      p_observacion:observacion||null,
-      p_expediente_ids:ids
-    });
+    let data,error;
+
+    if(newExp){
+      ({data,error}=await sb.rpc('crear_expediente_nuevo_y_solicitud',{
+        p_expediente:newExp.expediente,
+        p_extension:newExp.extension,
+        p_rd:newExp.rd,
+        p_ultimo_folio:newExp.ultimo_folio,
+        p_observacion_expediente:newExp.observacion,
+        p_solicitante:solicitante,
+        p_asunto:asunto,
+        p_observacion_solicitud:observacion||null
+      }));
+    }else{
+      ({data,error}=await sb.rpc('crear_solicitud_prestamo',{
+        p_solicitante:solicitante,
+        p_asunto:asunto,
+        p_observacion:observacion||null,
+        p_expediente_ids:ids
+      }));
+    }
+
     if(error)throw error;
 
     selectedIds.clear();
     updateSelectionUI();
     closeNewRequestModal();
-    showToast(`Solicitud ${data?.numero||''} registrada`);
+
+    showToast(newExp
+      ?`Expediente ${data?.expediente||newExp.expediente} registrado · Solicitud ${data?.numero||''}`
+      :`Solicitud ${data?.numero||''} registrada`);
+
     await loadRequests();
     if(hasFullAccess())await loadRequestsByLawyer();
     switchTab('requests',document.querySelector('[data-tab="requests"]'));
@@ -1641,7 +1802,6 @@ async function saveNewRequest(){
     btn.textContent='Enviar solicitud';
   }
 }
-
 async function openRequestDetail(id){
   currentRequestId=id;
   requestSelectedIds.clear();
