@@ -79,6 +79,7 @@
 .req-atencion{background:#e9f2ff;color:#174c8a}
 .req-prestamo{background:#fee8d5;color:#8a4100}
 .req-devuelto{background:#e6f5ea;color:#21613a}
+.req-devolucion-solicitada{background:#f4eaff;color:#6b2c91}
 .req-cancelado{background:#f2f2f2;color:#555}
 .req-summary{display:grid;grid-template-columns:repeat(4,minmax(120px,1fr));gap:8px;margin:10px 0}
 .req-summary .mini{border:1px solid var(--line);border-radius:8px;padding:9px;background:#fbfdff}
@@ -106,6 +107,15 @@
 .permission-note{padding:9px 11px;border:1px solid var(--line);border-radius:8px;background:#f8fafc;font-size:12px;color:var(--muted)}
 .request-search-results{max-height:360px;overflow:auto;border:1px solid var(--line);border-radius:8px;margin-top:10px}
 .hidden-by-role{display:none!important}
+
+
+.lawyer-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px;margin-bottom:14px}
+.lawyer-card{border:1px solid var(--line);border-radius:10px;padding:14px;background:#fff}
+.lawyer-card h3{font-size:13px;color:var(--navy);margin:0 0 8px}
+.lawyer-stats{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;font-size:11px;color:var(--muted)}
+.lawyer-stats b{display:block;font-size:17px;color:var(--text);margin-top:2px}
+.lawyer-total{font-size:27px;font-weight:900;color:var(--navy);margin:4px 0 8px}
+.lawyer-actions{margin-top:10px;display:flex;gap:6px;flex-wrap:wrap}
 
 </style>
 </head>
@@ -142,6 +152,7 @@
     <button class="tab" data-tab="summary" onclick="switchTab('summary',this)">Resumen</button>
     <button class="tab" data-tab="states" onclick="switchTab('states',this);loadStates()">Estados</button>
     <button class="tab" data-tab="requests" onclick="switchTab('requests',this);loadRequests()">Solicitudes</button>
+    <button class="tab" id="tabBtnRequestsByLawyer" data-tab="requestsByLawyer" onclick="switchTab('requestsByLawyer',this);loadRequestsByLawyer()">Solicitudes por abogado</button>
     <button class="tab" data-tab="all" onclick="switchTab('all',this)">Registro maestro</button>
     <button class="tab" data-tab="cargos" onclick="switchTab('cargos',this);loadCargos()">Cargos</button>
     <button class="tab" id="tabBtnHistory" data-tab="history" onclick="switchTab('history',this)">Historial</button>
@@ -217,8 +228,8 @@
   <section id="tab-requests" class="hidden">
     <div class="req-kpis">
       <div class="card kpi"><div class="label">Solicitadas</div><div class="value" id="rqSolicitado">0</div></div>
-      <div class="card kpi"><div class="label">En atención</div><div class="value" id="rqAtencion">0</div></div>
       <div class="card kpi warn"><div class="label">En préstamo</div><div class="value" id="rqPrestamo">0</div></div>
+      <div class="card kpi"><div class="label">Por recibir en Archivo</div><div class="value" id="rqPendienteRecepcion">0</div></div>
       <div class="card kpi"><div class="label">Devueltas</div><div class="value" id="rqDevuelto">0</div></div>
     </div>
 
@@ -232,8 +243,8 @@
         <select id="requestStateFilter" onchange="loadRequests()">
           <option value="">TODOS</option>
           <option>SOLICITADO</option>
-          <option>EN ATENCIÓN</option>
           <option>EN PRÉSTAMO</option>
+          <option>DEVOLUCIÓN SOLICITADA</option>
           <option>DEVUELTO</option>
         </select>
       </div>
@@ -248,6 +259,24 @@
         <span id="requestsCount">0</span>
       </div>
       <div id="requestsTable"><div class="empty">Cargando solicitudes...</div></div>
+    </div>
+  </section>
+
+
+  <section id="tab-requestsByLawyer" class="hidden">
+    <div class="card filters">
+      <div class="field">
+        <label>Buscar abogado</label>
+        <input id="lawyerRequestSearch" placeholder="Nombre del abogado..." oninput="renderRequestsByLawyer()">
+      </div>
+      <div class="note">
+        Vista para Archivo y Administrador. Agrupa las solicitudes por abogado para verificar y atender las solicitudes pendientes, generando el cargo al momento de la entrega.
+      </div>
+      <div></div>
+    </div>
+
+    <div id="lawyerRequestsGrid" class="lawyer-grid">
+      <div class="empty">Cargando solicitudes por abogado...</div>
     </div>
   </section>
 
@@ -335,7 +364,7 @@
     <div class="modal-head">
       <div>
         <h2>Nueva solicitud de expedientes</h2>
-        <div class="note">La solicitud no cambia la ubicación física. El cargo se genera recién cuando Archivo entrega los expedientes.</div>
+        <div class="note">La solicitud no cambia la ubicación física. Archivo verifica y atiende la solicitud; en ese momento se genera el cargo automático y los expedientes pasan a EN PRÉSTAMO.</div>
       </div>
       <button class="btn secondary small" onclick="closeNewRequestModal()">Cerrar</button>
     </div>
@@ -718,7 +747,7 @@ const MASTER=[["MARCELA ALONZO", "PERSONAL"], ["ABRAHAN DAMAS", "PERSONAL"], ["A
 const ASUNTOS_PREDETERMINADOS=["ACCESO A LA INFORMACIÓN", "ANALISIS Y EVALUACIÓN DEL MEMORANDO DE CONCLUSIÓN DEL PROCESO CONTENCIOSO ADMINISTRATIVO, REMITIDO POR LA PROCURADURÍA PÚBLICA (PP)", "ANEXADO DE CÉDULAS DE NOTIFICACIÓN", "ANEXADO DE DOCUMENTOS", "ATENCIÓN A LA DIRECCIÓN DE EXTRACCIÓN PARA CONSUMO HUMANO DIRECTO E INDIRECTO (DECHDI)", "ATENCIÓN A LA DIRECCIÓN DE VIGILANCIA Y CONTROL (DVC) - RD ARCHIVAMIENTO", "ATENCIÓN A LA OFICINA DE CONTROL INTERNO (OCI)", "ATENCIÓN A LA OFICINA GENERAL DE ADMINISTRACIÓN (OGA)", "ATENCIÓN A LA PROCURADURÍA PÚBLICA", "ATENCIÓN AL MINISTERIO PÚBLICO (FISCALÍA)", "ATENCIÓN DE ESCRITOS", "ATENCIÓN DE ESCRITOS REMITIDOS POR EL CONSEJO DE APELACIÓN DE SANCIONES CALIDAD DE PRÉSTAMO (CONAS)", "ATENCIÓN DE QUEJAS", "CADUCIDAD", "COMUNICACIÓN DE LAS SANCIONES A LA DIRECCIÓN GENERAL DE PESCA PARA CONSUMO HUMANO DIRECTO E INDIRECTO (DGPCHDI)", "DESLINDE DE RESPONSABILIDAD", "ELEVACIÓN DEL EXPEDIENTE AL CONSEJO DE APELACIÓN DE SANCIONES (CONAS)", "ENMIENDA", "EVALUACIÓN DE OFICIO", "EVALUACIÓN DE PAGOS POR CONCEPTO DE DECOMISOS", "EVALUACIÓN DEL EXPEDIENTE QUE RETORNA DEL CONSEJO DE APELACIÓN DE SANCIONES (CONAS)", "INTERES PARTICULAR", "LECTURA EN SALA (USUARIOS INTERNOS)", "LECTURA EXPEDIENTE (USUARIOS EXTERNOS)", "NULIDAD DE OFICIO", "PERDIDA DE BENEFICIO", "PETICIÓN ADMINISTRATIVA", "RECOMENDACIÓN DE INICIO", "RECONSIDERACIÓN", "REINCIDENCIAS DEL PAS", "REVISIÓN", "REVISIÓN DEL PROCEDIMIENTO DE EJECUCIÓN COACTIVA (PEC) - OEC", "SECRETARIA TÉCNICA DE LOS ORGANOS INSTRUCTORES (STOI)", "SOLICITUD DE BENEFICIOS", "TRAMITACIÓN DEL PAS (IFIS)", "USO DE LA PALABRA O AUDIENCIA"];
 const STATUSES=['CUSTODIA','EN PRÉSTAMO','DEVUELTO','REASIGNADO','EN TRÁMITE','PENDIENTE DE ORGANIZAR','TRANSFERIDO','EN NOTIFICACIONES'];
 const PAGE_SIZE=200;
-let sb=null, session=null, currentProfile=null, userProfiles=[], summaryRows=[], panelRows=[], allRows=[], historyRows=[], cargosRows=[], stateRows=[], stateDetailRows=[], requestRows=[], requestDetailRows=[], requestMovementRows=[], requestSearchRows=[];
+let sb=null, session=null, currentProfile=null, userProfiles=[], summaryRows=[], panelRows=[], allRows=[], historyRows=[], cargosRows=[], stateRows=[], stateDetailRows=[], requestRows=[], requestDetailRows=[], requestMovementRows=[], requestSearchRows=[], requestsByLawyerRows=[];
 let catalogo=MASTER.map(([nombre,tipo],i)=>({id:'fallback-'+i,nombre,tipo,activo:true}));
 let selectedIds=new Set(), cargoRows=[];
 let recordMode='single', batchCargoHeader=null;
@@ -836,13 +865,16 @@ function applyRoleUI(){
   // El buscador para solicitar es útil sobre todo para abogados.
   setVisible('searchRequestBtn',true);
 
-  ['summary','states','all','cargos'].forEach(tab=>{
+  ['summary','states','all','cargos','requestsByLawyer'].forEach(tab=>{
     const b=document.querySelector(`[data-tab="${tab}"]`);
     if(b)b.classList.toggle('hidden-by-role',!full);
   });
 
   if(el('tabBtnPanel'))el('tabBtnPanel').textContent=limited?'Mis expedientes':'Panel por personal';
-  if(el('tabBtnHistory'))el('tabBtnHistory').textContent=limited?'Mis movimientos':'Historial';
+  if(el('tabBtnHistory')){
+    el('tabBtnHistory').textContent='Historial';
+    el('tabBtnHistory').classList.toggle('hidden-by-role',limited);
+  }
 
   if(el('currentRole')){
     const label=currentProfile
@@ -906,11 +938,11 @@ async function afterLogin(){
   if(hasFullAccess()){
     await Promise.all([
       loadSummary(),loadPanel(),loadAll(),loadStates(),
-      loadRequests(),loadCargos(),loadHistory()
+      loadRequests(),loadRequestsByLawyer(),loadCargos(),loadHistory()
     ]);
   }else{
     await Promise.all([
-      loadSummary(),loadPanel(),loadRequests(),loadHistory()
+      loadSummary(),loadPanel(),loadRequests()
     ]);
   }
 
@@ -926,7 +958,7 @@ function fillSelects(){
   if(el('bEstado')) el('bEstado').innerHTML=STATUSES.map(x=>`<option>${esc(x)}</option>`).join('');
 
   if(el('rqSolicitante')) el('rqSolicitante').innerHTML=activos.filter(x=>x.tipo==='PERSONAL').map(x=>`<option>${esc(x.nombre)}</option>`).join('');
-  if(el('rqDNuevoResponsable')) el('rqDNuevoResponsable').innerHTML=activos.map(x=>`<option>${esc(x.nombre)}</option>`).join('');
+  if(el('rqDNuevoResponsable')) el('rqDNuevoResponsable').innerHTML=activos.filter(x=>x.tipo==='PERSONAL').map(x=>`<option>${esc(x.nombre)}</option>`).join('');
   if(el('rqDRetorno')) el('rqDRetorno').innerHTML=activos.filter(x=>x.tipo!=='PERSONAL').map(x=>`<option>${esc(x.nombre)}</option>`).join('');
 
   if(currentProfile?.rol==='USUARIO' && el('rqSolicitante')){
@@ -1267,6 +1299,7 @@ function reqStatePill(state){
   const cls=state==='SOLICITADO'?'req-solicitado':
     state==='EN ATENCIÓN'?'req-atencion':
     state==='EN PRÉSTAMO'?'req-prestamo':
+    state==='DEVOLUCIÓN SOLICITADA'?'req-devolucion-solicitada':
     state==='DEVUELTO'?'req-devuelto':'req-cancelado';
   return `<span class="req-state ${cls}">${esc(state||'')}</span>`;
 }
@@ -1368,6 +1401,60 @@ async function continueRequestFromSearch(){
   await openNewRequestModal(rows);
 }
 
+
+async function loadRequestsByLawyer(){
+  if(!hasFullAccess())return;
+
+  const {data,error}=await sb.rpc('resumen_solicitudes_por_abogado');
+  if(error){
+    if(el('lawyerRequestsGrid'))el('lawyerRequestsGrid').innerHTML=`<div class="empty">${esc(error.message)}</div>`;
+    return;
+  }
+
+  requestsByLawyerRows=data||[];
+  renderRequestsByLawyer();
+}
+
+function renderRequestsByLawyer(){
+  if(!el('lawyerRequestsGrid'))return;
+
+  const q=norm(el('lawyerRequestSearch')?.value||'');
+  const data=requestsByLawyerRows.filter(x=>!q||norm(x.solicitante).includes(q));
+
+  if(!data.length){
+    el('lawyerRequestsGrid').innerHTML='<div class="empty">No hay solicitudes para mostrar.</div>';
+    return;
+  }
+
+  el('lawyerRequestsGrid').innerHTML=data.map(x=>`
+    <div class="lawyer-card">
+      <h3>${esc(x.solicitante)}</h3>
+      <div class="lawyer-total">${Number(x.total||0)}</div>
+      <div class="note">solicitudes registradas</div>
+
+      <div class="lawyer-stats">
+        <div>SOLICITADO<b>${Number(x.solicitado||0)}</b></div>
+        <div>EN PRÉSTAMO<b>${Number(x.en_prestamo||0)}</b></div>
+        <div>POR RECIBIR<b>${Number(x.por_recibir||0)}</b></div>
+        <div>DEVUELTO<b>${Number(x.devuelto||0)}</b></div>
+      </div>
+
+      <div class="lawyer-actions">
+        <button class="btn secondary small" onclick="openLawyerRequests('${x.solicitante.replace(/'/g,"\\'")}')">Ver solicitudes</button>
+        ${Number(x.solicitado||0)>0?`<button class="btn small" onclick="openLawyerRequests('${x.solicitante.replace(/'/g,"\\'")}','SOLICITADO')">Pendientes (${Number(x.solicitado||0)})</button>`:''}
+        ${Number(x.por_recibir||0)>0?`<button class="btn secondary small" onclick="openLawyerRequests('${x.solicitante.replace(/'/g,"\\'")}','DEVOLUCIÓN SOLICITADA')">Por recibir (${Number(x.por_recibir||0)})</button>`:''}
+      </div>
+    </div>
+  `).join('');
+}
+
+async function openLawyerRequests(nombre,estado=''){
+  switchTab('requests',document.querySelector('[data-tab="requests"]'));
+  el('requestSearch').value=nombre;
+  el('requestStateFilter').value=estado;
+  await loadRequests();
+}
+
 async function loadRequests(){
   if(!sb||!session)return;
 
@@ -1390,8 +1477,10 @@ async function loadRequests(){
   requestRows.forEach(x=>{if(counts[x.estado]!==undefined)counts[x.estado]++});
 
   if(el('rqSolicitado'))el('rqSolicitado').textContent=counts.SOLICITADO;
-  if(el('rqAtencion'))el('rqAtencion').textContent=counts['EN ATENCIÓN'];
   if(el('rqPrestamo'))el('rqPrestamo').textContent=counts['EN PRÉSTAMO'];
+  if(el('rqPendienteRecepcion')){
+    el('rqPendienteRecepcion').textContent=requestRows.reduce((a,x)=>a+Number(x.devoluciones_pendientes||0),0);
+  }
   if(el('rqDevuelto'))el('rqDevuelto').textContent=counts.DEVUELTO;
   if(el('requestsCount'))el('requestsCount').textContent=requestRows.length+' solicitudes';
 
@@ -1418,6 +1507,7 @@ function renderRequests(){
       <th>Asunto</th>
       <th>Estado</th>
       <th>Expedientes</th>
+      <th>Por recibir</th>
       <th>Cargo</th>
       <th>Atiende</th>
       <th>F. solicitud</th>
@@ -1430,6 +1520,7 @@ function renderRequests(){
         <td>${esc(r.asunto)}</td>
         <td>${reqStatePill(r.estado)}</td>
         <td>${Number(r.total_expedientes||0)}</td>
+        <td>${Number(r.devoluciones_pendientes||0)}</td>
         <td>${esc(r.cargo_numero||'—')}</td>
         <td>${esc(r.atiende||'—')}</td>
         <td>${fmtDate(r.fecha_solicitud)}</td>
@@ -1541,6 +1632,7 @@ async function saveNewRequest(){
     closeNewRequestModal();
     showToast(`Solicitud ${data?.numero||''} registrada`);
     await loadRequests();
+    if(hasFullAccess())await loadRequestsByLawyer();
     switchTab('requests',document.querySelector('[data-tab="requests"]'));
   }catch(err){
     el('rqSaveStatus').textContent=err?.message||String(err);
@@ -1619,16 +1711,47 @@ function toggleRequestItem(id,checked){
 
 function toggleAllRequestItems(checked){
   requestDetailRows
-    .filter(x=>x.estado_item==='EN PRÉSTAMO')
+    .filter(x=>requestItemCanReassign(x))
     .forEach(x=>checked?requestSelectedIds.add(x.expediente_id):requestSelectedIds.delete(x.expediente_id));
   renderRequestDetailItems();
 }
 
+function requestItemCanReassign(x){
+  if(x.estado_item!=='EN PRÉSTAMO')return false;
+  if(hasFullAccess())return true;
+
+  const mine=currentProfile?.nombre_personal||'';
+  return !!mine && norm(x.responsable_actual||x.ubicacion_actual||'')===norm(mine);
+}
+
+function requestItemCanRequestReturn(x){
+  if(x.estado_item!=='EN PRÉSTAMO')return false;
+
+  if(hasFullAccess())return true;
+
+  const mine=currentProfile?.nombre_personal||'';
+  return !!mine && norm(x.responsable_actual||x.ubicacion_actual||'')===norm(mine);
+}
+
+function requestItemCanConfirmReturn(x){
+  return hasFullAccess() && x.estado_item==='DEVOLUCIÓN SOLICITADA';
+}
+
+function requestItemSelectable(x){
+  if(hasFullAccess()){
+    return requestItemCanReassign(x) || requestItemCanConfirmReturn(x);
+  }
+  return requestItemCanReassign(x) || requestItemCanRequestReturn(x);
+}
+
 function renderRequestDetailItems(){
   const data=requestDetailRows||[];
-  const active=data.filter(x=>x.estado_item==='EN PRÉSTAMO');
-  const allActiveChecked=active.length>0&&active.every(x=>requestSelectedIds.has(x.expediente_id));
-  el('rqDSelectedCount').textContent=requestSelectedIds.size+' seleccionado'+(requestSelectedIds.size===1?'':'s');
+  const selectableRows=data.filter(x=>requestItemSelectable(x));
+  const allChecked=selectableRows.length>0 &&
+    selectableRows.every(x=>requestSelectedIds.has(x.expediente_id));
+
+  el('rqDSelectedCount').textContent=requestSelectedIds.size+
+    ' seleccionado'+(requestSelectedIds.size===1?'':'s');
 
   if(!data.length){
     el('rqDetailItems').innerHTML='<div class="empty">No hay expedientes.</div>';
@@ -1637,26 +1760,37 @@ function renderRequestDetailItems(){
 
   el('rqDetailItems').innerHTML=`<table>
     <thead><tr>
-      <th><input type="checkbox" ${allActiveChecked?'checked':''} onchange="toggleAllRequestItems(this.checked)"></th>
+      <th><input type="checkbox" ${selectableRows.length?'':'disabled'} ${allChecked?'checked':''} onchange="toggleAllRequestItems(this.checked)"></th>
       <th>Expediente</th><th>Ext.</th><th>Estado solicitud</th><th>Estado físico</th>
-      <th>Responsable actual</th><th>F. entrega</th><th>F. devolución</th>
+      <th>Responsable actual</th><th>F. entrega</th><th>F. sol. devolución</th><th>F. devolución</th>
     </tr></thead>
     <tbody>${data.map(x=>{
-      const selectable=x.estado_item==='EN PRÉSTAMO';
+      const selectable=requestItemSelectable(x);
       return `<tr>
-        <td><input type="checkbox" ${selectable?'':'disabled'} ${requestSelectedIds.has(x.expediente_id)?'checked':''} onchange="toggleRequestItem('${x.expediente_id}',this.checked)"></td>
+        <td><input type="checkbox" ${selectable?'':'disabled'}
+          ${requestSelectedIds.has(x.expediente_id)?'checked':''}
+          onchange="toggleRequestItem('${x.expediente_id}',this.checked)"></td>
         <td><b>${esc(x.expediente)}</b></td>
         <td>${x.extension?esc(x.extension):'—'}</td>
         <td>${reqStatePill(x.estado_item)}</td>
         <td>${esc(x.estado_fisico||'')}</td>
         <td>${esc(x.responsable_actual||x.ubicacion_actual||'')}</td>
         <td>${fmtDate(x.fecha_entrega)}</td>
+        <td>${fmtDate(x.fecha_solicitud_devolucion)}</td>
         <td>${fmtDate(x.fecha_devolucion)}</td>
       </tr>`;
     }).join('')}</tbody>
   </table>`;
 }
 
+function toggleAllRequestItems(checked){
+  requestDetailRows
+    .filter(x=>requestItemSelectable(x))
+    .forEach(x=>checked
+      ?requestSelectedIds.add(x.expediente_id)
+      :requestSelectedIds.delete(x.expediente_id));
+  renderRequestDetailItems();
+}
 function renderRequestMovements(){
   if(!requestMovementRows.length){
     el('rqMovements').innerHTML='<div class="empty">Sin movimientos registrados.</div>';
@@ -1681,11 +1815,27 @@ function renderRequestMovements(){
 function renderRequestActions(){
   const r=currentRequest||{};
 
-  if(!hasFullAccess()){
-    el('rqWorkflowActions').innerHTML='<span class="note">Puede consultar el estado de su solicitud. La atención, entrega, reasignación y devolución corresponden al personal autorizado.</span>';
-    ['rqDAtiende','rqDNuevoResponsable','rqDRetorno','rqDObservacion'].forEach(id=>{
-      if(el(id))el(id).disabled=true;
-    });
+  if(isLimitedUser()){
+    el('rqDAtiende').disabled=true;
+    el('rqDRetorno').disabled=true;
+    el('rqDNuevoResponsable').disabled=false;
+    el('rqDObservacion').disabled=false;
+
+    if(r.estado==='EN PRÉSTAMO'){
+      el('rqWorkflowActions').innerHTML=`
+        <button class="btn secondary" onclick="reassignRequestItems()">Reasignar seleccionados</button>
+        <button class="btn" onclick="requestReturnItems()">Solicitar devolución</button>
+        <span class="note">Puede reasignar o solicitar la devolución de los expedientes que actualmente están bajo su responsabilidad.</span>`;
+    }else if(r.estado==='SOLICITADO'){
+      el('rqWorkflowActions').innerHTML=
+        '<span class="note">Solicitud registrada. Archivo debe verificarla y atenderla antes de que el expediente pase a EN PRÉSTAMO.</span>';
+    }else if(r.estado==='DEVUELTO'){
+      el('rqWorkflowActions').innerHTML=
+        '<span class="note">Solicitud cerrada. El expediente ya fue recibido por Archivo.</span>';
+    }else{
+      el('rqWorkflowActions').innerHTML=
+        '<span class="note">Consulte el estado de la solicitud.</span>';
+    }
     return;
   }
 
@@ -1693,25 +1843,31 @@ function renderRequestActions(){
     if(el(id))el(id).disabled=false;
   });
 
-  let html='';
+  let actions='';
 
   if(r.estado==='SOLICITADO'){
-    html=`<button class="btn" onclick="attendRequest()">Pasar a EN ATENCIÓN</button>`;
-  }else if(r.estado==='EN ATENCIÓN'){
-    html=`<button class="btn" onclick="deliverRequest()">Entregar y generar cargo</button>`;
+    actions=`
+      <button class="btn" onclick="verifyAndAttendRequest()">Verificar y atender solicitud</button>
+      <span class="note">Al atender, se genera el cargo automático y los expedientes pasan a EN PRÉSTAMO.</span>`;
   }else if(r.estado==='EN PRÉSTAMO'){
-    html=`
+    actions=`
       <button class="btn secondary" onclick="reassignRequestItems()">Reasignar seleccionados</button>
-      <button class="btn" onclick="returnRequestItems()">Registrar devolución</button>`;
+      <button class="btn" onclick="confirmReturnItems()">Confirmar devolución física</button>
+      <span class="note">La devolución se confirma únicamente cuando el expediente llega físicamente a Archivo.</span>`;
   }else if(r.estado==='DEVUELTO'){
-    html='<span class="note">Solicitud cerrada: todos los expedientes fueron devueltos.</span>';
+    actions='<span class="note">Solicitud cerrada: todos los expedientes fueron recibidos físicamente y devueltos a custodia.</span>';
   }
 
-  el('rqWorkflowActions').innerHTML=html;
+  el('rqWorkflowActions').innerHTML=actions;
 }
-async function attendRequest(){
+async function verifyAndAttendRequest(){
   const atiende=el('rqDAtiende').value.trim();
   const obs=el('rqDObservacion').value.trim();
+
+  if(!hasFullAccess()){
+    el('rqActionStatus').textContent='Solo Archivo o Administrador puede atender solicitudes.';
+    return;
+  }
 
   if(!atiende){
     el('rqActionStatus').textContent='Indique quién atiende el requerimiento.';
@@ -1719,46 +1875,39 @@ async function attendRequest(){
     return;
   }
 
-  el('rqActionStatus').textContent='Actualizando a EN ATENCIÓN...';
+  if(!confirm('¿Confirmar que Archivo verificó la solicitud y entregará los expedientes? Se generará el cargo automático.'))return;
 
-  const {error}=await sb.rpc('poner_solicitud_en_atencion',{
+  el('rqActionStatus').textContent='Verificando solicitud, generando cargo y registrando préstamo...';
+
+  const {data,error}=await sb.rpc('verificar_y_atender_solicitud',{
     p_solicitud_id:currentRequestId,
     p_atiende:atiende,
     p_observacion:obs||null
   });
 
-  if(error){el('rqActionStatus').textContent=error.message;return}
-
-  showToast('Solicitud en atención');
-  await refreshRequestDetail();
-}
-
-async function deliverRequest(){
-  const atiende=el('rqDAtiende').value.trim();
-  const obs=el('rqDObservacion').value.trim();
-
-  if(!atiende){
-    el('rqActionStatus').textContent='Indique quién atiende el requerimiento.';
-    el('rqDAtiende').focus();
+  if(error){
+    el('rqActionStatus').textContent=error.message;
     return;
   }
 
-  if(!confirm('¿Confirmar la entrega física de los expedientes y generar el cargo automático?'))return;
+  showToast(`Solicitud atendida · Cargo ${data?.cargo_numero||''}`);
 
-  el('rqActionStatus').textContent='Generando cargo y registrando préstamo...';
+  await Promise.all([
+    loadSummary(),
+    loadPanel(),
+    loadAll(),
+    loadStates(),
+    loadRequestsByLawyer(),
+    loadCargos(),
+    loadHistory()
+  ]);
 
-  const {data,error}=await sb.rpc('entregar_solicitud_prestamo',{
-    p_solicitud_id:currentRequestId,
-    p_atiende:atiende,
-    p_observacion:obs||null
-  });
-
-  if(error){el('rqActionStatus').textContent=error.message;return}
-
-  showToast(`Entregado · Cargo ${data?.cargo_numero||''}`);
-  await Promise.all([loadSummary(),loadPanel(),loadAll(),loadStates(),loadCargos(),loadHistory()]);
   await refreshRequestDetail();
 }
+
+// Compatibilidad con botones/versiones anteriores.
+async function attendRequest(){ return verifyAndAttendRequest(); }
+async function deliverRequest(){ return verifyAndAttendRequest(); }
 
 async function reassignRequestItems(){
   const ids=[...requestSelectedIds];
@@ -1789,41 +1938,117 @@ async function reassignRequestItems(){
 
   requestSelectedIds.clear();
   showToast('Reasignación registrada');
-  await Promise.all([loadSummary(),loadPanel(),loadAll(),loadStates(),loadHistory()]);
+  if(hasFullAccess()){
+    await Promise.all([loadSummary(),loadPanel(),loadAll(),loadStates(),loadRequestsByLawyer(),loadHistory()]);
+  }else{
+    await Promise.all([loadSummary(),loadPanel(),loadRequests()]);
+  }
   await refreshRequestDetail();
 }
 
-async function returnRequestItems(){
+async function requestReturnItems(){
   const ids=[...requestSelectedIds];
-  const retorno=el('rqDRetorno').value.trim();
   const obs=el('rqDObservacion').value.trim();
 
   if(!ids.length){
     el('rqActionStatus').textContent='Seleccione uno o más expedientes EN PRÉSTAMO.';
     return;
   }
-  if(!retorno){
-    el('rqActionStatus').textContent='Seleccione la ubicación de retorno.';
+
+  const selected=requestDetailRows.filter(x=>ids.includes(x.expediente_id));
+  if(selected.some(x=>!requestItemCanRequestReturn(x))){
+    el('rqActionStatus').textContent='Solo puede solicitar la devolución de expedientes EN PRÉSTAMO que actualmente están bajo su responsabilidad.';
     return;
   }
 
-  if(!confirm(`¿Registrar la devolución de ${ids.length} expediente(s) a ${retorno}?`))return;
+  if(!confirm(`¿Solicitar la devolución de ${ids.length} expediente(s)? Archivo deberá confirmar la recepción física.`))return;
 
-  el('rqActionStatus').textContent='Registrando devolución...';
+  el('rqActionStatus').textContent='Registrando solicitud de devolución...';
 
-  const {data,error}=await sb.rpc('devolver_solicitud_expedientes',{
+  const {data,error}=await sb.rpc('solicitar_devolucion_expedientes',{
+    p_solicitud_id:currentRequestId,
+    p_expediente_ids:ids,
+    p_observacion:obs||null
+  });
+
+  if(error){
+    el('rqActionStatus').textContent=error.message;
+    return;
+  }
+
+  requestSelectedIds.clear();
+  showToast(`${data?.solicitados||ids.length} expediente(s) pendientes de recepción en Archivo`);
+
+  if(hasFullAccess()){
+    await Promise.all([
+      loadSummary(),loadPanel(),loadAll(),loadStates(),
+      loadRequestsByLawyer(),loadHistory()
+    ]);
+  }else{
+    await Promise.all([loadSummary(),loadPanel(),loadRequests()]);
+  }
+
+  await refreshRequestDetail();
+}
+
+async function confirmReturnItems(){
+  const ids=[...requestSelectedIds];
+  const retorno=el('rqDRetorno').value.trim();
+  const obs=el('rqDObservacion').value.trim();
+
+  if(!hasFullAccess()){
+    el('rqActionStatus').textContent='Solo Archivo o Administrador puede confirmar la recepción física.';
+    return;
+  }
+
+  if(!ids.length){
+    el('rqActionStatus').textContent='Seleccione uno o más expedientes con DEVOLUCIÓN SOLICITADA.';
+    return;
+  }
+
+  const selected=requestDetailRows.filter(x=>ids.includes(x.expediente_id));
+  if(selected.some(x=>!requestItemCanConfirmReturn(x))){
+    el('rqActionStatus').textContent='Para confirmar la devolución, todos los seleccionados deben estar en DEVOLUCIÓN SOLICITADA.';
+    return;
+  }
+
+  if(!retorno){
+    el('rqActionStatus').textContent='Seleccione la ubicación física de retorno.';
+    return;
+  }
+
+  if(!confirm(`¿Confirmar que Archivo recibió físicamente ${ids.length} expediente(s)?`))return;
+
+  el('rqActionStatus').textContent='Confirmando recepción física y cerrando devolución...';
+
+  const {data,error}=await sb.rpc('confirmar_devolucion_archivo',{
     p_solicitud_id:currentRequestId,
     p_expediente_ids:ids,
     p_ubicacion_retorno:retorno,
     p_observacion:obs||null
   });
 
-  if(error){el('rqActionStatus').textContent=error.message;return}
+  if(error){
+    el('rqActionStatus').textContent=error.message;
+    return;
+  }
 
   requestSelectedIds.clear();
-  showToast(data?.cerrada?'Solicitud cerrada: todos devueltos':'Devolución registrada');
-  await Promise.all([loadSummary(),loadPanel(),loadAll(),loadStates(),loadHistory()]);
+
+  showToast(data?.cerrada
+    ?'Solicitud cerrada: todos los expedientes fueron recibidos'
+    :`${data?.devueltos||ids.length} expediente(s) recibidos por Archivo`);
+
+  await Promise.all([
+    loadSummary(),loadPanel(),loadAll(),loadStates(),
+    loadRequestsByLawyer(),loadHistory()
+  ]);
+
   await refreshRequestDetail();
+}
+
+async function returnRequestItems(){
+  return confirmReturnItems();
 }
 
 async function refreshRequestDetail(){
@@ -2005,7 +2230,7 @@ function renderHistory(){
   if(!historyRows.length){el('historyTable').innerHTML='<div class="empty">No hay movimientos para mostrar.</div>';return}
   el('historyTable').innerHTML=`<table><thead><tr><th>Fecha</th><th>Expediente</th><th>Extensión</th><th>Acción</th><th>Desde</th><th>Hacia</th><th>Cargo</th><th>Detalle</th></tr></thead><tbody>${historyRows.map(h=>`<tr><td>${fmtDate(h.created_at)}</td><td><b>${esc(h.expediente)}</b></td><td>${h.extension?esc(h.extension):'—'}</td><td>${esc(h.accion)}</td><td>${esc(h.desde)}</td><td>${esc(h.hacia)}</td><td>${esc(h.cargo)}</td><td>${esc(h.detalle)}</td></tr>`).join('')}</tbody></table>`
 }
-function switchTab(name,btn){['panel','summary','states','requests','all','cargos','history'].forEach(x=>el('tab-'+x).classList.toggle('hidden',x!==name));document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));if(btn)btn.classList.add('active')}
+function switchTab(name,btn){['panel','summary','states','requests','requestsByLawyer','all','cargos','history'].forEach(x=>el('tab-'+x).classList.toggle('hidden',x!==name));document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));if(btn)btn.classList.add('active')}
 
 
 function autoCargoNumber(){ return ''; }
