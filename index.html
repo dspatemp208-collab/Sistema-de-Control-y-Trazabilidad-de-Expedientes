@@ -770,7 +770,7 @@
     <div class="modal-head">
       <div>
         <h2>Generar cargo de préstamo</h2>
-        <div style="font-size:12px;color:#64748b;margin-top:3px">El cargo incluirá todos los expedientes seleccionados.</div>
+        <div style="font-size:12px;color:#64748b;margin-top:3px">El cargo incluirá todos los expedientes vinculados al mismo número de cargo.</div>
       </div>
       <button class="btn secondary small" onclick="closeCargoModal()">Cerrar</button>
     </div>
@@ -2386,6 +2386,17 @@ function renderRequestActions(){
 
   let actions='';
 
+  const cargosImprimibles=[...new Set(
+    (requestDetailRows||[])
+      .map(x=>(x.cargo_numero||'').trim())
+      .filter(Boolean)
+  )];
+
+  if(cargosImprimibles.length){
+    actions += `
+      <button class="btn secondary" onclick="printCargoFromRequest()">🖨 Imprimir cargo</button>`;
+  }
+
   if(r.estado==='SOLICITADO'){
     actions=`
       <button class="btn secondary" onclick="openAddItemsToExistingRequest()">+ Agregar expedientes</button>
@@ -2955,6 +2966,9 @@ function recordTable(data,withOwner=false,source='panel'){
     <td><div style="display:flex;gap:5px;white-space:nowrap">
       <button class="btn secondary small" onclick="showExpHistory('${r.id}')">Historial</button>
       <button class="btn small" onclick="manageExpedienteFromPanel('${r.id}')">Gestionar</button>
+      ${hasFullAccess() && r.cargo
+        ?`<button class="btn secondary small" onclick="openExistingCargoForPrint('${esc(r.cargo)}')">🖨 Cargo</button>`
+        :''}
       ${hasFullAccess()?`<button class="btn secondary small" onclick="editRecord('${r.id}')">Editar</button>`:''}
     </div></td>
   </tr>`).join('');
@@ -3067,6 +3081,115 @@ async function loadCargoHeaderByNumber(){
 
   return true;
 }
+
+async function openExistingCargoForPrint(numero){
+  if(!hasFullAccess()){
+    alert('Solo Archivo o Administrador puede imprimir cargos.');
+    return;
+  }
+
+  numero=(numero||'').trim();
+  if(!numero){
+    alert('El expediente todavía no tiene un cargo asociado.');
+    return;
+  }
+
+  try{
+    // Recuperar encabezado del cargo.
+    const {data:cargo,error:cargoErr}=await sb
+      .from('cargos')
+      .select('id,numero')
+      .eq('numero',numero)
+      .maybeSingle();
+
+    if(cargoErr)throw cargoErr;
+
+    let ids=[];
+
+    // Forma principal: tabla de relación cargo_expedientes.
+    if(cargo?.id){
+      const {data:links,error:linksErr}=await sb
+        .from('cargo_expedientes')
+        .select('expediente_id')
+        .eq('cargo_id',cargo.id);
+
+      if(!linksErr && links?.length){
+        ids=links.map(x=>x.expediente_id).filter(Boolean);
+      }
+    }
+
+    // Compatibilidad con cargos antiguos.
+    if(!ids.length){
+      const {data:rows,error:rowsErr}=await sb
+        .from('expedientes')
+        .select('id')
+        .eq('cargo',numero);
+
+      if(rowsErr)throw rowsErr;
+      ids=(rows||[]).map(x=>x.id).filter(Boolean);
+    }
+
+    if(!ids.length){
+      alert(`No se encontraron expedientes vinculados al Cargo N.° ${numero}.`);
+      return;
+    }
+
+    selectedIds.clear();
+    ids.forEach(id=>selectedIds.add(id));
+    updateSelectionUI();
+
+    await openCargoModal();
+
+  }catch(err){
+    alert(err?.message||String(err));
+  }
+}
+
+async function printCargoFromRequest(){
+  if(!hasFullAccess()){
+    alert('Solo Archivo o Administrador puede imprimir cargos.');
+    return;
+  }
+
+  const selected=[...requestSelectedIds];
+
+  let rows=requestDetailRows||[];
+
+  if(selected.length){
+    rows=rows.filter(x=>selected.includes(x.expediente_id));
+  }
+
+  let cargos=[...new Set(
+    rows.map(x=>(x.cargo_numero||'').trim()).filter(Boolean)
+  )];
+
+  // Si no se seleccionó nada y la solicitud contiene exactamente un cargo,
+  // permitir imprimirlo directamente.
+  if(!selected.length){
+    cargos=[...new Set(
+      (requestDetailRows||[])
+        .map(x=>(x.cargo_numero||'').trim())
+        .filter(Boolean)
+    )];
+  }
+
+  if(!cargos.length){
+    if(el('rqActionStatus')){
+      el('rqActionStatus').textContent='Los expedientes seleccionados todavía no tienen un cargo para imprimir.';
+    }
+    return;
+  }
+
+  if(cargos.length>1){
+    if(el('rqActionStatus')){
+      el('rqActionStatus').textContent='Hay más de un cargo. Seleccione expedientes pertenecientes a un solo cargo.';
+    }
+    return;
+  }
+
+  await openExistingCargoForPrint(cargos[0]);
+}
+
 async function openCargoModal(){
   if(!selectedIds.size){alert('Seleccione al menos un expediente.');return}
   el('cargoStatus').textContent='Cargando expedientes seleccionados...';
