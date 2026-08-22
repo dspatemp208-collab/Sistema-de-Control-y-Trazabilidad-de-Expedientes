@@ -94,6 +94,19 @@
 }
 @media(max-width:480px){.req-kpis,.req-summary{grid-template-columns:1fr}}
 
+
+.app.limited-user{grid-template-columns:1fr}
+.app.limited-user .sidebar{display:none}
+.role-chip{display:inline-block;padding:3px 8px;border-radius:999px;font-size:10px;font-weight:850;background:#eef2f7;color:#334155}
+.role-chip.admin{background:#e9e5ff;color:#4338ca}
+.role-chip.archive{background:#e6f5ea;color:#21613a}
+.role-chip.user{background:#e9f2ff;color:#174c8a}
+.user-perm-table{max-height:430px;overflow:auto;border:1px solid var(--line);border-radius:9px;margin-top:12px}
+.user-perm-table select,.user-perm-table input{font-size:12px}
+.permission-note{padding:9px 11px;border:1px solid var(--line);border-radius:8px;background:#f8fafc;font-size:12px;color:var(--muted)}
+.request-search-results{max-height:360px;overflow:auto;border:1px solid var(--line);border-radius:8px;margin-top:10px}
+.hidden-by-role{display:none!important}
+
 </style>
 </head>
 <body>
@@ -108,28 +121,30 @@
   <div class="topbar">
     <div class="title"><h1>Sistema de Control y Trazabilidad de Expedientes</h1><p>EXPEDIENTE = número + año en una sola celda · EXTENSIÓN opcional y visible</p></div>
     <div class="actions">
-      <button class="btn" onclick="openRecordModal()">+ Nuevo expediente</button>
+      <button class="btn" id="newRecordBtn" onclick="openRecordModal()">+ Nuevo expediente</button>
       <button class="btn secondary" id="cargoBtn" onclick="openCargoModal()" disabled>🖨 Imprimir cargo</button>
       <button class="btn secondary" id="requestBtn" onclick="openNewRequestModal()" disabled>📥 Solicitar seleccionados</button>
+      <button class="btn secondary" id="searchRequestBtn" onclick="openRequestSearchModal()">🔎 Buscar para solicitar</button>
       <span class="sel-count" id="selectedCount">0 seleccionados</span>
-      <button class="btn secondary" onclick="document.getElementById('csvFile').click()">Importar CSV</button>
+      <button class="btn secondary" id="importCsvBtn" onclick="document.getElementById('csvFile').click()">Importar CSV</button>
       <input class="hidden" id="csvFile" type="file" accept=".csv,text/csv" onchange="importCSV(event)">
-      <button class="btn secondary" onclick="exportCSV(this)">Exportar registro</button>
-      <button class="btn secondary" onclick="openPeopleModal()">👥 Administrar personal</button>
+      <button class="btn secondary" id="exportCsvBtn" onclick="exportCSV(this)">Exportar registro</button>
+      <button class="btn secondary" id="peopleBtn" onclick="openPeopleModal()">👥 Administrar personal</button>
+      <button class="btn secondary" id="usersBtn" onclick="openUsersModal()">🔐 Usuarios y permisos</button>
       <button class="btn secondary" onclick="openConfig()">Base de datos</button>
       <button class="btn secondary" onclick="logout()">Cerrar sesión</button>
     </div>
   </div>
-  <div class="statusbar">Base: <b>Supabase / PostgreSQL</b> · Usuario: <b id="currentUser">—</b> · Los cambios son compartidos por todos los usuarios autorizados.</div>
+  <div class="statusbar">Base: <b>Supabase / PostgreSQL</b> · Usuario: <b id="currentUser">—</b> · Perfil: <b id="currentRole">—</b> · Los permisos se controlan desde Supabase.</div>
 
   <div class="tabs">
-    <button class="tab active" data-tab="panel" onclick="switchTab('panel',this)">Panel por personal</button>
+    <button class="tab active" id="tabBtnPanel" data-tab="panel" onclick="switchTab('panel',this)">Panel por personal</button>
     <button class="tab" data-tab="summary" onclick="switchTab('summary',this)">Resumen</button>
     <button class="tab" data-tab="states" onclick="switchTab('states',this);loadStates()">Estados</button>
     <button class="tab" data-tab="requests" onclick="switchTab('requests',this);loadRequests()">Solicitudes</button>
     <button class="tab" data-tab="all" onclick="switchTab('all',this)">Registro maestro</button>
     <button class="tab" data-tab="cargos" onclick="switchTab('cargos',this);loadCargos()">Cargos</button>
-    <button class="tab" data-tab="history" onclick="switchTab('history',this)">Historial</button>
+    <button class="tab" id="tabBtnHistory" data-tab="history" onclick="switchTab('history',this)">Historial</button>
   </div>
 
   <section id="tab-panel">
@@ -415,6 +430,76 @@
 </div>
 
 
+
+<!-- Usuarios y permisos -->
+<div class="modal" id="usersModal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <div>
+        <h2>Usuarios y permisos</h2>
+        <div class="note">Solo el ADMINISTRADOR puede cambiar roles. Cada cuenta debe existir previamente en Supabase Authentication.</div>
+      </div>
+      <button class="btn secondary small" onclick="closeUsersModal()">Cerrar</button>
+    </div>
+
+    <div class="permission-note">
+      <b>USUARIO / ABOGADO:</b> solo ve sus solicitudes y movimientos.
+      <b>ARCHIVO:</b> acceso total a expedientes, solicitudes, cargos y devoluciones.
+      <b>ADMINISTRADOR:</b> acceso total + administración de permisos.
+    </div>
+
+    <div id="usersStatus" class="note" style="margin-top:8px"></div>
+    <div class="user-perm-table">
+      <table>
+        <thead>
+          <tr><th>Correo</th><th>Personal asociado</th><th>Rol</th><th>Activo</th><th></th></tr>
+        </thead>
+        <tbody id="usersBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Búsqueda dirigida para solicitar expedientes -->
+<div class="modal" id="requestSearchModal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <div>
+        <h2>Buscar expediente para solicitar</h2>
+        <div class="note">La búsqueda muestra únicamente datos mínimos para identificar y solicitar un expediente.</div>
+      </div>
+      <button class="btn secondary small" onclick="closeRequestSearchModal()">Cerrar</button>
+    </div>
+
+    <div class="form-grid">
+      <div class="field span3">
+        <label>Número de expediente</label>
+        <input id="requestLookupInput" placeholder="Ej.: 0012-2025" onkeydown="if(event.key==='Enter'){event.preventDefault();searchRequestCandidates()}">
+      </div>
+      <div style="display:flex;align-items:flex-end">
+        <button class="btn" onclick="searchRequestCandidates()">Buscar</button>
+      </div>
+    </div>
+
+    <div id="requestLookupStatus" class="note" style="margin-top:8px">
+      Escriba al menos 4 caracteres del número de expediente.
+    </div>
+
+    <div class="request-search-results" id="requestLookupResults">
+      <div class="empty">Sin búsqueda.</div>
+    </div>
+
+    <div class="modal-foot">
+      <span id="requestLookupCount" class="note">0 seleccionados</span>
+      <div style="display:flex;gap:8px">
+        <button class="btn secondary" onclick="closeRequestSearchModal()">Cancelar</button>
+        <button class="btn" id="requestLookupContinueBtn" onclick="continueRequestFromSearch()" disabled>Continuar solicitud</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
 <!-- Administración de personal, áreas y ubicaciones -->
 <div class="modal" id="peopleModal">
   <div class="modal-box">
@@ -633,11 +718,11 @@ const MASTER=[["MARCELA ALONZO", "PERSONAL"], ["ABRAHAN DAMAS", "PERSONAL"], ["A
 const ASUNTOS_PREDETERMINADOS=["ACCESO A LA INFORMACIÓN", "ANALISIS Y EVALUACIÓN DEL MEMORANDO DE CONCLUSIÓN DEL PROCESO CONTENCIOSO ADMINISTRATIVO, REMITIDO POR LA PROCURADURÍA PÚBLICA (PP)", "ANEXADO DE CÉDULAS DE NOTIFICACIÓN", "ANEXADO DE DOCUMENTOS", "ATENCIÓN A LA DIRECCIÓN DE EXTRACCIÓN PARA CONSUMO HUMANO DIRECTO E INDIRECTO (DECHDI)", "ATENCIÓN A LA DIRECCIÓN DE VIGILANCIA Y CONTROL (DVC) - RD ARCHIVAMIENTO", "ATENCIÓN A LA OFICINA DE CONTROL INTERNO (OCI)", "ATENCIÓN A LA OFICINA GENERAL DE ADMINISTRACIÓN (OGA)", "ATENCIÓN A LA PROCURADURÍA PÚBLICA", "ATENCIÓN AL MINISTERIO PÚBLICO (FISCALÍA)", "ATENCIÓN DE ESCRITOS", "ATENCIÓN DE ESCRITOS REMITIDOS POR EL CONSEJO DE APELACIÓN DE SANCIONES CALIDAD DE PRÉSTAMO (CONAS)", "ATENCIÓN DE QUEJAS", "CADUCIDAD", "COMUNICACIÓN DE LAS SANCIONES A LA DIRECCIÓN GENERAL DE PESCA PARA CONSUMO HUMANO DIRECTO E INDIRECTO (DGPCHDI)", "DESLINDE DE RESPONSABILIDAD", "ELEVACIÓN DEL EXPEDIENTE AL CONSEJO DE APELACIÓN DE SANCIONES (CONAS)", "ENMIENDA", "EVALUACIÓN DE OFICIO", "EVALUACIÓN DE PAGOS POR CONCEPTO DE DECOMISOS", "EVALUACIÓN DEL EXPEDIENTE QUE RETORNA DEL CONSEJO DE APELACIÓN DE SANCIONES (CONAS)", "INTERES PARTICULAR", "LECTURA EN SALA (USUARIOS INTERNOS)", "LECTURA EXPEDIENTE (USUARIOS EXTERNOS)", "NULIDAD DE OFICIO", "PERDIDA DE BENEFICIO", "PETICIÓN ADMINISTRATIVA", "RECOMENDACIÓN DE INICIO", "RECONSIDERACIÓN", "REINCIDENCIAS DEL PAS", "REVISIÓN", "REVISIÓN DEL PROCEDIMIENTO DE EJECUCIÓN COACTIVA (PEC) - OEC", "SECRETARIA TÉCNICA DE LOS ORGANOS INSTRUCTORES (STOI)", "SOLICITUD DE BENEFICIOS", "TRAMITACIÓN DEL PAS (IFIS)", "USO DE LA PALABRA O AUDIENCIA"];
 const STATUSES=['CUSTODIA','EN PRÉSTAMO','DEVUELTO','REASIGNADO','EN TRÁMITE','PENDIENTE DE ORGANIZAR','TRANSFERIDO','EN NOTIFICACIONES'];
 const PAGE_SIZE=200;
-let sb=null, session=null, summaryRows=[], panelRows=[], allRows=[], historyRows=[], cargosRows=[], stateRows=[], stateDetailRows=[], requestRows=[], requestDetailRows=[], requestMovementRows=[];
+let sb=null, session=null, currentProfile=null, userProfiles=[], summaryRows=[], panelRows=[], allRows=[], historyRows=[], cargosRows=[], stateRows=[], stateDetailRows=[], requestRows=[], requestDetailRows=[], requestMovementRows=[], requestSearchRows=[];
 let catalogo=MASTER.map(([nombre,tipo],i)=>({id:'fallback-'+i,nombre,tipo,activo:true}));
 let selectedIds=new Set(), cargoRows=[];
 let recordMode='single', batchCargoHeader=null;
-let selectedOwner='', selectedState='', currentRequestId='', currentRequest=null, requestSelectedIds=new Set(), page=0, panelCount=0, allCountValue=0, stateDetailCount=0, panelTimer=null, allTimer=null, historyTimer=null, cargosTimer=null, requestsTimer=null;
+let selectedOwner='', selectedState='', currentRequestId='', currentRequest=null, requestSelectedIds=new Set(), requestSearchSelectedIds=new Set(), page=0, panelCount=0, allCountValue=0, stateDetailCount=0, panelTimer=null, allTimer=null, historyTimer=null, cargosTimer=null, requestsTimer=null;
 
 function el(id){return document.getElementById(id)}
 function norm(v){return String(v??'').trim().toUpperCase()}
@@ -696,14 +781,140 @@ async function login(e){
   session=data.session;el('loginStatus').textContent='';el('loginModal').classList.remove('show');await afterLogin()
 }
 async function logout(){if(sb)await sb.auth.signOut();session=null;location.reload()}
+function hasFullAccess(){
+  return !!currentProfile && currentProfile.activo!==false &&
+    ['ADMINISTRADOR','ARCHIVO'].includes(currentProfile.rol);
+}
+function isAdmin(){
+  return !!currentProfile && currentProfile.activo!==false &&
+    currentProfile.rol==='ADMINISTRADOR';
+}
+function isLimitedUser(){
+  return !!currentProfile && currentProfile.rol==='USUARIO';
+}
+
+async function loadMyProfile(){
+  if(!sb||!session)return null;
+
+  const {data,error}=await sb
+    .from('perfiles_usuario')
+    .select('id,email,nombre_personal,rol,activo')
+    .eq('id',session.user.id)
+    .maybeSingle();
+
+  if(error)throw error;
+
+  currentProfile=data||{
+    id:session.user.id,
+    email:session.user.email||'',
+    nombre_personal:null,
+    rol:'USUARIO',
+    activo:false
+  };
+  return currentProfile;
+}
+
+function applyRoleUI(){
+  const full=hasFullAccess();
+  const admin=isAdmin();
+  const limited=isLimitedUser();
+
+  document.querySelector('.app').classList.toggle('limited-user',limited);
+
+  const setVisible=(id,visible)=>{
+    const x=el(id);
+    if(x)x.classList.toggle('hidden-by-role',!visible);
+  };
+
+  setVisible('newRecordBtn',full);
+  setVisible('cargoBtn',full);
+  setVisible('importCsvBtn',full);
+  setVisible('exportCsvBtn',full);
+  setVisible('peopleBtn',admin);
+  setVisible('usersBtn',admin);
+
+  // El buscador para solicitar es útil sobre todo para abogados.
+  setVisible('searchRequestBtn',true);
+
+  ['summary','states','all','cargos'].forEach(tab=>{
+    const b=document.querySelector(`[data-tab="${tab}"]`);
+    if(b)b.classList.toggle('hidden-by-role',!full);
+  });
+
+  if(el('tabBtnPanel'))el('tabBtnPanel').textContent=limited?'Mis expedientes':'Panel por personal';
+  if(el('tabBtnHistory'))el('tabBtnHistory').textContent=limited?'Mis movimientos':'Historial';
+
+  if(el('currentRole')){
+    const label=currentProfile
+      ? `${currentProfile.rol}${currentProfile.nombre_personal?' · '+currentProfile.nombre_personal:''}`
+      : '—';
+    el('currentRole').textContent=label;
+  }
+
+  // Un usuario normal queda fijo a su propio nombre.
+  if(limited){
+    selectedOwner=currentProfile.nombre_personal||'';
+    if(el('ownerSelect')){
+      el('ownerSelect').innerHTML=currentProfile.nombre_personal
+        ? `<option>${esc(currentProfile.nombre_personal)}</option>`
+        : '<option value="">SIN PERSONAL ASOCIADO</option>';
+      el('ownerSelect').value=currentProfile.nombre_personal||'';
+      el('ownerSelect').disabled=true;
+    }
+
+    if(el('rqSolicitante')){
+      el('rqSolicitante').innerHTML=currentProfile.nombre_personal
+        ? `<option>${esc(currentProfile.nombre_personal)}</option>`
+        : '<option value="">SIN PERSONAL ASOCIADO</option>';
+      el('rqSolicitante').value=currentProfile.nombre_personal||'';
+      el('rqSolicitante').disabled=true;
+    }
+  }else{
+    if(el('ownerSelect'))el('ownerSelect').disabled=false;
+    if(el('rqSolicitante'))el('rqSolicitante').disabled=false;
+  }
+}
+
 async function afterLogin(){
   if(!session)return;
+
   el('loginModal').classList.remove('show');
   el('currentUser').textContent=session.user.email||session.user.id;
+
+  try{
+    await loadMyProfile();
+  }catch(err){
+    serverError(err);
+    return;
+  }
+
+  if(!currentProfile.activo){
+    alert('Esta cuenta está desactivada. Comuníquese con el administrador.');
+    await logout();
+    return;
+  }
+
   await loadCatalogo();
   fillSelects();
+  applyRoleUI();
   updateSelectionUI();
-  await Promise.all([loadSummary(),loadPanel(),loadAll(),loadStates(),loadRequests(),loadCargos(),loadHistory()]);
+
+  if(isLimitedUser() && !currentProfile.nombre_personal){
+    alert('Su cuenta todavía no está asociada a un nombre de personal. El administrador debe completar "Usuarios y permisos".');
+  }
+
+  if(hasFullAccess()){
+    await Promise.all([
+      loadSummary(),loadPanel(),loadAll(),loadStates(),
+      loadRequests(),loadCargos(),loadHistory()
+    ]);
+  }else{
+    await Promise.all([
+      loadSummary(),loadPanel(),loadRequests(),loadHistory()
+    ]);
+  }
+
+  switchTab('panel',document.querySelector('[data-tab="panel"]'));
 }
 function fillSelects(){
   const activos=catalogo.filter(x=>x.activo!==false);
@@ -717,6 +928,14 @@ function fillSelects(){
   if(el('rqSolicitante')) el('rqSolicitante').innerHTML=activos.filter(x=>x.tipo==='PERSONAL').map(x=>`<option>${esc(x.nombre)}</option>`).join('');
   if(el('rqDNuevoResponsable')) el('rqDNuevoResponsable').innerHTML=activos.map(x=>`<option>${esc(x.nombre)}</option>`).join('');
   if(el('rqDRetorno')) el('rqDRetorno').innerHTML=activos.filter(x=>x.tipo!=='PERSONAL').map(x=>`<option>${esc(x.nombre)}</option>`).join('');
+
+  if(currentProfile?.rol==='USUARIO' && el('rqSolicitante')){
+    el('rqSolicitante').innerHTML=currentProfile.nombre_personal
+      ? `<option>${esc(currentProfile.nombre_personal)}</option>`
+      : '<option value="">SIN PERSONAL ASOCIADO</option>';
+    el('rqSolicitante').value=currentProfile.nombre_personal||'';
+    el('rqSolicitante').disabled=true;
+  }
 }
 
 
@@ -772,6 +991,118 @@ async function refreshCatalogoUI(){
   if(selectedOwner&&!catalogo.some(x=>x.nombre===selectedOwner&&x.activo)){selectedOwner='';el('ownerSelect').value='';page=0;await loadPanel()}
 }
 
+
+async function openUsersModal(){
+  if(!isAdmin()){
+    alert('Solo un ADMINISTRADOR puede cambiar permisos.');
+    return;
+  }
+
+  el('usersModal').classList.add('show');
+  el('usersStatus').textContent='Cargando usuarios...';
+  await loadUserProfiles();
+}
+
+function closeUsersModal(){
+  el('usersModal').classList.remove('show');
+}
+
+async function loadUserProfiles(){
+  const {data,error}=await sb
+    .from('perfiles_usuario')
+    .select('*')
+    .order('email');
+
+  if(error){
+    el('usersStatus').textContent=error.message;
+    return;
+  }
+
+  userProfiles=data||[];
+  renderUserProfiles();
+  el('usersStatus').textContent=`${userProfiles.length} cuentas registradas.`;
+}
+
+function renderUserProfiles(){
+  const personal=catalogo
+    .filter(x=>x.activo!==false && x.tipo==='PERSONAL')
+    .map(x=>x.nombre)
+    .sort((a,b)=>a.localeCompare(b));
+
+  if(!userProfiles.length){
+    el('usersBody').innerHTML='<tr><td colspan="5" class="empty">No hay usuarios.</td></tr>';
+    return;
+  }
+
+  el('usersBody').innerHTML=userProfiles.map(u=>{
+    const nameOptions=['',...personal]
+      .map(n=>`<option value="${esc(n)}" ${n===(u.nombre_personal||'')?'selected':''}>${n?esc(n):'— SIN ASOCIAR —'}</option>`)
+      .join('');
+
+    return `<tr>
+      <td>
+        <b>${esc(u.email||'')}</b>
+        ${u.id===session.user.id?'<div class="note">Cuenta actual</div>':''}
+      </td>
+      <td>
+        <select id="user-name-${u.id}">${nameOptions}</select>
+      </td>
+      <td>
+        <select id="user-role-${u.id}">
+          <option ${u.rol==='USUARIO'?'selected':''}>USUARIO</option>
+          <option ${u.rol==='ARCHIVO'?'selected':''}>ARCHIVO</option>
+          <option ${u.rol==='ADMINISTRADOR'?'selected':''}>ADMINISTRADOR</option>
+        </select>
+      </td>
+      <td style="text-align:center">
+        <input type="checkbox" id="user-active-${u.id}" ${u.activo?'checked':''}>
+      </td>
+      <td>
+        <button class="btn secondary small" onclick="saveUserProfile('${u.id}')">Guardar</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+async function saveUserProfile(id){
+  if(!isAdmin())return;
+
+  const nombre=el(`user-name-${id}`).value.trim()||null;
+  const rol=el(`user-role-${id}`).value;
+  const activo=el(`user-active-${id}`).checked;
+
+  if(rol==='USUARIO' && !nombre){
+    if(!confirm('Este USUARIO quedará sin personal asociado y no podrá ver ni crear solicitudes hasta que se le asigne un nombre. ¿Continuar?'))return;
+  }
+
+  if(id===session.user.id && (!activo || rol!=='ADMINISTRADOR')){
+    if(!confirm('Está modificando su propia cuenta administradora. Esto puede quitarle acceso a la administración. ¿Continuar?'))return;
+  }
+
+  const {error}=await sb
+    .from('perfiles_usuario')
+    .update({
+      nombre_personal:nombre,
+      rol,
+      activo,
+      updated_at:new Date().toISOString()
+    })
+    .eq('id',id);
+
+  if(error){
+    el('usersStatus').textContent=error.message;
+    return;
+  }
+
+  el('usersStatus').textContent='Permisos actualizados.';
+  await loadUserProfiles();
+
+  if(id===session.user.id){
+    await loadMyProfile();
+    applyRoleUI();
+  }
+}
+
 async function loadSummary(){
   const {data,error}=await sb.rpc('resumen_responsables');
   if(error){serverError(error);return}
@@ -815,12 +1146,14 @@ async function loadPanel(){
   const {data,error,count}=await q;
   if(error){serverError(error);return}
   panelRows=data||[];panelCount=count||0;
-  el('panelTitle').textContent=selectedOwner?`Expedientes de ${selectedOwner} · ${typeOf(selectedOwner)}`:'Todos los expedientes';
+  el('panelTitle').textContent=isLimitedUser()
+    ? `Mis expedientes${currentProfile?.nombre_personal?' · '+currentProfile.nombre_personal:''}`
+    : (selectedOwner?`Expedientes de ${selectedOwner} · ${typeOf(selectedOwner)}`:'Todos los expedientes');
   el('pageInfo').textContent=`${page+1} · ${panelCount} registros`;
   el('panelTable').innerHTML=recordTable(panelRows,false,'panel')
 }
 function debouncePanel(){clearTimeout(panelTimer);page=0;panelTimer=setTimeout(loadPanel,300)}
-async function setOwner(v){selectedOwner=v||'';page=0;el('ownerSelect').value=selectedOwner;switchTab('panel',document.querySelector('[data-tab="panel"]'));renderSidebar();renderKpis();await loadPanel()}
+async function setOwner(v){if(isLimitedUser())v=currentProfile?.nombre_personal||'';selectedOwner=v||'';page=0;el('ownerSelect').value=selectedOwner;switchTab('panel',document.querySelector('[data-tab="panel"]'));renderSidebar();renderKpis();await loadPanel()}
 async function changePage(d){const next=page+d;if(next<0)return;if(next*PAGE_SIZE>=panelCount&&d>0)return;page=next;await loadPanel()}
 
 
@@ -938,6 +1271,103 @@ function reqStatePill(state){
   return `<span class="req-state ${cls}">${esc(state||'')}</span>`;
 }
 
+
+function openRequestSearchModal(){
+  if(!currentProfile?.activo){
+    alert('Cuenta sin acceso.');
+    return;
+  }
+
+  if(isLimitedUser() && !currentProfile.nombre_personal){
+    alert('Su cuenta todavía no está asociada a un nombre de personal.');
+    return;
+  }
+
+  requestSearchRows=[];
+  requestSearchSelectedIds.clear();
+  el('requestLookupInput').value='';
+  el('requestLookupStatus').textContent='Escriba al menos 4 caracteres del número de expediente.';
+  el('requestLookupResults').innerHTML='<div class="empty">Sin búsqueda.</div>';
+  updateRequestLookupSelection();
+  el('requestSearchModal').classList.add('show');
+  setTimeout(()=>el('requestLookupInput').focus(),50);
+}
+
+function closeRequestSearchModal(){
+  el('requestSearchModal').classList.remove('show');
+}
+
+async function searchRequestCandidates(){
+  const q=el('requestLookupInput').value.trim();
+
+  if(q.length<4){
+    el('requestLookupStatus').textContent='Ingrese al menos 4 caracteres.';
+    return;
+  }
+
+  el('requestLookupStatus').textContent='Buscando...';
+  el('requestLookupResults').innerHTML='<div class="empty">Buscando...</div>';
+
+  const {data,error}=await sb.rpc('buscar_expedientes_para_solicitud',{
+    p_busqueda:q
+  });
+
+  if(error){
+    el('requestLookupStatus').textContent=error.message;
+    el('requestLookupResults').innerHTML='<div class="empty">No se pudo realizar la búsqueda.</div>';
+    return;
+  }
+
+  requestSearchRows=data||[];
+  requestSearchSelectedIds.clear();
+  renderRequestLookupResults();
+}
+
+function toggleRequestLookup(id,checked){
+  if(checked)requestSearchSelectedIds.add(id);
+  else requestSearchSelectedIds.delete(id);
+  updateRequestLookupSelection();
+}
+
+function updateRequestLookupSelection(){
+  const n=requestSearchSelectedIds.size;
+  el('requestLookupCount').textContent=n+' seleccionado'+(n===1?'':'s');
+  el('requestLookupContinueBtn').disabled=n===0;
+}
+
+function renderRequestLookupResults(){
+  if(!requestSearchRows.length){
+    el('requestLookupStatus').textContent='No se encontraron expedientes.';
+    el('requestLookupResults').innerHTML='<div class="empty">Sin resultados.</div>';
+    updateRequestLookupSelection();
+    return;
+  }
+
+  el('requestLookupStatus').textContent=`${requestSearchRows.length} resultado(s). Solo pueden seleccionarse los disponibles.`;
+
+  el('requestLookupResults').innerHTML=`<table>
+    <thead><tr><th></th><th>Expediente</th><th>Ext.</th><th>R.D.</th><th>Estado</th><th>Disponibilidad</th></tr></thead>
+    <tbody>${requestSearchRows.map(r=>`<tr>
+      <td><input type="checkbox" ${r.disponible?'':'disabled'} ${requestSearchSelectedIds.has(r.id)?'checked':''}
+        onchange="toggleRequestLookup('${r.id}',this.checked)"></td>
+      <td><b>${esc(r.expediente)}</b></td>
+      <td>${r.extension?esc(r.extension):'—'}</td>
+      <td>${esc(r.rd||'')}</td>
+      <td>${esc(r.estado||'')}</td>
+      <td>${r.disponible?'<span class="pill returned">DISPONIBLE</span>':'<span class="pill alert">'+esc(r.motivo||'NO DISPONIBLE')+'</span>'}</td>
+    </tr>`).join('')}</tbody>
+  </table>`;
+
+  updateRequestLookupSelection();
+}
+
+async function continueRequestFromSearch(){
+  const rows=requestSearchRows.filter(r=>requestSearchSelectedIds.has(r.id));
+  if(!rows.length)return;
+  closeRequestSearchModal();
+  await openNewRequestModal(rows);
+}
+
 async function loadRequests(){
   if(!sb||!session)return;
 
@@ -1009,28 +1439,44 @@ function renderRequests(){
   </table>`;
 }
 
-async function openNewRequestModal(){
+async function openNewRequestModal(rowsOverride=null){
   if(!sb||!session){alert('Debe iniciar sesión.');return}
 
-  let ids=[...selectedIds];
-  let rows=[];
+  let rows=Array.isArray(rowsOverride)?rowsOverride:[];
+  let ids=[];
 
-  if(ids.length){
-    const {data,error}=await sb.from('expedientes').select('*').in('id',ids);
-    if(error){alert(error.message);return}
-    rows=data||[];
+  if(!rows.length){
+    ids=[...selectedIds];
+
+    if(ids.length){
+      const {data,error}=await sb.from('expedientes').select('*').in('id',ids);
+      if(error){alert(error.message);return}
+      rows=data||[];
+    }
   }
 
   if(!rows.length){
-    alert('Seleccione primero uno o más expedientes desde el Panel, Estados o Registro maestro.');
+    openRequestSearchModal();
     return;
   }
 
   const activos=catalogo.filter(x=>x.activo!==false&&x.tipo==='PERSONAL');
-  if(selectedOwner && activos.some(x=>x.nombre===selectedOwner)){
-    el('rqSolicitante').value=selectedOwner;
-  }else if(!el('rqSolicitante').value && activos.length){
-    el('rqSolicitante').value=activos[0].nombre;
+
+  if(isLimitedUser()){
+    if(!currentProfile.nombre_personal){
+      alert('Su cuenta no tiene personal asociado.');
+      return;
+    }
+    el('rqSolicitante').innerHTML=`<option>${esc(currentProfile.nombre_personal)}</option>`;
+    el('rqSolicitante').value=currentProfile.nombre_personal;
+    el('rqSolicitante').disabled=true;
+  }else{
+    el('rqSolicitante').disabled=false;
+    if(selectedOwner && activos.some(x=>x.nombre===selectedOwner)){
+      el('rqSolicitante').value=selectedOwner;
+    }else if(!el('rqSolicitante').value && activos.length){
+      el('rqSolicitante').value=activos[0].nombre;
+    }
   }
 
   el('rqAsunto').value='';
@@ -1039,19 +1485,17 @@ async function openNewRequestModal(){
   el('rqSelectedCount').textContent=rows.length+' expediente'+(rows.length===1?'':'s');
 
   el('rqSelectedTable').innerHTML=`<table>
-    <thead><tr><th>Expediente</th><th>Ext.</th><th>Estado físico</th><th>Ubicación actual</th></tr></thead>
+    <thead><tr><th>Expediente</th><th>Ext.</th><th>Estado</th></tr></thead>
     <tbody>${rows.map(r=>`<tr>
       <td><b>${esc(expBase(r.expediente))}</b></td>
       <td>${r.extension?esc(r.extension):'—'}</td>
-      <td>${rowStatus(r)}</td>
-      <td>${esc(r.responsable||'')}</td>
+      <td>${esc(r.estado||'')}</td>
     </tr>`).join('')}</tbody>
   </table>`;
 
   el('newRequestModal').dataset.ids=JSON.stringify(rows.map(r=>r.id));
   el('newRequestModal').classList.add('show');
 }
-
 function closeNewRequestModal(){
   el('newRequestModal').classList.remove('show');
 }
@@ -1236,6 +1680,19 @@ function renderRequestMovements(){
 
 function renderRequestActions(){
   const r=currentRequest||{};
+
+  if(!hasFullAccess()){
+    el('rqWorkflowActions').innerHTML='<span class="note">Puede consultar el estado de su solicitud. La atención, entrega, reasignación y devolución corresponden al personal autorizado.</span>';
+    ['rqDAtiende','rqDNuevoResponsable','rqDRetorno','rqDObservacion'].forEach(id=>{
+      if(el(id))el(id).disabled=true;
+    });
+    return;
+  }
+
+  ['rqDAtiende','rqDNuevoResponsable','rqDRetorno','rqDObservacion'].forEach(id=>{
+    if(el(id))el(id).disabled=false;
+  });
+
   let html='';
 
   if(r.estado==='SOLICITADO'){
@@ -1252,7 +1709,6 @@ function renderRequestActions(){
 
   el('rqWorkflowActions').innerHTML=html;
 }
-
 async function attendRequest(){
   const atiende=el('rqDAtiende').value.trim();
   const obs=el('rqDObservacion').value.trim();
@@ -1456,11 +1912,51 @@ async function verExpedientesCargo(numero){
 
 async function loadHistory(){
   if(!sb||!session)return;
+
+  if(isLimitedUser()){
+    let q=sb
+      .from('movimientos_prestamo')
+      .select('*')
+      .order('created_at',{ascending:false})
+      .limit(500);
+
+    const s=cleanSearch(el('historySearch').value);
+    if(s){
+      const p=`%${s}%`;
+      q=q.or(`expediente.ilike.${p},accion.ilike.${p},desde.ilike.${p},hacia.ilike.${p},cargo_numero.ilike.${p},observacion.ilike.${p}`);
+    }
+
+    const {data,error}=await q;
+    if(error){serverError(error);return}
+
+    historyRows=(data||[]).map(x=>({
+      created_at:x.created_at,
+      expediente:x.expediente,
+      extension:'',
+      accion:x.accion,
+      desde:x.desde,
+      hacia:x.hacia,
+      cargo:x.cargo_numero,
+      detalle:x.observacion
+    }));
+
+    el('historyCount').textContent=historyRows.length;
+    renderHistory();
+    return;
+  }
+
   let q=sb.from('historial_expedientes').select('*').order('created_at',{ascending:false}).limit(500);
   const s=cleanSearch(el('historySearch').value);
-  if(s){const p=`%${s}%`;q=q.or(`expediente.ilike.${p},extension.ilike.${p},accion.ilike.${p},desde.ilike.${p},hacia.ilike.${p},cargo.ilike.${p},detalle.ilike.${p}`)}
-  const {data,error}=await q;if(error){serverError(error);return}
-  historyRows=data||[];el('historyCount').textContent=historyRows.length;renderHistory()
+  if(s){
+    const p=`%${s}%`;
+    q=q.or(`expediente.ilike.${p},extension.ilike.${p},accion.ilike.${p},desde.ilike.${p},hacia.ilike.${p},cargo.ilike.${p},detalle.ilike.${p}`);
+  }
+  const {data,error}=await q;
+  if(error){serverError(error);return}
+
+  historyRows=data||[];
+  el('historyCount').textContent=historyRows.length;
+  renderHistory();
 }
 function debounceHistory(){clearTimeout(historyTimer);historyTimer=setTimeout(loadHistory,300)}
 
@@ -1497,7 +1993,7 @@ function recordTable(data,withOwner=false,source='panel'){
     <td>${esc(r.modalidad)}</td><td>${esc(r.ultimo_folio)}</td>
     <td>${esc(r.digitalizado)}${r.enlace?` · <a href="${esc(r.enlace)}" target="_blank">Abrir</a>`:''}</td>
     <td>${esc(r.cargo)}</td><td>${rowAlert(r)?'<span class="pill alert">ALERTA >30 DÍAS</span>':''}</td><td>${esc(r.observacion)}</td>
-    <td><div style="display:flex;gap:5px;white-space:nowrap"><button class="btn secondary small" onclick="showExpHistory('${r.id}')">Historial</button><button class="btn secondary small" onclick="editRecord('${r.id}')">Editar</button></div></td>
+    <td><div style="display:flex;gap:5px;white-space:nowrap"><button class="btn secondary small" onclick="showExpHistory('${r.id}')">Historial</button>${hasFullAccess()?`<button class="btn secondary small" onclick="editRecord('${r.id}')">Editar</button>`:''}</div></td>
   </tr>`).join('');
   return `<table><thead><tr>
     <th><input type="checkbox" aria-label="Seleccionar todos" ${allChecked?'checked':''} onchange="toggleAllRows(this.checked,'${source}')"></th>
@@ -2159,14 +2655,71 @@ async function saveRecord(e){
 }
 
 async function showExpHistory(id){
+  if(isLimitedUser()){
+    const [{data:r,error:e1},{data:m,error:e2}]=await Promise.all([
+      sb.from('expedientes').select('*').eq('id',id).single(),
+      sb.from('movimientos_prestamo').select('*').eq('expediente_id',id).order('created_at',{ascending:false})
+    ]);
+
+    if(e1||e2){serverError(e1||e2);return}
+
+    el('hExp').textContent=r.expediente||'—';
+    el('hExt').textContent=r.extension||'—';
+    el('hResp').textContent=r.responsable||'—';
+    el('hEstado').textContent=r.estado||'—';
+    el('expHistoryTitle').textContent='Mis movimientos del expediente '+expKey(r);
+
+    el('expTimeline').innerHTML=!m.length
+      ?'<div class="empty">Sin movimientos asociados a sus solicitudes.</div>'
+      :'<div class="timeline">'+m.map(x=>{
+        const meta=[
+          x.desde?`Desde: ${esc(x.desde)}`:'',
+          x.hacia?`Hacia: ${esc(x.hacia)}`:'',
+          x.cargo_numero?`Cargo: ${esc(x.cargo_numero)}`:''
+        ].filter(Boolean).join(' · ');
+
+        return `<div class="timeline-item">
+          <div class="t-date">${fmtDate(x.created_at)}</div>
+          <div class="t-action">${esc(x.accion)}</div>
+          <div class="t-detail">${esc(x.observacion||'Sin detalle')}</div>
+          ${meta?`<div class="t-meta">${meta}</div>`:''}
+        </div>`;
+      }).join('')+'</div>';
+
+    el('expHistoryModal').classList.add('show');
+    return;
+  }
+
   const [{data:r,error:e1},{data:h,error:e2}]=await Promise.all([
     sb.from('expedientes').select('*').eq('id',id).single(),
     sb.from('historial_expedientes').select('*').eq('expediente_id',id).order('created_at',{ascending:false})
   ]);
   if(e1||e2){serverError(e1||e2);return}
-  el('hExp').textContent=r.expediente||'—';el('hExt').textContent=r.extension||'—';el('hResp').textContent=r.responsable||'—';el('hEstado').textContent=r.estado||'—';el('expHistoryTitle').textContent='Historial del expediente '+expKey(r);
-  el('expTimeline').innerHTML=!h.length?'<div class="empty">Sin movimientos.</div>':'<div class="timeline">'+h.map(x=>{const meta=[x.desde?`Desde: ${esc(x.desde)}`:'',x.hacia?`Hacia: ${esc(x.hacia)}`:'',x.cargo?`Cargo: ${esc(x.cargo)}`:''].filter(Boolean).join(' · ');return `<div class="timeline-item"><div class="t-date">${fmtDate(x.created_at)}</div><div class="t-action">${esc(x.accion)}</div><div class="t-detail">${esc(x.detalle||'Sin detalle')}</div>${meta?`<div class="t-meta">${meta}</div>`:''}</div>`}).join('')+'</div>';
-  el('expHistoryModal').classList.add('show')
+
+  el('hExp').textContent=r.expediente||'—';
+  el('hExt').textContent=r.extension||'—';
+  el('hResp').textContent=r.responsable||'—';
+  el('hEstado').textContent=r.estado||'—';
+  el('expHistoryTitle').textContent='Historial del expediente '+expKey(r);
+
+  el('expTimeline').innerHTML=!h.length
+    ?'<div class="empty">Sin movimientos.</div>'
+    :'<div class="timeline">'+h.map(x=>{
+      const meta=[
+        x.desde?`Desde: ${esc(x.desde)}`:'',
+        x.hacia?`Hacia: ${esc(x.hacia)}`:'',
+        x.cargo?`Cargo: ${esc(x.cargo)}`:''
+      ].filter(Boolean).join(' · ');
+
+      return `<div class="timeline-item">
+        <div class="t-date">${fmtDate(x.created_at)}</div>
+        <div class="t-action">${esc(x.accion)}</div>
+        <div class="t-detail">${esc(x.detalle||'Sin detalle')}</div>
+        ${meta?`<div class="t-meta">${meta}</div>`:''}
+      </div>`;
+    }).join('')+'</div>';
+
+  el('expHistoryModal').classList.add('show');
 }
 function closeExpHistory(){el('expHistoryModal').classList.remove('show')}
 
