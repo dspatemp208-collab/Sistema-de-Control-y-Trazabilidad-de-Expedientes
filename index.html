@@ -117,6 +117,12 @@
 .lawyer-total{font-size:27px;font-weight:900;color:var(--navy);margin:4px 0 8px}
 .lawyer-actions{margin-top:10px;display:flex;gap:6px;flex-wrap:wrap}
 
+
+.request-draft-box{margin-top:10px;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.request-draft-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 11px;background:#f8fafc;border-bottom:1px solid var(--line)}
+.request-draft-box table{margin:0}
+.request-draft-empty{padding:18px;text-align:center;color:var(--muted)}
+
 </style>
 </head>
 <body>
@@ -495,7 +501,7 @@
     <div class="modal-head">
       <div>
         <h2>Buscar expediente para solicitar</h2>
-        <div class="note">La búsqueda muestra únicamente datos mínimos para identificar y solicitar un expediente.</div>
+        <div class="note">Puede agregar varios expedientes a una misma solicitud. Busque y agregue uno por uno; también puede combinar expedientes existentes y nuevos.</div>
       </div>
       <button class="btn secondary small" onclick="closeRequestSearchModal()">Cerrar</button>
     </div>
@@ -517,8 +523,7 @@
     <div id="newExpRequestBox" class="card hidden" style="margin-top:10px;padding:12px">
       <strong>El expediente no está registrado</strong>
       <div class="note" style="margin:4px 0 10px">
-        Puede registrarlo por primera vez y generar inmediatamente la solicitud.
-        Archivo verificará el expediente antes de atenderlo.
+        Puede registrarlo por primera vez y agregarlo a la misma solicitud. Archivo verificará el expediente antes de atenderlo.
       </div>
 
       <div class="form-grid">
@@ -545,7 +550,7 @@
       </div>
 
       <div style="margin-top:10px">
-        <button class="btn" onclick="openNewFirstTimeRequest()">Registrar expediente nuevo y solicitar</button>
+        <button class="btn" onclick="openNewFirstTimeRequest()">+ Agregar expediente nuevo a la solicitud</button>
       </div>
     </div>
 
@@ -553,10 +558,21 @@
       <div class="empty">Sin búsqueda.</div>
     </div>
 
+    <div class="request-draft-box">
+      <div class="request-draft-head">
+        <strong>Expedientes agregados a esta solicitud</strong>
+        <span id="requestDraftCount">0 expedientes</span>
+      </div>
+      <div id="requestDraftTable" class="request-draft-empty">
+        Aún no ha agregado expedientes.
+      </div>
+    </div>
+
     <div class="modal-foot">
-      <span id="requestLookupCount" class="note">0 seleccionados</span>
-      <div style="display:flex;gap:8px">
+      <span id="requestLookupCount" class="note">0 seleccionados en la búsqueda</span>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn secondary" onclick="closeRequestSearchModal()">Cancelar</button>
+        <button class="btn secondary" id="requestLookupAddBtn" onclick="addSelectedSearchResultsToDraft()" disabled>+ Agregar seleccionados</button>
         <button class="btn" id="requestLookupContinueBtn" onclick="continueRequestFromSearch()" disabled>Continuar solicitud</button>
       </div>
     </div>
@@ -786,7 +802,7 @@ let sb=null, session=null, currentProfile=null, userProfiles=[], summaryRows=[],
 let catalogo=MASTER.map(([nombre,tipo],i)=>({id:'fallback-'+i,nombre,tipo,activo:true}));
 let selectedIds=new Set(), cargoRows=[];
 let recordMode='single', batchCargoHeader=null;
-let selectedOwner='', selectedState='', currentRequestId='', currentRequest=null, requestSelectedIds=new Set(), requestSearchSelectedIds=new Set(), page=0, panelCount=0, allCountValue=0, stateDetailCount=0, panelTimer=null, allTimer=null, historyTimer=null, cargosTimer=null, requestsTimer=null;
+let selectedOwner='', selectedState='', currentRequestId='', currentRequest=null, requestSelectedIds=new Set(), requestSearchSelectedIds=new Set(), requestDraftItems=[], addToExistingRequestId='', page=0, panelCount=0, allCountValue=0, stateDetailCount=0, panelTimer=null, allTimer=null, historyTimer=null, cargosTimer=null, requestsTimer=null;
 
 function el(id){return document.getElementById(id)}
 function norm(v){return String(v??'').trim().toUpperCase()}
@@ -1340,7 +1356,38 @@ function reqStatePill(state){
 }
 
 
+
+function openAddItemsToExistingRequest(){
+  if(!currentRequestId || !currentRequest){
+    alert('No se pudo identificar la solicitud.');
+    return;
+  }
+
+  if(currentRequest.estado!=='SOLICITADO'){
+    alert('Solo se pueden agregar expedientes mientras la solicitud esté en estado SOLICITADO.');
+    return;
+  }
+
+  addToExistingRequestId=currentRequestId;
+  requestSearchRows=[];
+  requestSearchSelectedIds.clear();
+  requestDraftItems=[];
+
+  el('requestLookupInput').value='';
+  el('requestLookupStatus').textContent='Busque y agregue uno o más expedientes a esta solicitud.';
+  el('requestLookupResults').innerHTML='<div class="empty">Sin búsqueda.</div>';
+  showNewExpRequestOption(false);
+  updateRequestLookupSelection();
+  renderRequestDraft();
+
+  el('requestLookupContinueBtn').textContent='Agregar a solicitud';
+  el('requestSearchModal').classList.add('show');
+  setTimeout(()=>el('requestLookupInput').focus(),50);
+}
+
 function openRequestSearchModal(){
+  addToExistingRequestId='';
+  if(el('requestLookupContinueBtn'))el('requestLookupContinueBtn').textContent='Continuar solicitud';
   if(!currentProfile?.activo){
     alert('Cuenta sin acceso.');
     return;
@@ -1353,11 +1400,13 @@ function openRequestSearchModal(){
 
   requestSearchRows=[];
   requestSearchSelectedIds.clear();
+  requestDraftItems=[];
   el('requestLookupInput').value='';
   el('requestLookupStatus').textContent='Escriba al menos 4 caracteres del número de expediente.';
   el('requestLookupResults').innerHTML='<div class="empty">Sin búsqueda.</div>';
   showNewExpRequestOption(false);
   updateRequestLookupSelection();
+  renderRequestDraft();
   el('requestSearchModal').classList.add('show');
   setTimeout(()=>el('requestLookupInput').focus(),50);
 }
@@ -1401,7 +1450,8 @@ async function openNewFirstTimeRequest(){
     return;
   }
 
-  const newData={
+  const item={
+    id:null,
     expediente,
     extension:el('newReqExtension').value.trim()||null,
     rd:el('newReqRd').value.trim()||null,
@@ -1411,43 +1461,25 @@ async function openNewFirstTimeRequest(){
     _nuevo:true
   };
 
-  closeRequestSearchModal();
+  const key=requestDraftKey(item);
 
-  const activos=catalogo.filter(x=>x.activo!==false&&x.tipo==='PERSONAL');
-
-  if(isLimitedUser()){
-    el('rqSolicitante').innerHTML=`<option>${esc(currentProfile.nombre_personal)}</option>`;
-    el('rqSolicitante').value=currentProfile.nombre_personal;
-    el('rqSolicitante').disabled=true;
-  }else{
-    el('rqSolicitante').disabled=false;
-    if(selectedOwner && activos.some(x=>x.nombre===selectedOwner)){
-      el('rqSolicitante').value=selectedOwner;
-    }else if(activos.length){
-      el('rqSolicitante').value=activos[0].nombre;
-    }
+  if(requestDraftItems.some(x=>requestDraftKey(x)===key)){
+    el('requestLookupStatus').textContent=`${expediente} ya está agregado a esta solicitud.`;
+    return;
   }
 
-  el('rqAsunto').value='';
-  el('rqObservacion').value='';
-  el('rqSaveStatus').textContent='';
-  el('rqSelectedCount').textContent='1 expediente nuevo';
+  requestDraftItems.push(item);
+  renderRequestDraft();
 
-  el('rqSelectedTable').innerHTML=`<table>
-    <thead><tr><th>Expediente</th><th>Ext.</th><th>R.D.</th><th>Estado</th></tr></thead>
-    <tbody><tr>
-      <td><b>${esc(newData.expediente)}</b></td>
-      <td>${newData.extension?esc(newData.extension):'—'}</td>
-      <td>${newData.rd?esc(newData.rd):'—'}</td>
-      <td><span class="pill">PENDIENTE DE VERIFICACIÓN</span></td>
-    </tr></tbody>
-  </table>`;
-
-  el('newRequestModal').dataset.ids='[]';
-  el('newRequestModal').dataset.newExp=JSON.stringify(newData);
-  el('newRequestModal').classList.add('show');
+  el('requestLookupStatus').textContent=`${expediente} agregado. Puede buscar y agregar otro expediente.`;
+  el('requestLookupInput').value='';
+  el('requestLookupResults').innerHTML='<div class="empty">Busque otro expediente para agregarlo.</div>';
+  showNewExpRequestOption(false);
+  requestSearchRows=[];
+  requestSearchSelectedIds.clear();
+  updateRequestLookupSelection();
+  el('requestLookupInput').focus();
 }
-
 async function searchRequestCandidates(){
   const raw=el('requestLookupInput').value.trim();
   const q=normalizeRequestExpediente(raw);
@@ -1486,6 +1518,11 @@ async function searchRequestCandidates(){
 
   renderRequestLookupResults();
 }
+function requestDraftKey(item){
+  if(item.id)return 'ID:'+item.id;
+  return 'EXP:'+norm(item.expediente)+'|'+norm(item.extension||'');
+}
+
 function toggleRequestLookup(id,checked){
   if(checked)requestSearchSelectedIds.add(id);
   else requestSearchSelectedIds.delete(id);
@@ -1493,9 +1530,88 @@ function toggleRequestLookup(id,checked){
 }
 
 function updateRequestLookupSelection(){
-  const n=requestSearchSelectedIds.size;
-  el('requestLookupCount').textContent=n+' seleccionado'+(n===1?'':'s');
+  const selected=requestSearchSelectedIds.size;
+  el('requestLookupCount').textContent=selected+
+    ' seleccionado'+(selected===1?'':'s')+' en la búsqueda';
+
+  if(el('requestLookupAddBtn')){
+    el('requestLookupAddBtn').disabled=selected===0;
+  }
+
+  el('requestLookupContinueBtn').disabled=requestDraftItems.length===0;
+}
+
+function renderRequestDraft(){
+  const n=requestDraftItems.length;
+  el('requestDraftCount').textContent=n+' expediente'+(n===1?'':'s');
   el('requestLookupContinueBtn').disabled=n===0;
+
+  if(!n){
+    el('requestDraftTable').className='request-draft-empty';
+    el('requestDraftTable').innerHTML='Aún no ha agregado expedientes.';
+    return;
+  }
+
+  el('requestDraftTable').className='';
+  el('requestDraftTable').innerHTML=`<table>
+    <thead>
+      <tr><th>N°</th><th>Expediente</th><th>Ext.</th><th>R.D.</th><th>Tipo</th><th></th></tr>
+    </thead>
+    <tbody>
+      ${requestDraftItems.map((x,i)=>`<tr>
+        <td>${i+1}</td>
+        <td><b>${esc(x.expediente)}</b></td>
+        <td>${x.extension?esc(x.extension):'—'}</td>
+        <td>${esc(x.rd||'')}</td>
+        <td>${x._nuevo?'<span class="pill">NUEVO</span>':'<span class="pill returned">EXISTENTE</span>'}</td>
+        <td><button class="btn secondary small" onclick="removeRequestDraftItem(${i})">Quitar</button></td>
+      </tr>`).join('')}
+    </tbody>
+  </table>`;
+}
+
+function removeRequestDraftItem(index){
+  requestDraftItems.splice(index,1);
+  renderRequestDraft();
+  updateRequestLookupSelection();
+}
+
+function addSelectedSearchResultsToDraft(){
+  const selected=requestSearchRows.filter(r=>requestSearchSelectedIds.has(r.id));
+
+  if(!selected.length)return;
+
+  let added=0;
+  let skipped=0;
+
+  selected.forEach(r=>{
+    if(!r.disponible){
+      skipped++;
+      return;
+    }
+
+    const item={...r,_nuevo:false};
+    const key=requestDraftKey(item);
+
+    if(requestDraftItems.some(x=>requestDraftKey(x)===key)){
+      skipped++;
+      return;
+    }
+
+    requestDraftItems.push(item);
+    added++;
+  });
+
+  requestSearchSelectedIds.clear();
+  renderRequestDraft();
+  renderRequestLookupResults();
+
+  el('requestLookupStatus').textContent=
+    `${added} expediente(s) agregado(s)`+
+    (skipped?` · ${skipped} ya estaba(n) agregado(s) o no disponible(s)`:'')+
+    '. Puede buscar otro expediente.';
+
+  updateRequestLookupSelection();
 }
 
 function renderRequestLookupResults(){
@@ -1506,32 +1622,87 @@ function renderRequestLookupResults(){
     return;
   }
 
-  el('requestLookupStatus').textContent=`${requestSearchRows.length} resultado(s). Solo pueden seleccionarse los disponibles.`;
+  el('requestLookupStatus').textContent=
+    `${requestSearchRows.length} resultado(s). Seleccione los disponibles y pulse “Agregar seleccionados”.`;
 
   el('requestLookupResults').innerHTML=`<table>
     <thead><tr><th></th><th>Expediente</th><th>Ext.</th><th>R.D.</th><th>Estado</th><th>Disponibilidad</th></tr></thead>
-    <tbody>${requestSearchRows.map(r=>`<tr>
-      <td><input type="checkbox" ${r.disponible?'':'disabled'} ${requestSearchSelectedIds.has(r.id)?'checked':''}
-        onchange="toggleRequestLookup('${r.id}',this.checked)"></td>
-      <td><b>${esc(r.expediente)}</b></td>
-      <td>${r.extension?esc(r.extension):'—'}</td>
-      <td>${esc(r.rd||'')}</td>
-      <td>${esc(r.estado||'')}</td>
-      <td>${r.disponible?'<span class="pill returned">DISPONIBLE</span>':'<span class="pill alert">'+esc(r.motivo||'NO DISPONIBLE')+'</span>'}</td>
-    </tr>`).join('')}</tbody>
+    <tbody>${requestSearchRows.map(r=>{
+      const already=requestDraftItems.some(x=>requestDraftKey(x)===requestDraftKey(r));
+      return `<tr>
+        <td><input type="checkbox"
+          ${(!r.disponible||already)?'disabled':''}
+          ${requestSearchSelectedIds.has(r.id)?'checked':''}
+          onchange="toggleRequestLookup('${r.id}',this.checked)"></td>
+        <td><b>${esc(r.expediente)}</b></td>
+        <td>${r.extension?esc(r.extension):'—'}</td>
+        <td>${esc(r.rd||'')}</td>
+        <td>${esc(r.estado||'')}</td>
+        <td>${already
+          ?'<span class="pill">YA AGREGADO</span>'
+          :(r.disponible
+            ?'<span class="pill returned">DISPONIBLE</span>'
+            :'<span class="pill alert">'+esc(r.motivo||'NO DISPONIBLE')+'</span>')}</td>
+      </tr>`;
+    }).join('')}</tbody>
   </table>`;
 
   updateRequestLookupSelection();
 }
 
 async function continueRequestFromSearch(){
-  const rows=requestSearchRows.filter(r=>requestSearchSelectedIds.has(r.id));
-  if(!rows.length)return;
+  if(!requestDraftItems.length)return;
+
+  const items=requestDraftItems.map(x=>({
+    id:x.id||null,
+    expediente:x.expediente,
+    extension:x.extension||null,
+    rd:x.rd||null,
+    ultimo_folio:x.ultimo_folio||null,
+    observacion:x.observacion||null,
+    nuevo:!!x._nuevo
+  }));
+
+  // MODO: agregar a una solicitud ya existente
+  if(addToExistingRequestId){
+    const solicitudId=addToExistingRequestId;
+
+    if(!confirm(`¿Agregar ${items.length} expediente(s) a la solicitud ${currentRequest?.numero||''}?`))return;
+
+    el('requestLookupContinueBtn').disabled=true;
+    el('requestLookupContinueBtn').textContent='Agregando...';
+
+    const {data,error}=await sb.rpc('agregar_expedientes_a_solicitud',{
+      p_solicitud_id:solicitudId,
+      p_items:items
+    });
+
+    if(error){
+      el('requestLookupStatus').textContent=error.message;
+      el('requestLookupContinueBtn').disabled=false;
+      el('requestLookupContinueBtn').textContent='Agregar a solicitud';
+      return;
+    }
+
+    closeRequestSearchModal();
+    addToExistingRequestId='';
+    showToast(`${data?.agregados||items.length} expediente(s) agregados a ${currentRequest?.numero||'la solicitud'}`);
+
+    await loadRequests();
+    if(hasFullAccess())await loadRequestsByLawyer();
+    await openRequestDetail(solicitudId);
+    return;
+  }
+
+  // MODO: crear una solicitud nueva
+  const itemsCopy=items.map(x=>({
+    ...x,
+    _nuevo:x.nuevo
+  }));
+
   closeRequestSearchModal();
-  await openNewRequestModal(rows);
+  await openNewRequestModal(itemsCopy);
 }
-
-
 async function loadRequestsByLawyer(){
   if(!hasFullAccess())return;
 
@@ -1672,7 +1843,7 @@ async function openNewRequestModal(rowsOverride=null){
     if(ids.length){
       const {data,error}=await sb.from('expedientes').select('*').in('id',ids);
       if(error){alert(error.message);return}
-      rows=data||[];
+      rows=(data||[]).map(x=>({...x,_nuevo:false}));
     }
   }
 
@@ -1688,11 +1859,13 @@ async function openNewRequestModal(rowsOverride=null){
       alert('Su cuenta no tiene personal asociado.');
       return;
     }
+
     el('rqSolicitante').innerHTML=`<option>${esc(currentProfile.nombre_personal)}</option>`;
     el('rqSolicitante').value=currentProfile.nombre_personal;
     el('rqSolicitante').disabled=true;
   }else{
     el('rqSolicitante').disabled=false;
+
     if(selectedOwner && activos.some(x=>x.nombre===selectedOwner)){
       el('rqSolicitante').value=selectedOwner;
     }else if(!el('rqSolicitante').value && activos.length){
@@ -1703,18 +1876,38 @@ async function openNewRequestModal(rowsOverride=null){
   el('rqAsunto').value='';
   el('rqObservacion').value='';
   el('rqSaveStatus').textContent='';
-  el('rqSelectedCount').textContent=rows.length+' expediente'+(rows.length===1?'':'s');
+
+  const nuevos=rows.filter(x=>x._nuevo).length;
+  const existentes=rows.length-nuevos;
+
+  el('rqSelectedCount').textContent=
+    `${rows.length} expediente${rows.length===1?'':'s'} · `+
+    `${existentes} existente${existentes===1?'':'s'} · `+
+    `${nuevos} nuevo${nuevos===1?'':'s'}`;
 
   el('rqSelectedTable').innerHTML=`<table>
-    <thead><tr><th>Expediente</th><th>Ext.</th><th>Estado</th></tr></thead>
-    <tbody>${rows.map(r=>`<tr>
+    <thead><tr><th>N°</th><th>Expediente</th><th>Ext.</th><th>R.D.</th><th>Tipo</th><th>Estado</th></tr></thead>
+    <tbody>${rows.map((r,i)=>`<tr>
+      <td>${i+1}</td>
       <td><b>${esc(expBase(r.expediente))}</b></td>
       <td>${r.extension?esc(r.extension):'—'}</td>
-      <td>${esc(r.estado||'')}</td>
+      <td>${esc(r.rd||'')}</td>
+      <td>${r._nuevo?'NUEVO':'EXISTENTE'}</td>
+      <td>${esc(r.estado||(r._nuevo?'PENDIENTE DE VERIFICACIÓN':''))}</td>
     </tr>`).join('')}</tbody>
   </table>`;
 
-  el('newRequestModal').dataset.ids=JSON.stringify(rows.map(r=>r.id));
+  el('newRequestModal').dataset.items=JSON.stringify(rows.map(r=>({
+    id:r.id||null,
+    expediente:r.expediente,
+    extension:r.extension||null,
+    rd:r.rd||null,
+    ultimo_folio:r.ultimo_folio||null,
+    observacion:r.observacion||null,
+    nuevo:!!r._nuevo
+  })));
+
+  el('newRequestModal').dataset.ids='';
   el('newRequestModal').dataset.newExp='';
   el('newRequestModal').classList.add('show');
 }
@@ -1727,14 +1920,8 @@ async function saveNewRequest(){
   const asunto=el('rqAsunto').value.trim();
   const observacion=el('rqObservacion').value.trim();
 
-  let ids=[];
-  let newExp=null;
-
-  try{ids=JSON.parse(el('newRequestModal').dataset.ids||'[]')}catch(_){}
-  try{
-    const raw=el('newRequestModal').dataset.newExp||'';
-    newExp=raw?JSON.parse(raw):null;
-  }catch(_){}
+  let items=[];
+  try{items=JSON.parse(el('newRequestModal').dataset.items||'[]')}catch(_){}
 
   if(!solicitante){
     el('rqSaveStatus').textContent='Seleccione el solicitante.';
@@ -1747,40 +1934,24 @@ async function saveNewRequest(){
     return;
   }
 
-  if(!ids.length && !newExp){
-    el('rqSaveStatus').textContent='No hay expedientes seleccionados.';
+  if(!items.length){
+    el('rqSaveStatus').textContent='No hay expedientes en la solicitud.';
     return;
   }
 
   const btn=el('rqSaveBtn');
   btn.disabled=true;
   btn.textContent='Enviando...';
-  el('rqSaveStatus').textContent=newExp
-    ?'Registrando expediente nuevo y solicitud...'
-    :'Registrando solicitud...';
+  el('rqSaveStatus').textContent=
+    `Registrando una solicitud con ${items.length} expediente(s)...`;
 
   try{
-    let data,error;
-
-    if(newExp){
-      ({data,error}=await sb.rpc('crear_expediente_nuevo_y_solicitud',{
-        p_expediente:newExp.expediente,
-        p_extension:newExp.extension,
-        p_rd:newExp.rd,
-        p_ultimo_folio:newExp.ultimo_folio,
-        p_observacion_expediente:newExp.observacion,
-        p_solicitante:solicitante,
-        p_asunto:asunto,
-        p_observacion_solicitud:observacion||null
-      }));
-    }else{
-      ({data,error}=await sb.rpc('crear_solicitud_prestamo',{
-        p_solicitante:solicitante,
-        p_asunto:asunto,
-        p_observacion:observacion||null,
-        p_expediente_ids:ids
-      }));
-    }
+    const {data,error}=await sb.rpc('crear_solicitud_multiple_mixta',{
+      p_solicitante:solicitante,
+      p_asunto:asunto,
+      p_observacion:observacion||null,
+      p_items:items
+    });
 
     if(error)throw error;
 
@@ -1788,12 +1959,14 @@ async function saveNewRequest(){
     updateSelectionUI();
     closeNewRequestModal();
 
-    showToast(newExp
-      ?`Expediente ${data?.expediente||newExp.expediente} registrado · Solicitud ${data?.numero||''}`
-      :`Solicitud ${data?.numero||''} registrada`);
+    showToast(
+      `Solicitud ${data?.numero||''} registrada · `+
+      `${data?.total||items.length} expediente(s)`
+    );
 
     await loadRequests();
     if(hasFullAccess())await loadRequestsByLawyer();
+
     switchTab('requests',document.querySelector('[data-tab="requests"]'));
   }catch(err){
     el('rqSaveStatus').textContent=err?.message||String(err);
@@ -1987,8 +2160,9 @@ function renderRequestActions(){
         <button class="btn" onclick="requestReturnItems()">Solicitar devolución</button>
         <span class="note">Puede reasignar o solicitar la devolución de los expedientes que actualmente están bajo su responsabilidad.</span>`;
     }else if(r.estado==='SOLICITADO'){
-      el('rqWorkflowActions').innerHTML=
-        '<span class="note">Solicitud registrada. Archivo debe verificarla y atenderla antes de que el expediente pase a EN PRÉSTAMO.</span>';
+      el('rqWorkflowActions').innerHTML=`
+        <button class="btn secondary" onclick="openAddItemsToExistingRequest()">+ Agregar expedientes</button>
+        <span class="note">Puede agregar más expedientes mientras Archivo todavía no haya atendido la solicitud.</span>`;
     }else if(r.estado==='DEVUELTO'){
       el('rqWorkflowActions').innerHTML=
         '<span class="note">Solicitud cerrada. El expediente ya fue recibido por Archivo.</span>';
@@ -2007,8 +2181,9 @@ function renderRequestActions(){
 
   if(r.estado==='SOLICITADO'){
     actions=`
+      <button class="btn secondary" onclick="openAddItemsToExistingRequest()">+ Agregar expedientes</button>
       <button class="btn" onclick="verifyAndAttendRequest()">Verificar y atender solicitud</button>
-      <span class="note">Al atender, se genera el cargo automático y los expedientes pasan a EN PRÉSTAMO.</span>`;
+      <span class="note">Puede ampliar la solicitud antes de atenderla. Al atender, se genera el cargo automático para todos los expedientes incluidos.</span>`;
   }else if(r.estado==='EN PRÉSTAMO'){
     actions=`
       <button class="btn secondary" onclick="reassignRequestItems()">Reasignar seleccionados</button>
