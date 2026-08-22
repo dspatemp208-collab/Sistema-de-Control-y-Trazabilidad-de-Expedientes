@@ -1308,7 +1308,7 @@ async function manageExpedienteFromPanel(expedienteId){
       .eq('expediente_id',expedienteId)
       .not('solicitud_id','is',null)
       .order('created_at',{ascending:false})
-      .limit(50);
+      .limit(100);
 
     if(error)throw error;
 
@@ -1321,7 +1321,7 @@ async function manageExpedienteFromPanel(expedienteId){
 
     const {data:sols,error:solErr}=await sb
       .from('solicitudes_prestamo')
-      .select('id,estado,created_at')
+      .select('id,numero,estado,created_at')
       .in('id',ids)
       .order('created_at',{ascending:false});
 
@@ -1329,9 +1329,9 @@ async function manageExpedienteFromPanel(expedienteId){
 
     const solicitudes=sols||[];
 
-    // Preferir una solicitud todavía operativa.
+    // Priorizar una solicitud todavía operativa.
     const activa=solicitudes.find(s=>
-      ['SOLICITADO','ACEPTADO','EN PRÉSTAMO'].includes(s.estado)
+      ['SOLICITADO','ACEPTADO','EN ATENCIÓN','EN PRÉSTAMO'].includes(s.estado)
     );
 
     const target=activa||solicitudes[0];
@@ -1343,6 +1343,25 @@ async function manageExpedienteFromPanel(expedienteId){
 
     await loadRequests();
     await openRequestDetail(target.id);
+
+    // Seleccionar automáticamente el expediente desde el cual se pulsó Gestionar.
+    requestSelectedIds.clear();
+
+    const item=requestDetailRows.find(x=>x.expediente_id===expedienteId);
+
+    if(item && requestItemSelectable(item)){
+      requestSelectedIds.add(expedienteId);
+    }
+
+    renderRequestDetailItems();
+    renderRequestActions();
+
+    if(el('rqActionStatus')){
+      el('rqActionStatus').textContent=
+        item
+          ? `Expediente ${item.expediente} seleccionado para gestión.`
+          : '';
+    }
 
   }catch(err){
     alert(err?.message||String(err));
@@ -2935,7 +2954,7 @@ function recordTable(data,withOwner=false,source='panel'){
     <td>${esc(r.observacion)}</td>
     <td><div style="display:flex;gap:5px;white-space:nowrap">
       <button class="btn secondary small" onclick="showExpHistory('${r.id}')">Historial</button>
-      ${isLimitedUser()?`<button class="btn small" onclick="manageExpedienteFromPanel('${r.id}')">Gestionar</button>`:''}
+      <button class="btn small" onclick="manageExpedienteFromPanel('${r.id}')">Gestionar</button>
       ${hasFullAccess()?`<button class="btn secondary small" onclick="editRecord('${r.id}')">Editar</button>`:''}
     </div></td>
   </tr>`).join('');
