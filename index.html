@@ -165,6 +165,7 @@
       <input class="hidden" id="csvFile" type="file" accept=".csv,text/csv" onchange="importCSV(event)">
       <button class="btn secondary" id="exportCsvBtn" onclick="exportCSV(this)">Exportar registro</button>
       <button class="btn secondary" id="peopleBtn" onclick="openPeopleModal()">👥 Administrar personal</button>
+      <button class="btn secondary" id="subjectsBtn" onclick="openSubjectsModal()">📋 Administrar asuntos</button>
       <button class="btn secondary" id="usersBtn" onclick="openUsersModal()">🔐 Usuarios y permisos</button>
       <button class="btn secondary" onclick="openConfig()">Base de datos</button>
       <button class="btn secondary" onclick="logout()">Cerrar sesión</button>
@@ -619,6 +620,52 @@
 </div>
 
 
+
+<!-- Administración de asuntos - SOLO ADMINISTRADOR -->
+<div class="modal" id="subjectsModal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <div>
+        <h2>Administrar asuntos</h2>
+        <div style="font-size:12px;color:#64748b;margin-top:3px">
+          Solo el ADMINISTRADOR puede crear, editar, activar o inactivar asuntos.
+        </div>
+      </div>
+      <button class="btn secondary small" onclick="closeSubjectsModal()">Cerrar</button>
+    </div>
+
+    <div class="people-grid">
+      <div class="field" style="grid-column:span 2">
+        <label>Nuevo asunto *</label>
+        <input id="sNombre" placeholder="Escriba el nuevo asunto">
+      </div>
+      <div class="field">
+        <label>Estado</label>
+        <select id="sActivo">
+          <option value="true">ACTIVO</option>
+          <option value="false">INACTIVO</option>
+        </select>
+      </div>
+      <button class="btn" onclick="saveSubject()">+ Agregar asunto</button>
+    </div>
+
+    <div id="subjectsStatus" style="font-size:12px;color:#64748b;margin-top:9px"></div>
+
+    <div class="people-table">
+      <table>
+        <thead>
+          <tr>
+            <th>Asunto</th>
+            <th>Estado</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="subjectsBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
 <!-- Administración de personal, áreas y ubicaciones -->
 <div class="modal" id="peopleModal">
   <div class="modal-box">
@@ -839,6 +886,7 @@ const STATUSES=['CUSTODIA','EN PRÉSTAMO','DEVUELTO','REASIGNADO','EN TRÁMITE',
 const PAGE_SIZE=200;
 let sb=null, session=null, currentProfile=null, userProfiles=[], summaryRows=[], panelRows=[], allRows=[], historyRows=[], cargosRows=[], selectedCargoNumero='', stateRows=[], stateDetailRows=[], requestRows=[], requestDetailRows=[], requestMovementRows=[], requestSearchRows=[], requestsByLawyerRows=[];
 let catalogo=MASTER.map(([nombre,tipo],i)=>({id:'fallback-'+i,nombre,tipo,activo:true}));
+let asuntosCatalogo=ASUNTOS_PREDETERMINADOS.map((nombre,i)=>({id:'fallback-asunto-'+i,nombre,activo:true}));
 let selectedIds=new Set(), cargoRows=[];
 let recordMode='single', batchCargoHeader=null;
 let selectedOwner='', selectedState='', currentRequestId='', currentRequest=null, requestSelectedIds=new Set(), requestSearchSelectedIds=new Set(), requestDraftItems=[], addToExistingRequestId='', page=0, panelCount=0, allCountValue=0, stateDetailCount=0, panelTimer=null, allTimer=null, historyTimer=null, cargosTimer=null, requestsTimer=null;
@@ -950,6 +998,7 @@ function applyRoleUI(){
   setVisible('importCsvBtn',full);
   setVisible('exportCsvBtn',full);
   setVisible('peopleBtn',admin);
+  setVisible('subjectsBtn',admin);
   setVisible('usersBtn',admin);
 
   // El buscador para solicitar es útil sobre todo para abogados.
@@ -1016,8 +1065,12 @@ async function afterLogin(){
     return;
   }
 
-  await loadCatalogo();
+  await Promise.all([
+    loadCatalogo(),
+    loadAsuntosCatalogo()
+  ]);
   fillSelects();
+  renderAsuntosDatalist();
   applyRoleUI();
   updateSelectionUI();
 
@@ -1058,6 +1111,219 @@ function fillSelects(){
     el('rqSolicitante').value=currentProfile.nombre_personal||'';
     el('rqSolicitante').disabled=true;
   }
+}
+
+
+
+function asuntoActivo(nombre){
+  const n=norm(nombre);
+  return asuntosCatalogo.some(x=>x.activo!==false && norm(x.nombre)===n);
+}
+
+function renderAsuntosDatalist(){
+  const dl=el('listaAsuntosCargo');
+  if(!dl)return;
+
+  const activos=asuntosCatalogo
+    .filter(x=>x.activo!==false)
+    .slice()
+    .sort((a,b)=>a.nombre.localeCompare(b.nombre,'es'));
+
+  dl.innerHTML=activos
+    .map(x=>`<option value="${esc(x.nombre)}"></option>`)
+    .join('');
+}
+
+async function loadAsuntosCatalogo(){
+  if(!sb||!session)return;
+
+  const {data,error}=await sb
+    .from('catalogo_asuntos')
+    .select('id,nombre,activo,created_at,updated_at')
+    .order('nombre');
+
+  if(error){
+    console.warn('catalogo_asuntos:',error.message);
+    asuntosCatalogo=ASUNTOS_PREDETERMINADOS.map((nombre,i)=>({
+      id:'fallback-asunto-'+i,
+      nombre,
+      activo:true
+    }));
+    renderAsuntosDatalist();
+    return;
+  }
+
+  asuntosCatalogo=(data||[]).map(x=>({
+    id:x.id,
+    nombre:x.nombre,
+    activo:x.activo,
+    created_at:x.created_at,
+    updated_at:x.updated_at
+  }));
+
+  renderAsuntosDatalist();
+}
+
+function renderSubjects(){
+  if(!el('subjectsBody'))return;
+
+  if(!asuntosCatalogo.length){
+    el('subjectsBody').innerHTML=
+      '<tr><td colspan="3" class="empty">No hay asuntos registrados.</td></tr>';
+    return;
+  }
+
+  el('subjectsBody').innerHTML=asuntosCatalogo
+    .slice()
+    .sort((a,b)=>a.nombre.localeCompare(b.nombre,'es'))
+    .map(x=>`<tr>
+      <td><b>${esc(x.nombre)}</b></td>
+      <td>${x.activo!==false
+        ?'<span class="pill returned">ACTIVO</span>'
+        :'<span class="pill alert">INACTIVO</span>'}</td>
+      <td>
+        <div style="display:flex;gap:6px;white-space:nowrap">
+          <button class="btn secondary small"
+            onclick="editSubject('${x.id}')">Editar</button>
+          <button class="btn secondary small"
+            onclick="toggleSubject('${x.id}',${x.activo!==false?'false':'true'})">
+            ${x.activo!==false?'Inactivar':'Activar'}
+          </button>
+        </div>
+      </td>
+    </tr>`).join('');
+}
+
+async function openSubjectsModal(){
+  if(!isAdmin()){
+    alert('Solo el ADMINISTRADOR puede administrar asuntos.');
+    return;
+  }
+
+  if(!sb||!session){
+    alert('Debe iniciar sesión.');
+    return;
+  }
+
+  el('sNombre').value='';
+  el('sActivo').value='true';
+  el('subjectsStatus').textContent='Cargando...';
+  el('subjectsModal').classList.add('show');
+
+  await loadAsuntosCatalogo();
+  renderSubjects();
+  el('subjectsStatus').textContent='';
+}
+
+function closeSubjectsModal(){
+  el('subjectsModal').classList.remove('show');
+}
+
+async function saveSubject(){
+  if(!isAdmin()){
+    alert('Solo el ADMINISTRADOR puede crear asuntos.');
+    return;
+  }
+
+  const nombre=el('sNombre').value.trim().toUpperCase();
+  const activo=el('sActivo').value==='true';
+
+  if(!nombre){
+    el('subjectsStatus').textContent='Escriba el asunto.';
+    el('sNombre').focus();
+    return;
+  }
+
+  el('subjectsStatus').textContent='Guardando asunto...';
+
+  const {error}=await sb
+    .from('catalogo_asuntos')
+    .insert({
+      nombre,
+      activo,
+      created_by:session.user.id,
+      updated_by:session.user.id
+    });
+
+  if(error){
+    el('subjectsStatus').textContent=error.message;
+    return;
+  }
+
+  el('sNombre').value='';
+  el('sActivo').value='true';
+
+  await loadAsuntosCatalogo();
+  renderSubjects();
+
+  el('subjectsStatus').textContent='Asunto agregado correctamente.';
+  showToast('Asunto agregado');
+}
+
+async function editSubject(id){
+  if(!isAdmin())return;
+
+  const x=asuntosCatalogo.find(a=>String(a.id)===String(id));
+  if(!x)return;
+
+  const nuevo=prompt('Editar asunto:',x.nombre);
+  if(nuevo===null)return;
+
+  const nombre=nuevo.trim().toUpperCase();
+
+  if(!nombre){
+    alert('El asunto no puede quedar vacío.');
+    return;
+  }
+
+  const {error}=await sb
+    .from('catalogo_asuntos')
+    .update({
+      nombre,
+      updated_by:session.user.id
+    })
+    .eq('id',id);
+
+  if(error){
+    alert(error.message);
+    return;
+  }
+
+  await loadAsuntosCatalogo();
+  renderSubjects();
+  showToast('Asunto actualizado');
+}
+
+async function toggleSubject(id,activo){
+  if(!isAdmin())return;
+
+  const {error}=await sb
+    .from('catalogo_asuntos')
+    .update({
+      activo,
+      updated_by:session.user.id
+    })
+    .eq('id',id);
+
+  if(error){
+    alert(error.message);
+    return;
+  }
+
+  await loadAsuntosCatalogo();
+  renderSubjects();
+  showToast(activo?'Asunto activado':'Asunto inactivado');
+}
+
+function validarAsuntoActivo(asunto,statusId,inputId){
+  if(asuntoActivo(asunto))return true;
+
+  const msg='Seleccione un asunto ACTIVO del catálogo. Solo el ADMINISTRADOR puede crear nuevos asuntos.';
+  if(statusId && el(statusId))el(statusId).textContent=msg;
+  else alert(msg);
+
+  if(inputId && el(inputId))el(inputId).focus();
+  return false;
 }
 
 
@@ -2139,10 +2405,12 @@ async function saveNewRequest(){
   }
 
   if(!asunto){
-    el('rqSaveStatus').textContent='Seleccione o escriba el asunto.';
+    el('rqSaveStatus').textContent='Seleccione el asunto.';
     el('rqAsunto').focus();
     return;
   }
+
+  if(!validarAsuntoActivo(asunto,'rqSaveStatus','rqAsunto'))return;
 
   if(!items.length){
     el('rqSaveStatus').textContent='No hay expedientes en la solicitud.';
@@ -3148,6 +3416,7 @@ async function loadCargoHeaderByNumber(){
 
   if(data.fecha)el('cFecha').value=data.fecha;
   el('cAsunto').value=(data.asunto||'').trim();
+  el('cAsunto').dataset.originalAsunto=(data.asunto||'').trim();
   el('cAtiende').value=(data.atiende_requerimiento||'').trim();
   if(data.observacion)el('cObservacion').value=data.observacion;
 
@@ -3245,6 +3514,7 @@ async function openCargoModal(){
   el('cSolicitante').value='';
   el('cFecha').value=new Date().toISOString().slice(0,10);
   el('cAsunto').value='';
+  el('cAsunto').dataset.originalAsunto='';
   el('cAtiende').value='';
   el('cObservacion').value='';
   el('cargoStatus').textContent='';
@@ -3322,7 +3592,10 @@ async function saveAndPrintCargo(){
   const observacion=el('cObservacion').value.trim();
 
   if(!solicitante){el('cargoStatus').textContent='Ingrese o corrija el nombre del solicitante.';el('cSolicitante').focus();return}
-  if(!asunto){el('cargoStatus').textContent='Ingrese el asunto del cargo.';el('cAsunto').focus();return}
+  if(!asunto){el('cargoStatus').textContent='Seleccione el asunto del cargo.';el('cAsunto').focus();return}
+  const asuntoOriginal=(el('cAsunto').dataset.originalAsunto||'').trim();
+  if(!(numeroExistente && asuntoOriginal && norm(asuntoOriginal)===norm(asunto)) &&
+     !validarAsuntoActivo(asunto,'cargoStatus','cAsunto'))return;
   if(!atiende){el('cargoStatus').textContent='Seleccione quién atiende el requerimiento.';el('cAtiende').focus();return}
   if(!cargoRows.length){el('cargoStatus').textContent='No hay expedientes seleccionados.';return}
 
@@ -3471,7 +3744,8 @@ async function saveBatchRecords(btn){
   const rows=getBatchRows();
 
   if(!responsable){el('saveStatus').textContent='Seleccione el responsable / ubicación.';return}
-  if(!asunto){el('saveStatus').textContent='Ingrese el asunto del cargo.';el('bAsunto').focus();return}
+  if(!asunto){el('saveStatus').textContent='Seleccione el asunto del cargo.';el('bAsunto').focus();return}
+  if(!validarAsuntoActivo(asunto,'saveStatus','bAsunto'))return;
   if(!atiende){el('saveStatus').textContent='Seleccione quién atiende el requerimiento.';el('bAtiende').focus();return}
   if(!rows.length){el('saveStatus').textContent='Agregue al menos un expediente.';return}
 
@@ -3717,10 +3991,11 @@ async function saveRecord(e){
     return;
   }
   if(!asunto){
-    el('saveStatus').textContent='Seleccione o escriba el asunto del cargo.';
+    el('saveStatus').textContent='Seleccione el asunto del cargo.';
     el('fAsunto').focus();
     return;
   }
+  if(!validarAsuntoActivo(asunto,'saveStatus','fAsunto'))return;
   if(!atiende){
     el('saveStatus').textContent='Seleccione quién atiende el requerimiento.';
     el('fAtiende').focus();
