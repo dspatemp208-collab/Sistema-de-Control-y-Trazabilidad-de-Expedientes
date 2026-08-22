@@ -1279,7 +1279,59 @@ function movementLabel(r){
     text+=` → ${hacia}`;
   }
 
-  return `${esc(text)}${fecha?`<div class="note">${fecha}</div>`:''}`;
+  return esc(text);
+}
+
+
+async function manageExpedienteFromPanel(expedienteId){
+  if(!sb||!session)return;
+
+  try{
+    const {data:movs,error}=await sb
+      .from('movimientos_prestamo')
+      .select('solicitud_id,created_at')
+      .eq('expediente_id',expedienteId)
+      .not('solicitud_id','is',null)
+      .order('created_at',{ascending:false})
+      .limit(50);
+
+    if(error)throw error;
+
+    const ids=[...new Set((movs||[]).map(x=>x.solicitud_id).filter(Boolean))];
+
+    if(!ids.length){
+      alert('Este expediente no tiene una solicitud asociada para gestionar.');
+      return;
+    }
+
+    const {data:sols,error:solErr}=await sb
+      .from('solicitudes_prestamo')
+      .select('id,estado,created_at')
+      .in('id',ids)
+      .order('created_at',{ascending:false});
+
+    if(solErr)throw solErr;
+
+    const solicitudes=sols||[];
+
+    // Preferir una solicitud todavía operativa.
+    const activa=solicitudes.find(s=>
+      ['SOLICITADO','ACEPTADO','EN PRÉSTAMO'].includes(s.estado)
+    );
+
+    const target=activa||solicitudes[0];
+
+    if(!target){
+      alert('No se encontró la solicitud relacionada con este expediente.');
+      return;
+    }
+
+    await loadRequests();
+    await openRequestDetail(target.id);
+
+  }catch(err){
+    alert(err?.message||String(err));
+  }
 }
 
 async function loadPanel(){
@@ -1305,7 +1357,7 @@ async function loadPanel(){
 
   panelCount=count||0;
   el('panelTitle').textContent=isLimitedUser()
-    ? `Mis expedientes y movimientos${currentProfile?.nombre_personal?' · '+currentProfile.nombre_personal:''}`
+    ? `Mis expedientes${currentProfile?.nombre_personal?' · '+currentProfile.nombre_personal:''}`
     : (selectedOwner?`Expedientes de ${selectedOwner} · ${typeOf(selectedOwner)}`:'Todos los expedientes');
   el('pageInfo').textContent=`${page+1} · ${panelCount} registros`;
   el('panelTable').innerHTML=recordTable(panelRows,false,'panel')
@@ -1940,15 +1992,14 @@ function renderRequests(){
         <td>
           ${r.ultimo_movimiento
             ?`<b>${esc(r.ultimo_movimiento)}</b>
-              ${r.ultimo_movimiento_expediente?`<div class="note">${esc(r.ultimo_movimiento_expediente)}</div>`:''}
-              ${r.ultimo_movimiento_fecha?`<div class="note">${fmtDate(r.ultimo_movimiento_fecha)}</div>`:''}`
+              ${r.ultimo_movimiento_expediente?`<div class="note">${esc(r.ultimo_movimiento_expediente)}</div>`:''}`
             :'—'}
         </td>
 
         <td>${esc(r.ultimo_movimiento_hacia||'—')}</td>
         <td>${esc(r.atiende||'—')}</td>
         <td>${fmtDate(r.fecha_solicitud)}</td>
-        <td><button class="btn secondary small" onclick="openRequestDetail('${r.id}')">${r.estado==='DEVUELTO'?'Ver':'Gestionar'}</button></td>
+        <td><button class="btn secondary small" onclick="openRequestDetail('${r.id}')">${isLimitedUser()?'Ver':(r.estado==='DEVUELTO'?'Ver':'Gestionar')}</button></td>
       </tr>`).join('')}
     </tbody>
   </table>`;
@@ -2838,6 +2889,7 @@ function recordTable(data,withOwner=false,source='panel'){
     <td>${esc(r.observacion)}</td>
     <td><div style="display:flex;gap:5px;white-space:nowrap">
       <button class="btn secondary small" onclick="showExpHistory('${r.id}')">Historial</button>
+      ${isLimitedUser()?`<button class="btn small" onclick="manageExpedienteFromPanel('${r.id}')">Gestionar</button>`:''}
       ${hasFullAccess()?`<button class="btn secondary small" onclick="editRecord('${r.id}')">Editar</button>`:''}
     </div></td>
   </tr>`).join('');
