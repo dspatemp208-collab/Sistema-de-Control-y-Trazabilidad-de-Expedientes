@@ -243,11 +243,11 @@
 
   <section id="tab-requests" class="hidden">
     <div class="req-kpis">
-      <div class="card kpi"><div class="label">Solicitadas</div><div class="value" id="rqSolicitado">0</div></div>
-      <div class="card kpi"><div class="label">Aceptadas / sin cargo</div><div class="value" id="rqAceptado">0</div></div>
-      <div class="card kpi warn"><div class="label">Atendidas</div><div class="value" id="rqPrestamo">0</div></div>
-      <div class="card kpi"><div class="label">Por recibir en Archivo</div><div class="value" id="rqPendienteRecepcion">0</div></div>
-      <div class="card kpi"><div class="label">Devueltas</div><div class="value" id="rqDevuelto">0</div></div>
+      <div class="card kpi"><div class="label">Registradas</div><div class="value" id="rqSolicitado">0</div></div>
+      <div class="card kpi"><div class="label">Registradas por Archivo</div><div class="value" id="rqAceptado">0</div></div>
+      <div class="card kpi warn"><div class="label">Entregadas</div><div class="value" id="rqPrestamo">0</div></div>
+      <div class="card kpi"><div class="label">Pendientes de cierre</div><div class="value" id="rqPendienteRecepcion">0</div></div>
+      <div class="card kpi"><div class="label">Cerradas</div><div class="value" id="rqDevuelto">0</div></div>
     </div>
 
     <div class="card filters">
@@ -259,11 +259,12 @@
         <label>Estado</label>
         <select id="requestStateFilter" onchange="loadRequests()">
           <option value="">TODOS</option>
-          <option>SOLICITADO</option>
-          <option>ACEPTADO</option>
-          <option>EN PRÉSTAMO</option>
-          <option>DEVOLUCIÓN SOLICITADA</option>
-          <option>DEVUELTO</option>
+          <option>REGISTRADA</option>
+          <option>REGISTRADA POR ARCHIVO</option>
+          <option>ENTREGA PARCIAL</option>
+          <option>ENTREGA TOTAL</option>
+          <option>PENDIENTE DE CIERRE</option>
+          <option>CERRADA POR ARCHIVO</option>
         </select>
       </div>
       <div style="display:flex;align-items:flex-end">
@@ -1913,22 +1914,22 @@ async function loadRequests(){
   requestRows=data||[];
 
   const counts={
-    'SOLICITADO':0,
-    'ACEPTADO':0,
-    'ATENDIDO PARCIAL':0,
-    'ATENDIDO TOTAL':0,
-    'DEVOLUCIÓN PENDIENTE':0,
-    'RECIBIDO POR ARCHIVO':0
+    'REGISTRADA':0,
+    'REGISTRADA POR ARCHIVO':0,
+    'ENTREGA PARCIAL':0,
+    'ENTREGA TOTAL':0,
+    'PENDIENTE DE CIERRE':0,
+    'CERRADA POR ARCHIVO':0
   };
   requestRows.forEach(x=>{
     const st=x.estado_atencion||x.estado;
     if(counts[st]!==undefined)counts[st]++;
   });
 
-  if(el('rqSolicitado'))el('rqSolicitado').textContent=counts.SOLICITADO;
-  if(el('rqAceptado'))el('rqAceptado').textContent=counts.ACEPTADO;
+  if(el('rqSolicitado'))el('rqSolicitado').textContent=counts['REGISTRADA'];
+  if(el('rqAceptado'))el('rqAceptado').textContent=counts['REGISTRADA POR ARCHIVO'];
   if(el('rqPrestamo'))el('rqPrestamo').textContent=
-    counts['ATENDIDO PARCIAL']+counts['ATENDIDO TOTAL'];
+    counts['ENTREGA PARCIAL']+counts['ENTREGA TOTAL'];
   if(el('rqPendienteRecepcion')){
     el('rqPendienteRecepcion').textContent=requestRows.reduce((a,x)=>a+Number(x.devoluciones_pendientes||0),0);
   }
@@ -1945,12 +1946,12 @@ function debounceRequests(){
 
 
 function attentionStateClass(value){
-  return value==='SOLICITADO'?'requested':
-    value==='ACEPTADO'?'accepted':
-    value==='ATENDIDO PARCIAL'?'partial':
-    value==='ATENDIDO TOTAL'?'total':
-    value==='DEVOLUCIÓN PENDIENTE'?'returning':
-    value==='RECIBIDO POR ARCHIVO'?'received':'accepted';
+  return value==='REGISTRADA'?'requested':
+    value==='REGISTRADA POR ARCHIVO'?'accepted':
+    value==='ENTREGA PARCIAL'?'partial':
+    value==='ENTREGA TOTAL'?'total':
+    value==='PENDIENTE DE CIERRE'?'returning':
+    value==='CERRADA POR ARCHIVO'?'received':'accepted';
 }
 
 function attentionStatePill(value){
@@ -1994,7 +1995,7 @@ function renderRequests(){
         <td>${fmtDate(r.fecha_solicitud)}</td>
         <td>
           <button class="btn secondary small" onclick="openRequestDetail('${r.id}')">
-            ${isLimitedUser()?'Ver':(r.estado_atencion==='RECIBIDO POR ARCHIVO'?'Ver':'Gestionar')}
+            ${isLimitedUser()?'Ver':(r.estado_atencion==='CERRADA POR ARCHIVO'?'Ver':'Gestionar')}
           </button>
         </td>
       </tr>`).join('')}
