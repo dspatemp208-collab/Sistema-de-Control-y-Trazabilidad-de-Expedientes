@@ -1227,17 +1227,85 @@ function applySearch(query,q){
   const p=`%${q}%`;
   return query.or(`expediente.ilike.${p},extension.ilike.${p},rd.ilike.${p},responsable.ilike.${p},cargo.ilike.${p},observacion.ilike.${p},acumulado.ilike.${p},ultimo_folio.ilike.${p}`)
 }
+
+async function attachLatestMovementToRecords(rows){
+  if(!rows?.length || !sb)return rows||[];
+
+  const ids=rows.map(r=>r.id).filter(Boolean);
+  if(!ids.length)return rows;
+
+  const {data,error}=await sb
+    .from('movimientos_prestamo')
+    .select('expediente_id,accion,desde,hacia,estado,cargo_numero,created_at')
+    .in('expediente_id',ids)
+    .order('created_at',{ascending:false})
+    .limit(1000);
+
+  if(error){
+    console.warn('No se pudo cargar último movimiento:',error.message);
+    return rows;
+  }
+
+  const latest=new Map();
+
+  (data||[]).forEach(m=>{
+    if(!latest.has(m.expediente_id)){
+      latest.set(m.expediente_id,m);
+    }
+  });
+
+  return rows.map(r=>{
+    const m=latest.get(r.id);
+    return {
+      ...r,
+      ultimo_movimiento:m?.accion||'',
+      ultimo_movimiento_desde:m?.desde||'',
+      ultimo_movimiento_hacia:m?.hacia||'',
+      ultimo_movimiento_estado:m?.estado||'',
+      ultimo_movimiento_fecha:m?.created_at||null
+    };
+  });
+}
+
+function movementLabel(r){
+  const action=(r.ultimo_movimiento||'').trim();
+  if(!action)return '—';
+
+  const hacia=(r.ultimo_movimiento_hacia||'').trim();
+  const fecha=r.ultimo_movimiento_fecha?fmtDate(r.ultimo_movimiento_fecha):'';
+
+  let text=action;
+  if(hacia && ['REASIGNACIÓN','DEVOLUCIÓN SOLICITADA','DEVOLUCIÓN CONFIRMADA / RECIBIDO EN ARCHIVO'].some(x=>action.includes(x))){
+    text+=` → ${hacia}`;
+  }
+
+  return `${esc(text)}${fecha?`<div class="note">${fecha}</div>`:''}`;
+}
+
 async function loadPanel(){
   if(!sb||!session)return;
   const from=page*PAGE_SIZE,to=from+PAGE_SIZE-1;
   let q=sb.from('expedientes').select('*',{count:'exact'}).order('updated_at',{ascending:false}).range(from,to);
-  if(selectedOwner)q=q.eq('responsable',selectedOwner);
+
+  // ARCHIVO/ADMIN filtran por responsable actual.
+  // USUARIO/ABOGADO ve todos los expedientes vinculados a su trazabilidad
+  // (RLS de Supabase decide cuáles puede consultar), incluso si después
+  // fueron reasignados o devueltos.
+  if(selectedOwner && !isLimitedUser())q=q.eq('responsable',selectedOwner);
+
   q=applySearch(q,el('searchInput').value);
   const {data,error,count}=await q;
   if(error){serverError(error);return}
-  panelRows=data||[];panelCount=count||0;
+
+  panelRows=data||[];
+
+  if(isLimitedUser()){
+    panelRows=await attachLatestMovementToRecords(panelRows);
+  }
+
+  panelCount=count||0;
   el('panelTitle').textContent=isLimitedUser()
-    ? `Mis expedientes${currentProfile?.nombre_personal?' · '+currentProfile.nombre_personal:''}`
+    ? `Mis expedientes y movimientos${currentProfile?.nombre_personal?' · '+currentProfile.nombre_personal:''}`
     : (selectedOwner?`Expedientes de ${selectedOwner} · ${typeOf(selectedOwner)}`:'Todos los expedientes');
   el('pageInfo').textContent=`${page+1} · ${panelCount} registros`;
   el('panelTable').innerHTML=recordTable(panelRows,false,'panel')
@@ -1783,6 +1851,39 @@ async function loadRequests(){
 
   requestRows=data||[];
 
+  // Mostrar el último movimiento directamente en la relación de solicitudes.
+  const solicitudIds=requestRows.map(x=>x.id).filter(Boolean);
+
+  if(solicitudIds.length){
+    const {data:mov,error:movErr}=await sb
+      .from('movimientos_prestamo')
+      .select('solicitud_id,expediente,accion,desde,hacia,estado,cargo_numero,created_at')
+      .in('solicitud_id',solicitudIds)
+      .order('created_at',{ascending:false})
+      .limit(1500);
+
+    if(!movErr){
+      const latest=new Map();
+
+      (mov||[]).forEach(m=>{
+        if(!latest.has(m.solicitud_id)){
+          latest.set(m.solicitud_id,m);
+        }
+      });
+
+      requestRows=requestRows.map(r=>{
+        const m=latest.get(r.id);
+        return {
+          ...r,
+          ultimo_movimiento:m?.accion||'',
+          ultimo_movimiento_expediente:m?.expediente||'',
+          ultimo_movimiento_hacia:m?.hacia||'',
+          ultimo_movimiento_fecha:m?.created_at||null
+        };
+      });
+    }
+  }
+
   const counts={SOLICITADO:0,ACEPTADO:0,'EN ATENCIÓN':0,'EN PRÉSTAMO':0,DEVUELTO:0};
   requestRows.forEach(x=>{if(counts[x.estado]!==undefined)counts[x.estado]++});
 
@@ -1820,6 +1921,8 @@ function renderRequests(){
       <th>Expedientes</th>
       <th>Por recibir</th>
       <th>Cargo</th>
+      <th>Último movimiento</th>
+      <th>Responsable / destino</th>
       <th>Atiende</th>
       <th>F. solicitud</th>
       <th></th>
@@ -1833,6 +1936,16 @@ function renderRequests(){
         <td>${Number(r.total_expedientes||0)}</td>
         <td>${Number(r.devoluciones_pendientes||0)}</td>
         <td>${esc(r.cargo_numero||'—')}</td>
+
+        <td>
+          ${r.ultimo_movimiento
+            ?`<b>${esc(r.ultimo_movimiento)}</b>
+              ${r.ultimo_movimiento_expediente?`<div class="note">${esc(r.ultimo_movimiento_expediente)}</div>`:''}
+              ${r.ultimo_movimiento_fecha?`<div class="note">${fmtDate(r.ultimo_movimiento_fecha)}</div>`:''}`
+            :'—'}
+        </td>
+
+        <td>${esc(r.ultimo_movimiento_hacia||'—')}</td>
         <td>${esc(r.atiende||'—')}</td>
         <td>${fmtDate(r.fecha_solicitud)}</td>
         <td><button class="btn secondary small" onclick="openRequestDetail('${r.id}')">${r.estado==='DEVUELTO'?'Ver':'Gestionar'}</button></td>
@@ -2693,22 +2806,61 @@ function toggleAllRows(checked,source){
 function rowStatus(r){const c=r.estado==='EN PRÉSTAMO'?'loan':r.estado==='DEVUELTO'?'returned':'';return `<span class="pill ${c}">${esc(r.estado||'')}</span>`}
 function recordTable(data,withOwner=false,source='panel'){
   if(!data.length)return '<div class="empty">No hay expedientes registrados para esta selección.</div>';
-  const ownerHead=withOwner?'<th>Responsable / ubicación</th>':'';
+
+  const limited=isLimitedUser();
+  const ownerHead=withOwner
+    ?'<th>Responsable / ubicación</th>'
+    :(limited?'<th>Responsable actual</th>':'');
+
+  const movementHead=limited?'<th>Último movimiento</th>':'';
   const allChecked=data.length>0&&data.every(r=>selectedIds.has(r.id));
+
   const body=data.map(r=>`<tr>
     <td><input type="checkbox" aria-label="Seleccionar ${esc(expKey(r))}" ${selectedIds.has(r.id)?'checked':''} onchange="toggleSelect('${r.id}',this.checked)"></td>
-    <td><b>${esc(expBase(r.expediente))}</b></td><td>${r.extension?esc(r.extension):'—'}</td><td>${esc(r.rd)}</td>
-    ${withOwner?`<td>${esc(r.responsable)}</td>`:''}<td>${rowStatus(r)}</td>
-    <td>${fmtDate(r.fecha_entrega)}</td><td>${fmtDate(r.fecha_devolucion)}</td><td>${rowDays(r)||''}</td>
-    <td>${esc(r.modalidad)}</td><td>${esc(r.ultimo_folio)}</td>
+    <td><b>${esc(expBase(r.expediente))}</b></td>
+    <td>${r.extension?esc(r.extension):'—'}</td>
+    <td>${esc(r.rd)}</td>
+
+    ${withOwner
+      ?`<td>${esc(r.responsable)}</td>`
+      :(limited?`<td><b>${esc(r.responsable||'—')}</b></td>`:'')}
+
+    <td>${rowStatus(r)}</td>
+    ${limited?`<td>${movementLabel(r)}</td>`:''}
+    <td>${fmtDate(r.fecha_entrega)}</td>
+    <td>${fmtDate(r.fecha_devolucion)}</td>
+    <td>${rowDays(r)||''}</td>
+    <td>${esc(r.modalidad)}</td>
+    <td>${esc(r.ultimo_folio)}</td>
     <td>${esc(r.digitalizado)}${r.enlace?` · <a href="${esc(r.enlace)}" target="_blank">Abrir</a>`:''}</td>
-    <td>${esc(r.cargo)}</td><td>${rowAlert(r)?'<span class="pill alert">ALERTA >30 DÍAS</span>':''}</td><td>${esc(r.observacion)}</td>
-    <td><div style="display:flex;gap:5px;white-space:nowrap"><button class="btn secondary small" onclick="showExpHistory('${r.id}')">Historial</button>${hasFullAccess()?`<button class="btn secondary small" onclick="editRecord('${r.id}')">Editar</button>`:''}</div></td>
+    <td>${esc(r.cargo)}</td>
+    <td>${rowAlert(r)?'<span class="pill alert">ALERTA >30 DÍAS</span>':''}</td>
+    <td>${esc(r.observacion)}</td>
+    <td><div style="display:flex;gap:5px;white-space:nowrap">
+      <button class="btn secondary small" onclick="showExpHistory('${r.id}')">Historial</button>
+      ${hasFullAccess()?`<button class="btn secondary small" onclick="editRecord('${r.id}')">Editar</button>`:''}
+    </div></td>
   </tr>`).join('');
+
   return `<table><thead><tr>
     <th><input type="checkbox" aria-label="Seleccionar todos" ${allChecked?'checked':''} onchange="toggleAllRows(this.checked,'${source}')"></th>
-    <th>Expediente</th><th>Extensión</th><th>R.D.</th>${ownerHead}<th>Estado</th><th>F. entrega</th><th>F. devolución</th><th>Días háb.</th><th>Modalidad</th><th>Últ. folio</th><th>Digitalizado</th><th>Cargo</th><th>Alerta</th><th>Observación</th><th></th>
-  </tr></thead><tbody>${body}</tbody></table>`
+    <th>Expediente</th>
+    <th>Extensión</th>
+    <th>R.D.</th>
+    ${ownerHead}
+    <th>Estado</th>
+    ${movementHead}
+    <th>F. entrega</th>
+    <th>F. devolución</th>
+    <th>Días háb.</th>
+    <th>Modalidad</th>
+    <th>Últ. folio</th>
+    <th>Digitalizado</th>
+    <th>Cargo</th>
+    <th>Alerta</th>
+    <th>Observación</th>
+    <th></th>
+  </tr></thead><tbody>${body}</tbody></table>`;
 }
 
 function renderHistory(){
