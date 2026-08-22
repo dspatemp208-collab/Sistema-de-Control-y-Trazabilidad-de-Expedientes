@@ -1365,11 +1365,7 @@ async function loadPanel(){
   if(error){serverError(error);return}
 
   panelRows=data||[];
-
-  if(isLimitedUser()){
-    panelRows=await attachLatestMovementToRecords(panelRows);
-  }
-
+  panelRows=await attachLatestMovementToRecords(panelRows);
   panelCount=count||0;
   el('panelTitle').textContent=isLimitedUser()
     ? `Mis expedientes${currentProfile?.nombre_personal?' · '+currentProfile.nombre_personal:''}`
@@ -1473,6 +1469,7 @@ async function loadStateDetail(estado){
   }
 
   stateDetailRows=data||[];
+  stateDetailRows=await attachLatestMovementToRecords(stateDetailRows);
   stateDetailCount=count||0;
   el('stateDetailCount').textContent=`${stateDetailCount} expedientes`;
   el('stateDetailTable').innerHTML=recordTable(stateDetailRows,true,'states');
@@ -2714,7 +2711,11 @@ async function loadAll(){
   q=applySearch(q,el('allSearch').value);
   const {data,error,count}=await q;
   if(error){serverError(error);return}
-  allRows=data||[];allCountValue=count||0;el('allCount').textContent=`${allCountValue} registros · mostrando ${allRows.length}`;el('allTable').innerHTML=recordTable(allRows,true,'all')
+  allRows=data||[];
+  allRows=await attachLatestMovementToRecords(allRows);
+  allCountValue=count||0;
+  el('allCount').textContent=`${allCountValue} registros · mostrando ${allRows.length}`;
+  el('allTable').innerHTML=recordTable(allRows,true,'all')
 }
 function debounceAll(){clearTimeout(allTimer);allTimer=setTimeout(loadAll,300)}
 
@@ -2858,9 +2859,8 @@ function toggleAllRows(checked,source){
 }
 
 function operationalStatus(r){
-  // Para Archivo/Admin se conserva el estado físico/técnico.
-  if(!isLimitedUser())return r.estado||'';
-
+  // La columna ESTADO muestra el último estado operativo
+  // para Abogado, Archivo y Administrador.
   const action=norm(r.ultimo_movimiento||'');
 
   // Último movimiento confirmado por Archivo.
