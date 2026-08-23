@@ -181,10 +181,9 @@
   <div class="tabs">
     <button class="tab active" id="tabBtnPanel" data-tab="panel" onclick="switchTab('panel',this)">Panel por personal</button>
     <button class="tab" data-tab="summary" onclick="switchTab('summary',this)">Resumen</button>
-    <button class="tab" data-tab="states" onclick="switchTab('states',this);loadStates()">Estados</button>
+    <button class="tab" data-tab="states" onclick="switchTab('states',this);loadStates();if(isAdmin())loadReturnRequests()">Estados</button>
     <button class="tab" data-tab="requests" onclick="switchTab('requests',this);loadRequests()">Solicitudes</button>
     <button class="tab" id="tabBtnRequestsByLawyer" data-tab="requestsByLawyer" onclick="switchTab('requestsByLawyer',this);loadRequestsByLawyer()">Solicitudes por abogado</button>
-    <button class="tab" id="tabBtnReturnRequests" data-tab="returnRequests" onclick="switchTab('returnRequests',this);loadReturnRequests()">Solicitudes de devolución</button>
     <button class="tab" data-tab="all" onclick="switchTab('all',this)">Registro maestro</button>
     <button class="tab" data-tab="cargos" onclick="switchTab('cargos',this);loadCargos()">Cargos</button>
     <button class="tab" id="tabBtnHistory" data-tab="history" onclick="switchTab('history',this)">Historial</button>
@@ -261,6 +260,76 @@
       <div class="empty">Cargando estados...</div>
     </div>
 
+    <!-- SOLO ADMINISTRADOR: Solicitudes de devolución dentro de Estados -->
+    <div id="statesReturnAdminBox" class="hidden" style="margin-top:14px">
+      <div class="card" style="margin-bottom:12px">
+        <div class="table-head" style="padding:0">
+          <div>
+            <strong>Solicitudes de devolución</strong>
+            <div class="note" style="margin-top:4px">
+              Expedientes cuya devolución fue solicitada y están pendientes de recepción física por Archivo.
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <span class="pill alert"><span id="statesReturnCount">0</span> pendientes</span>
+            <button class="btn" id="statesReturnToggleBtn" onclick="toggleReturnRequestsInStates()">
+              Ver solicitudes
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div id="statesReturnPanel" class="hidden">
+    <div class="kpis">
+      <div class="card kpi">
+        <div class="label">Solicitudes pendientes</div>
+        <div class="value" id="retPendingCount">0</div>
+      </div>
+      <div class="card kpi warn">
+        <div class="label">Expedientes por recibir</div>
+        <div class="value" id="retExpCount">0</div>
+      </div>
+      <div class="card kpi">
+        <div class="label">Responsables</div>
+        <div class="value" id="retRespCount">0</div>
+      </div>
+      <div class="card kpi danger">
+        <div class="label">Alertas &gt; 30 días</div>
+        <div class="value" id="retAlertCount">0</div>
+      </div>
+    </div>
+
+    <div class="card filters">
+      <div class="field">
+        <label>Buscar devolución</label>
+        <input id="returnSearch" placeholder="Expediente, solicitud, cargo, responsable..." oninput="debounceReturnRequests()">
+      </div>
+      <div class="field">
+        <label>Responsable actual</label>
+        <select id="returnResponsible" onchange="loadReturnRequests()">
+          <option value="">TODOS</option>
+        </select>
+      </div>
+      <div style="display:flex;align-items:flex-end">
+        <button class="btn secondary" onclick="clearReturnFilters()">Limpiar</button>
+      </div>
+    </div>
+
+    <div class="card table-wrap">
+      <div class="table-head">
+        <strong>Solicitudes de devolución pendientes</strong>
+        <span id="returnRequestsCount">0 expedientes</span>
+      </div>
+      <div id="returnRequestsTable">
+        <div class="empty">No hay solicitudes de devolución pendientes.</div>
+      </div>
+    </div>
+
+
+
+      </div>
+    </div>
+
     <div class="card table-wrap">
       <div class="table-head state-detail-head">
         <strong id="stateDetailTitle">Seleccione un estado para ver sus expedientes</strong>
@@ -331,53 +400,6 @@
     </div>
   </section>
 
-
-  <section id="tab-returnRequests" class="hidden">
-    <div class="kpis">
-      <div class="card kpi">
-        <div class="label">Solicitudes pendientes</div>
-        <div class="value" id="retPendingCount">0</div>
-      </div>
-      <div class="card kpi warn">
-        <div class="label">Expedientes por recibir</div>
-        <div class="value" id="retExpCount">0</div>
-      </div>
-      <div class="card kpi">
-        <div class="label">Responsables</div>
-        <div class="value" id="retRespCount">0</div>
-      </div>
-      <div class="card kpi danger">
-        <div class="label">Alertas &gt; 30 días</div>
-        <div class="value" id="retAlertCount">0</div>
-      </div>
-    </div>
-
-    <div class="card filters">
-      <div class="field">
-        <label>Buscar devolución</label>
-        <input id="returnSearch" placeholder="Expediente, solicitud, cargo, responsable..." oninput="debounceReturnRequests()">
-      </div>
-      <div class="field">
-        <label>Responsable actual</label>
-        <select id="returnResponsible" onchange="loadReturnRequests()">
-          <option value="">TODOS</option>
-        </select>
-      </div>
-      <div style="display:flex;align-items:flex-end">
-        <button class="btn secondary" onclick="clearReturnFilters()">Limpiar</button>
-      </div>
-    </div>
-
-    <div class="card table-wrap">
-      <div class="table-head">
-        <strong>Solicitudes de devolución pendientes</strong>
-        <span id="returnRequestsCount">0 expedientes</span>
-      </div>
-      <div id="returnRequestsTable">
-        <div class="empty">No hay solicitudes de devolución pendientes.</div>
-      </div>
-    </div>
-  </section>
 
   <section id="tab-all" class="hidden">
     <div class="card filters"><div class="field"><label>Buscar en registro maestro</label><input id="allSearch" placeholder="Buscar cualquier dato..." oninput="debounceAll()"></div><div class="note">EXTENSIÓN siempre visible. Si no existe, se muestra “—”. No existe columna AÑO.</div><div></div></div>
@@ -1070,7 +1092,7 @@ function applyRoleUI(){
   setVisible('peopleBtn',admin);
   setVisible('subjectsBtn',admin);
   setVisible('usersBtn',admin);
-  setVisible('tabBtnReturnRequests',admin);
+  setVisible('statesReturnAdminBox',admin);
 
   // El buscador para solicitar es útil sobre todo para abogados.
   setVisible('searchRequestBtn',true);
@@ -2532,6 +2554,26 @@ async function continueRequestFromSearch(){
   await openNewRequestModal(itemsCopy);
 }
 
+
+function toggleReturnRequestsInStates(){
+  if(!isAdmin())return;
+
+  const panel=el('statesReturnPanel');
+  const btn=el('statesReturnToggleBtn');
+  if(!panel||!btn)return;
+
+  const opening=panel.classList.contains('hidden');
+  panel.classList.toggle('hidden',!opening);
+  btn.textContent=opening?'Ocultar solicitudes':'Ver solicitudes';
+
+  if(opening){
+    loadReturnRequests();
+    setTimeout(()=>{
+      panel.scrollIntoView({behavior:'smooth',block:'start'});
+    },50);
+  }
+}
+
 function debounceReturnRequests(){
   clearTimeout(returnRequestsTimer);
   returnRequestsTimer=setTimeout(()=>loadReturnRequests(),250);
@@ -2597,6 +2639,7 @@ async function loadReturnRequests(){
   el('retExpCount').textContent=returnRequestRows.length;
   el('retRespCount').textContent=responsables.size;
   el('retAlertCount').textContent=alerts;
+  if(el('statesReturnCount'))el('statesReturnCount').textContent=returnRequestRows.length;
   el('returnRequestsCount').textContent=
     `${returnRequestRows.length} expediente${returnRequestRows.length===1?'':'s'}`;
 
@@ -3900,7 +3943,7 @@ function renderHistory(){
   if(!historyRows.length){el('historyTable').innerHTML='<div class="empty">No hay movimientos para mostrar.</div>';return}
   el('historyTable').innerHTML=`<table><thead><tr><th>Fecha</th><th>Expediente</th><th>Extensión</th><th>Acción</th><th>Desde</th><th>Hacia</th><th>Cargo</th><th>Detalle</th></tr></thead><tbody>${historyRows.map(h=>`<tr><td>${fmtDate(h.created_at)}</td><td><b>${esc(h.expediente)}</b></td><td>${h.extension?esc(h.extension):'—'}</td><td>${esc(h.accion)}</td><td>${esc(h.desde)}</td><td>${esc(h.hacia)}</td><td>${esc(h.cargo)}</td><td>${esc(h.detalle)}</td></tr>`).join('')}</tbody></table>`
 }
-function switchTab(name,btn){['panel','summary','states','requests','requestsByLawyer','returnRequests','all','cargos','history'].forEach(x=>el('tab-'+x).classList.toggle('hidden',x!==name));document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));if(btn)btn.classList.add('active')}
+function switchTab(name,btn){['panel','summary','states','requests','requestsByLawyer','all','cargos','history'].forEach(x=>el('tab-'+x).classList.toggle('hidden',x!==name));document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));if(btn)btn.classList.add('active')}
 
 
 function autoCargoNumber(){ return ''; }
