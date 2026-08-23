@@ -4441,6 +4441,35 @@ async function saveRecord(e){
   }
 }
 
+
+function estadoOperativoDesdeMovimientos(r,movs){
+  const latest=(movs||[])[0];
+
+  if(!latest)return r?.estado||'—';
+
+  const action=norm(latest.accion||'');
+
+  if(action.includes('DEVOLUCIÓN CONFIRMADA') ||
+     action.includes('RECIBIDO EN ARCHIVO')){
+    return 'DEVUELTO AL ARCHIVO';
+  }
+
+  if(action.includes('DEVOLUCIÓN SOLICITADA')){
+    return 'DEVOLUCIÓN SOLICITADA';
+  }
+
+  if(action.includes('REASIGNACIÓN')){
+    return 'REASIGNADO';
+  }
+
+  if(action.includes('ATENDIDO CON CARGO') ||
+     action.includes('EN PRÉSTAMO')){
+    return 'EN PRÉSTAMO';
+  }
+
+  return r?.estado||'—';
+}
+
 async function showExpHistory(id){
   if(isLimitedUser()){
     const [{data:r,error:e1},{data:m,error:e2}]=await Promise.all([
@@ -4453,7 +4482,7 @@ async function showExpHistory(id){
     el('hExp').textContent=r.expediente||'—';
     el('hExt').textContent=r.extension||'—';
     el('hResp').textContent=r.responsable||'—';
-    el('hEstado').textContent=r.estado||'—';
+    el('hEstado').textContent=estadoOperativoDesdeMovimientos(r,m);
     el('expHistoryTitle').textContent='Mis movimientos del expediente '+expKey(r);
 
     el('expTimeline').innerHTML=!m.length
@@ -4477,16 +4506,22 @@ async function showExpHistory(id){
     return;
   }
 
-  const [{data:r,error:e1},{data:h,error:e2}]=await Promise.all([
+  const [
+    {data:r,error:e1},
+    {data:h,error:e2},
+    {data:m,error:e3}
+  ]=await Promise.all([
     sb.from('expedientes').select('*').eq('id',id).single(),
-    sb.from('historial_expedientes').select('*').eq('expediente_id',id).order('created_at',{ascending:false})
+    sb.from('historial_expedientes').select('*').eq('expediente_id',id).order('created_at',{ascending:false}),
+    sb.from('movimientos_prestamo').select('*').eq('expediente_id',id).order('created_at',{ascending:false})
   ]);
-  if(e1||e2){serverError(e1||e2);return}
+
+  if(e1||e2||e3){serverError(e1||e2||e3);return}
 
   el('hExp').textContent=r.expediente||'—';
   el('hExt').textContent=r.extension||'—';
   el('hResp').textContent=r.responsable||'—';
-  el('hEstado').textContent=r.estado||'—';
+  el('hEstado').textContent=estadoOperativoDesdeMovimientos(r,m);
   el('expHistoryTitle').textContent='Historial del expediente '+expKey(r);
 
   el('expTimeline').innerHTML=!h.length
