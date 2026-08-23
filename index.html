@@ -246,7 +246,7 @@
     <div class="card filters">
       <div class="field">
         <label>Buscar estado</label>
-        <input id="stateSearch" placeholder="Ej.: EN PRÉSTAMO, CUSTODIA..." oninput="renderStates()">
+        <input id="stateSearch" placeholder="Ej.: EN PRÉSTAMO, DEVUELTOS AL ARCHIVO..." oninput="renderStates()">
       </div>
       <div class="note">
         Se muestran todos los estados configurados y cualquier otro estado existente en la base de datos.
@@ -2101,10 +2101,25 @@ async function loadStates(){
     total:Number(x.total||0)
   }));
 
-  // Incluir siempre los estados configurados, aunque tengan cero registros.
+  // La vista de Estados unifica:
+  // CUSTODIA + DEVUELTO = DEVUELTOS AL ARCHIVO.
+  // Los valores originales permanecen en la base para no alterar el historial.
   const map=new Map();
-  STATUSES.forEach(s=>map.set(s,0));
-  dbRows.forEach(x=>map.set(x.estado,x.total));
+
+  // Estados visibles en este tablero.
+  ['EN PRÉSTAMO','DEVUELTOS AL ARCHIVO','REASIGNADO','EN TRÁMITE']
+    .forEach(s=>map.set(s,0));
+
+  dbRows.forEach(x=>{
+    if(x.estado==='CUSTODIA' || x.estado==='DEVUELTO'){
+      map.set(
+        'DEVUELTOS AL ARCHIVO',
+        Number(map.get('DEVUELTOS AL ARCHIVO')||0)+Number(x.total||0)
+      );
+    }else{
+      map.set(x.estado,Number(x.total||0));
+    }
+  });
 
   stateRows=[...map.entries()]
     .map(([estado,total])=>({estado,total:Number(total||0)}))
@@ -2186,6 +2201,8 @@ async function loadStateDetail(estado){
 
   if(estado==='SIN ESTADO'){
     q=q.or('estado.is.null,estado.eq.');
+  }else if(estado==='DEVUELTOS AL ARCHIVO'){
+    q=q.in('estado',['CUSTODIA','DEVUELTO']);
   }else{
     q=q.eq('estado',estado);
   }
@@ -3884,6 +3901,12 @@ function operationalStatus(r){
     return 'EN PRÉSTAMO';
   }
 
+  // CUSTODIA y DEVUELTO representan expedientes que ya se
+  // encuentran nuevamente en Archivo.
+  if(r.estado==='CUSTODIA' || r.estado==='DEVUELTO'){
+    return 'DEVUELTO AL ARCHIVO';
+  }
+
   // Si aún no hay un movimiento operativo específico,
   // mostrar el estado físico actual de la base.
   return r.estado||'';
@@ -4743,6 +4766,10 @@ function estadoOperativoDesdeMovimientos(r,movs){
   if(action.includes('ATENDIDO CON CARGO') ||
      action.includes('EN PRÉSTAMO')){
     return 'EN PRÉSTAMO';
+  }
+
+  if(r?.estado==='CUSTODIA' || r?.estado==='DEVUELTO'){
+    return 'DEVUELTO AL ARCHIVO';
   }
 
   return r?.estado||'—';
