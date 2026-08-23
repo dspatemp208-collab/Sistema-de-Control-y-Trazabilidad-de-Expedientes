@@ -147,6 +147,28 @@
 .cargo-toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
 .cargo-selected-row{background:#f7fbff}
 
+
+.alerts-btn{position:relative}
+.alerts-badge{
+  display:inline-flex;align-items:center;justify-content:center;
+  min-width:21px;height:21px;padding:0 6px;margin-left:5px;
+  border-radius:999px;background:#b91c1c;color:#fff;
+  font-size:11px;font-weight:800;line-height:1
+}
+.alerts-badge.zero{background:#64748b}
+.notification-list{display:flex;flex-direction:column;gap:9px;margin-top:12px}
+.notification-item{
+  border:1px solid #d8e1ec;border-radius:10px;padding:12px;background:#fff
+}
+.notification-item.unread{border-left:5px solid #173f6b;background:#f7fbff}
+.notification-head{
+  display:flex;align-items:flex-start;justify-content:space-between;gap:12px
+}
+.notification-title{font-weight:800;color:#163a63}
+.notification-meta{font-size:11px;color:#64748b;margin-top:3px}
+.notification-message{font-size:13px;margin-top:8px;line-height:1.45}
+.notification-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}
+
 </style>
 </head>
 <body>
@@ -172,6 +194,9 @@
       <button class="btn secondary" id="peopleBtn" onclick="openPeopleModal()">👥 Administrar personal</button>
       <button class="btn secondary" id="subjectsBtn" onclick="openSubjectsModal()">📋 Administrar asuntos</button>
       <button class="btn secondary" id="usersBtn" onclick="openUsersModal()">🔐 Usuarios y permisos</button>
+      <button class="btn secondary alerts-btn" id="alertsBtn" onclick="openAlertsModal()">
+        🔔 Alertas <span class="alerts-badge zero" id="alertsBadge">0</span>
+      </button>
       <button class="btn secondary" onclick="openConfig()">Base de datos</button>
       <button class="btn secondary" onclick="logout()">Cerrar sesión</button>
     </div>
@@ -955,6 +980,40 @@
   </div>
 </div>
 
+
+<!-- Alertas de reasignación -->
+<div class="modal" id="alertsModal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <div>
+        <h2>🔔 Centro de alertas</h2>
+        <div style="font-size:12px;color:#64748b;margin-top:3px">
+          Avisos de expedientes que fueron reasignados a su responsabilidad.
+        </div>
+      </div>
+      <button class="btn secondary small" onclick="closeAlertsModal()">Cerrar</button>
+    </div>
+
+    <div class="card" style="margin-bottom:10px">
+      <div class="table-head" style="padding:0">
+        <div>
+          <strong>Alertas no leídas: <span id="alertsUnreadText">0</span></strong>
+          <div class="note" style="margin-top:3px">
+            Las alertas se conservan hasta que sean marcadas como leídas.
+          </div>
+        </div>
+        <button class="btn secondary small" id="markAllAlertsBtn" onclick="markAllNotificationsRead()">
+          Marcar todas como leídas
+        </button>
+      </div>
+    </div>
+
+    <div id="notificationsList" class="notification-list">
+      <div class="empty">No hay alertas.</div>
+    </div>
+  </div>
+</div>
+
 <!-- Historial individual -->
 <div class="modal" id="expHistoryModal">
   <div class="modal-box">
@@ -976,12 +1035,12 @@ const MASTER=[["MARCELA ALONZO", "PERSONAL"], ["ABRAHAN DAMAS", "PERSONAL"], ["A
 const ASUNTOS_PREDETERMINADOS=["ACCESO A LA INFORMACIÓN", "ANALISIS Y EVALUACIÓN DEL MEMORANDO DE CONCLUSIÓN DEL PROCESO CONTENCIOSO ADMINISTRATIVO, REMITIDO POR LA PROCURADURÍA PÚBLICA (PP)", "ANEXADO DE CÉDULAS DE NOTIFICACIÓN", "ANEXADO DE DOCUMENTOS", "ATENCIÓN A LA DIRECCIÓN DE EXTRACCIÓN PARA CONSUMO HUMANO DIRECTO E INDIRECTO (DECHDI)", "ATENCIÓN A LA DIRECCIÓN DE VIGILANCIA Y CONTROL (DVC) - RD ARCHIVAMIENTO", "ATENCIÓN A LA OFICINA DE CONTROL INTERNO (OCI)", "ATENCIÓN A LA OFICINA GENERAL DE ADMINISTRACIÓN (OGA)", "ATENCIÓN A LA PROCURADURÍA PÚBLICA", "ATENCIÓN AL MINISTERIO PÚBLICO (FISCALÍA)", "ATENCIÓN DE ESCRITOS", "ATENCIÓN DE ESCRITOS REMITIDOS POR EL CONSEJO DE APELACIÓN DE SANCIONES CALIDAD DE PRÉSTAMO (CONAS)", "ATENCIÓN DE QUEJAS", "CADUCIDAD", "COMUNICACIÓN DE LAS SANCIONES A LA DIRECCIÓN GENERAL DE PESCA PARA CONSUMO HUMANO DIRECTO E INDIRECTO (DGPCHDI)", "DESLINDE DE RESPONSABILIDAD", "ELEVACIÓN DEL EXPEDIENTE AL CONSEJO DE APELACIÓN DE SANCIONES (CONAS)", "ENMIENDA", "EVALUACIÓN DE OFICIO", "EVALUACIÓN DE PAGOS POR CONCEPTO DE DECOMISOS", "EVALUACIÓN DEL EXPEDIENTE QUE RETORNA DEL CONSEJO DE APELACIÓN DE SANCIONES (CONAS)", "INTERES PARTICULAR", "LECTURA EN SALA (USUARIOS INTERNOS)", "LECTURA EXPEDIENTE (USUARIOS EXTERNOS)", "NULIDAD DE OFICIO", "PERDIDA DE BENEFICIO", "PETICIÓN ADMINISTRATIVA", "RECOMENDACIÓN DE INICIO", "RECONSIDERACIÓN", "REINCIDENCIAS DEL PAS", "REVISIÓN", "REVISIÓN DEL PROCEDIMIENTO DE EJECUCIÓN COACTIVA (PEC) - OEC", "SECRETARIA TÉCNICA DE LOS ORGANOS INSTRUCTORES (STOI)", "SOLICITUD DE BENEFICIOS", "TRAMITACIÓN DEL PAS (IFIS)", "USO DE LA PALABRA O AUDIENCIA"];
 const STATUSES=['CUSTODIA','EN PRÉSTAMO','DEVUELTO','REASIGNADO','EN TRÁMITE'];
 const PAGE_SIZE=200;
-let sb=null, session=null, currentProfile=null, userProfiles=[], abogadoProfiles=[], reassignmentProfiles=[], returnRequestRows=[], summaryRows=[], panelRows=[], allRows=[], historyRows=[], cargosRows=[], selectedCargoNumero='', stateRows=[], stateDetailRows=[], requestRows=[], requestDetailRows=[], requestMovementRows=[], requestSearchRows=[], requestsByLawyerRows=[];
+let sb=null, session=null, currentProfile=null, userProfiles=[], abogadoProfiles=[], reassignmentProfiles=[], returnRequestRows=[], notificationRows=[], notificationUnread=0, notificationsLoaded=false, summaryRows=[], panelRows=[], allRows=[], historyRows=[], cargosRows=[], selectedCargoNumero='', stateRows=[], stateDetailRows=[], requestRows=[], requestDetailRows=[], requestMovementRows=[], requestSearchRows=[], requestsByLawyerRows=[];
 let catalogo=MASTER.map(([nombre,tipo],i)=>({id:'fallback-'+i,nombre,tipo,activo:true}));
 let asuntosCatalogo=ASUNTOS_PREDETERMINADOS.map((nombre,i)=>({id:'fallback-asunto-'+i,nombre,activo:true}));
 let selectedIds=new Set(), cargoRows=[];
 let recordMode='single', batchCargoHeader=null;
-let selectedOwner='', selectedState='', panelQuickFilter='', currentRequestId='', currentRequest=null, requestSelectedIds=new Set(), requestSearchSelectedIds=new Set(), requestDraftItems=[], addToExistingRequestId='', page=0, panelCount=0, allCountValue=0, stateDetailCount=0, panelTimer=null, allTimer=null, historyTimer=null, cargosTimer=null, requestsTimer=null, returnRequestsTimer=null;
+let selectedOwner='', selectedState='', panelQuickFilter='', currentRequestId='', currentRequest=null, requestSelectedIds=new Set(), requestSearchSelectedIds=new Set(), requestDraftItems=[], addToExistingRequestId='', page=0, panelCount=0, allCountValue=0, stateDetailCount=0, panelTimer=null, allTimer=null, historyTimer=null, cargosTimer=null, requestsTimer=null, returnRequestsTimer=null, notificationsPollTimer=null;
 
 function el(id){return document.getElementById(id)}
 function norm(v){return String(v??'').trim().toUpperCase()}
@@ -998,6 +1057,59 @@ function businessDays(start,end){
   while(d<=b){const w=d.getDay();if(w!==0&&w!==6)n++;d.setDate(d.getDate()+1)}
   return n;
 }
+
+function fmtTime(v){
+  if(!v)return '—';
+  const s=String(v).trim();
+  if(!s)return '—';
+
+  // PostgreSQL time normalmente llega como HH:MM:SS.
+  const m=s.match(/^(\d{1,2}):(\d{2})/);
+  if(m)return `${String(m[1]).padStart(2,'0')}:${m[2]}`;
+
+  return s;
+}
+
+function requestAttentionText(r){
+  if(!r)return '—';
+
+  const fecha=r.fecha_atencion ? fmtDate(r.fecha_atencion) : '';
+  const hora=r.hora_atencion ? fmtTime(r.hora_atencion) : '';
+
+  if(fecha && hora)return `${fecha} · ${hora}`;
+  if(fecha)return fecha;
+  if(hora)return hora;
+  return '—';
+}
+
+async function enrichRequestAttentionTimes(rows){
+  if(!sb||!session||!Array.isArray(rows)||!rows.length)return rows||[];
+
+  const ids=rows.map(x=>x.id).filter(Boolean);
+  if(!ids.length)return rows;
+
+  const {data,error}=await sb
+    .from('solicitudes_prestamo')
+    .select('id,fecha_atencion,hora_atencion')
+    .in('id',ids);
+
+  if(error){
+    console.warn('hora_atencion:',error.message);
+    return rows;
+  }
+
+  const map=new Map((data||[]).map(x=>[x.id,x]));
+
+  return rows.map(r=>{
+    const a=map.get(r.id);
+    return a ? {
+      ...r,
+      fecha_atencion:a.fecha_atencion ?? r.fecha_atencion ?? null,
+      hora_atencion:a.hora_atencion ?? null
+    } : r;
+  });
+}
+
 function rowDays(r){return businessDays(r.fecha_entrega,r.fecha_devolucion)}
 function rowAlert(r){return !r.fecha_devolucion&&r.estado!=='DEVUELTO'&&r.modalidad!=='COPIA DIGITAL'&&r.fecha_entrega&&rowDays(r)>30}
 function normalizeDate(v){
@@ -1172,6 +1284,10 @@ async function afterLogin(){
   applyRoleUI();
   updateSelectionUI();
 
+  // Las alertas están disponibles para todos los perfiles.
+  await loadNotifications(true);
+  startNotificationPolling();
+
   if(isLimitedUser() && !currentProfile.nombre_personal){
     alert('Su cuenta todavía no está asociada a un nombre de personal. El administrador debe completar "Usuarios y permisos".');
   }
@@ -1190,6 +1306,191 @@ async function afterLogin(){
   switchTab('panel',document.querySelector('[data-tab="panel"]'));
 }
 
+
+
+function updateAlertsBadge(){
+  const badge=el('alertsBadge');
+  if(!badge)return;
+
+  badge.textContent=notificationUnread>99?'99+':String(notificationUnread);
+  badge.classList.toggle('zero',notificationUnread===0);
+
+  if(el('alertsUnreadText')){
+    el('alertsUnreadText').textContent=notificationUnread;
+  }
+
+  if(el('markAllAlertsBtn')){
+    el('markAllAlertsBtn').disabled=notificationUnread===0;
+  }
+}
+
+async function loadNotifications(silent=false){
+  if(!sb||!session)return;
+
+  const previous=notificationUnread;
+
+  const {data,error}=await sb.rpc('mis_notificaciones_reasignacion');
+
+  if(error){
+    console.warn('mis_notificaciones_reasignacion:',error.message);
+    if(!silent && el('notificationsList')){
+      el('notificationsList').innerHTML=
+        `<div class="empty">${esc(error.message)}</div>`;
+    }
+    return;
+  }
+
+  notificationRows=data||[];
+  notificationUnread=notificationRows.filter(x=>!x.leida).length;
+
+  updateAlertsBadge();
+
+  if(el('alertsModal')?.classList.contains('show')){
+    renderNotifications();
+  }
+
+  // Aviso visual si llegan nuevas alertas mientras la aplicación está abierta.
+  if(
+    notificationsLoaded &&
+    notificationUnread>previous &&
+    notificationUnread>0
+  ){
+    const diff=notificationUnread-previous;
+    showToast(
+      diff===1
+        ?'🔔 Tiene una nueva reasignación'
+        :`🔔 Tiene ${diff} nuevas reasignaciones`
+    );
+  }
+
+  notificationsLoaded=true;
+}
+
+function renderNotifications(){
+  const list=el('notificationsList');
+  if(!list)return;
+
+  if(!notificationRows.length){
+    list.innerHTML='<div class="empty">No hay alertas de reasignación.</div>';
+    return;
+  }
+
+  list.innerHTML=notificationRows.map(n=>`
+    <div class="notification-item ${n.leida?'':'unread'}">
+      <div class="notification-head">
+        <div>
+          <div class="notification-title">${esc(n.titulo||'Expediente reasignado')}</div>
+          <div class="notification-meta">
+            ${fmtDate(n.created_at)}
+            ${n.cargo_numero?' · Cargo '+esc(n.cargo_numero):''}
+          </div>
+        </div>
+        ${n.leida
+          ?'<span class="pill returned">LEÍDA</span>'
+          :'<span class="pill alert">NUEVA</span>'}
+      </div>
+
+      <div class="notification-message">
+        ${esc(n.mensaje||'')}
+      </div>
+
+      <div class="notification-meta" style="margin-top:7px">
+        Expediente: <b>${esc(n.expediente||'—')}</b>
+        ${n.extension?' · Ext.: '+esc(n.extension):''}
+        ${n.desde?' · Desde: '+esc(n.desde):''}
+        ${n.hacia?' · Hacia: '+esc(n.hacia):''}
+      </div>
+
+      <div class="notification-actions">
+        ${!n.leida
+          ?`<button class="btn secondary small"
+              onclick="markNotificationRead('${n.id}')">
+              Marcar como leída
+            </button>`
+          :''}
+
+        ${n.expediente_id
+          ?`<button class="btn small"
+              onclick="openNotificationExpediente('${n.id}','${n.expediente_id}')">
+              Gestionar expediente
+            </button>`
+          :''}
+      </div>
+    </div>
+  `).join('');
+}
+
+async function openAlertsModal(){
+  if(!session)return;
+
+  el('alertsModal').classList.add('show');
+  el('notificationsList').innerHTML='<div class="empty">Cargando alertas...</div>';
+
+  await loadNotifications(false);
+  renderNotifications();
+}
+
+function closeAlertsModal(){
+  el('alertsModal').classList.remove('show');
+}
+
+async function markNotificationRead(id){
+  const {error}=await sb.rpc('marcar_notificacion_reasignacion_leida',{
+    p_notificacion_id:id
+  });
+
+  if(error){
+    alert(error.message);
+    return;
+  }
+
+  await loadNotifications(true);
+  renderNotifications();
+}
+
+async function markAllNotificationsRead(){
+  const {error}=await sb.rpc('marcar_todas_notificaciones_reasignacion_leidas');
+
+  if(error){
+    alert(error.message);
+    return;
+  }
+
+  await loadNotifications(true);
+  renderNotifications();
+}
+
+async function openNotificationExpediente(notificationId,expedienteId){
+  // Marcar como leída antes de abrir la gestión.
+  if(notificationId){
+    await sb.rpc('marcar_notificacion_reasignacion_leida',{
+      p_notificacion_id:notificationId
+    });
+  }
+
+  await loadNotifications(true);
+  closeAlertsModal();
+
+  await manageExpedienteFromPanel(expedienteId);
+}
+
+function startNotificationPolling(){
+  clearInterval(notificationsPollTimer);
+
+  // Revisión ligera cada 30 segundos mientras la página esté abierta.
+  notificationsPollTimer=setInterval(()=>{
+    if(!document.hidden && session){
+      loadNotifications(true);
+    }
+  },30000);
+
+  if(!window.__notificationFocusHook){
+    window.addEventListener('focus',()=>{
+      if(session)loadNotifications(true);
+    });
+    window.__notificationFocusHook=true;
+  }
+}
 
 async function loadReassignmentProfiles(){
   if(!sb||!session)return;
@@ -2992,7 +3293,7 @@ async function loadRequests(){
     return;
   }
 
-  requestRows=data||[];
+  requestRows=await enrichRequestAttentionTimes(data||[]);
 
   const counts={
     'REGISTRADA':0,
@@ -3060,6 +3361,8 @@ function renderRequests(){
       <th>Cargo</th>
       <th>Atiende</th>
       <th>F. solicitud</th>
+      <th>F. atención</th>
+      <th>Hora atención</th>
       <th></th>
     </tr></thead>
     <tbody>
@@ -3074,6 +3377,8 @@ function renderRequests(){
         <td>${esc(r.cargo_numero||'—')}</td>
         <td>${esc(r.atiende||'—')}</td>
         <td>${fmtDate(r.fecha_solicitud)}</td>
+        <td>${r.fecha_atencion?fmtDate(r.fecha_atencion):'—'}</td>
+        <td><b>${r.hora_atencion?fmtTime(r.hora_atencion):'—'}</b></td>
         <td>
           <button class="btn secondary small" onclick="openRequestDetail('${r.id}')">
             ${isLimitedUser()?'Ver':(r.estado_atencion==='CERRADA POR ARCHIVO'?'Ver':'Gestionar')}
@@ -3266,14 +3571,18 @@ async function openRequestDetail(id){
 
   if(!currentRequest){
     const {data:list}=await sb.rpc('listar_solicitudes_prestamo',{p_busqueda:null,p_estado:null});
-    requestRows=list||[];
+    requestRows=await enrichRequestAttentionTimes(list||[]);
     currentRequest=requestRows.find(x=>x.id===id)||{};
   }
 
   const r=currentRequest||{};
 
   el('rqDetailTitle').textContent=`Solicitud ${r.numero||''}`;
-  el('rqDetailMeta').textContent=`${r.asunto||''} · Fecha: ${fmtDate(r.fecha_solicitud)}`;
+  el('rqDetailMeta').textContent=
+    `${r.asunto||''} · Fecha solicitud: ${fmtDate(r.fecha_solicitud)}`+
+    `${r.fecha_atencion||r.hora_atencion
+      ?` · Atención: ${requestAttentionText(r)}`
+      :''}`;
   el('rqDState').innerHTML=reqStatePill(r.estado||'');
   el('rqDTotal').textContent=Number(r.total_expedientes||requestDetailRows.length);
   el('rqDCargo').textContent=r.cargo_numero||'—';
@@ -3513,7 +3822,7 @@ async function acceptRequestWithoutCargo(){
     return;
   }
 
-  showToast('Solicitud aceptada · pendiente de asignación de cargo');
+  showToast('Solicitud aceptada · hora de atención registrada automáticamente');
 
   await Promise.all([
     loadSummary(),loadPanel(),loadAll(),loadStates(),
