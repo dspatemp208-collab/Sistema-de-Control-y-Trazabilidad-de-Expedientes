@@ -2090,23 +2090,44 @@ async function changePage(d){const next=page+d;if(next<0)return;if(next*PAGE_SIZ
 async function loadStates(){
   if(!sb||!session)return;
 
-  const {data,error}=await sb.rpc('resumen_estados');
+  const [
+    {data,error},
+    {data:reassignData,error:reassignError}
+  ]=await Promise.all([
+    sb.rpc('resumen_estados'),
+    sb.rpc('resumen_reasignaciones')
+  ]);
+
   if(error){
     el('stateGrid').innerHTML=`<div class="empty">${esc(error.message)}</div>`;
     return;
   }
+
+  if(reassignError){
+    console.warn('resumen_reasignaciones:',reassignError.message);
+  }
+
+  const totalReasignaciones=Number(
+    Array.isArray(reassignData)
+      ? (reassignData[0]?.total||0)
+      : (reassignData?.total||0)
+  );
 
   const dbRows=(data||[]).map(x=>({
     estado:(x.estado||'SIN ESTADO').trim()||'SIN ESTADO',
     total:Number(x.total||0)
   }));
 
-  // La vista de Estados unifica:
+  // Total real de expedientes de la base.
+  const totalExpedientes=dbRows.reduce((a,x)=>a+Number(x.total||0),0);
+
+  // La vista unifica:
   // CUSTODIA + DEVUELTO = DEVUELTOS AL ARCHIVO.
-  // Los valores originales permanecen en la base para no alterar el historial.
+  //
+  // REASIGNADO se calcula según el ÚLTIMO MOVIMIENTO de cada expediente.
+  // Solo se incluye si ese último movimiento es una REASIGNACIÓN.
   const map=new Map();
 
-  // Estados visibles en este tablero.
   ['EN PRÉSTAMO','DEVUELTOS AL ARCHIVO','REASIGNADO','EN TRÁMITE']
     .forEach(s=>map.set(s,0));
 
@@ -2116,20 +2137,30 @@ async function loadStates(){
         'DEVUELTOS AL ARCHIVO',
         Number(map.get('DEVUELTOS AL ARCHIVO')||0)+Number(x.total||0)
       );
-    }else{
+    }else if(x.estado!=='REASIGNADO'){
       map.set(x.estado,Number(x.total||0));
     }
   });
 
+  // Expedientes cuyo último movimiento es REASIGNACIÓN.
+  map.set('REASIGNADO',totalReasignaciones);
+
   stateRows=[...map.entries()]
-    .map(([estado,total])=>({estado,total:Number(total||0)}))
+    .map(([estado,total])=>({
+      estado,
+      total:Number(total||0),
+      historial:false
+    }))
     .sort((a,b)=>b.total-a.total||a.estado.localeCompare(b.estado));
 
-  const total=stateRows.reduce((a,x)=>a+x.total,0);
-  const top=stateRows.slice().sort((a,b)=>b.total-a.total)[0]||{estado:'—',total:0};
+  // REASIGNADO representa ahora un estado operativo vigente,
+  // porque se obtiene del último movimiento del expediente.
+  const top=stateRows
+    .slice()
+    .sort((a,b)=>b.total-a.total)[0]||{estado:'—',total:0};
 
   el('statesTotalTypes').textContent=stateRows.length;
-  el('statesTotalRecords').textContent=total;
+  el('statesTotalRecords').textContent=totalExpedientes;
   el('statesTopCount').textContent=top.total;
   el('statesTopName').textContent=top.estado;
 
@@ -2155,13 +2186,20 @@ function renderStates(){
   const normalCards=data.map(x=>{
     const pct=total?((x.total/total)*100):0;
     const stateArg=x.estado.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+
+    const meta=x.estado==='REASIGNADO'
+      ?'Último estado: REASIGNADO'
+      :`${pct.toFixed(1)}% del total`;
+
+    const buttonText='Ver expedientes';
+
     return `<div class="card state-card ${selectedState===x.estado?'selected':''}">
       <div class="state-name">${esc(x.estado)}</div>
       <div class="state-count">${x.total}</div>
-      <div class="state-meta">${pct.toFixed(1)}% del total</div>
-      <div class="state-progress"><span style="width:${Math.min(100,pct)}%"></span></div>
+      <div class="state-meta">${meta}</div>
+      <div class="state-progress"><span style="width:${x.estado==='REASIGNADO'?(x.total?100:0):Math.min(100,pct)}%"></span></div>
       <div style="margin-top:10px">
-        <button class="btn secondary small" onclick="loadStateDetail('${stateArg}')">Ver expedientes</button>
+        <button class="btn secondary small" onclick="loadStateDetail('${stateArg}')">${buttonText}</button>
       </div>
     </div>`;
   }).join('');
@@ -2189,6 +2227,73 @@ function renderStates(){
 async function loadStateDetail(estado){
   selectedState=estado;
   renderStates();
+
+  if(estado==='REASIGNADO'){
+    el('stateDetailTitle').textContent='Expedientes cuyo último estado es: REASIGNADO';
+    el('stateDetailTable').innerHTML='<div class="empty">Cargando expedientes reasignados...</div>';
+
+    const {data,error}=await sb.rpc('listar_expedientes_reasignados');
+
+    if(error){
+      el('stateDetailTable').innerHTML=`<div class="empty">${esc(error.message)}</div>`;
+      return;
+    }
+
+    const rows=data||[];
+    stateDetailCount=rows.length;
+    el('stateDetailCount').textContent=`${stateDetailCount} expedientes`;
+
+    if(!rows.length){
+      el('stateDetailTable').innerHTML=
+        '<div class="empty">No hay expedientes cuyo último estado sea REASIGNADO.</div>';
+      return;
+    }
+
+    el('stateDetailTable').innerHTML=`<table>
+      <thead>
+        <tr>
+          <th>Expediente</th>
+          <th>Extensión</th>
+          <th>R.D.</th>
+          <th>Responsable actual</th>
+          <th>Estado actual</th>
+          <th>Última reasignación</th>
+          <th>Desde</th>
+          <th>Hacia</th>
+          <th>Cargo</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows.map(x=>`<tr>
+          <td><b>${esc(x.expediente||'—')}</b></td>
+          <td>${esc(x.extension||'—')}</td>
+          <td>${esc(x.rd||'—')}</td>
+          <td><b>${esc(x.responsable_actual||'—')}</b></td>
+          <td><span class="pill reassigned">REASIGNADO</span></td>
+          <td>${fmtDate(x.fecha_ultima_reasignacion)}</td>
+          <td>${esc(x.desde||'—')}</td>
+          <td><b>${esc(x.hacia||'—')}</b></td>
+          <td>${esc(x.cargo_numero||'—')}</td>
+          <td>
+            <div style="display:flex;gap:6px;white-space:nowrap">
+              <button class="btn secondary small"
+                onclick="showExpHistory('${x.expediente_id}')">
+                Historial
+              </button>
+              ${hasFullAccess()
+                ?`<button class="btn small"
+                    onclick="manageExpedienteFromPanel('${x.expediente_id}')">
+                    Gestionar
+                  </button>`
+                :''}
+            </div>
+          </td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
+    return;
+  }
 
   el('stateDetailTitle').textContent=`Expedientes en estado: ${estado}`;
   el('stateDetailTable').innerHTML='<div class="empty">Cargando expedientes...</div>';
