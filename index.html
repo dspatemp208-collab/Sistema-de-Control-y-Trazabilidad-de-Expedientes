@@ -537,7 +537,15 @@
         <label>Asunto *</label>
         <input id="rqAsunto" list="listaAsuntosCargo" placeholder="Seleccione o escriba el asunto">
       </div>
-      <div class="field span4">
+      <div class="field span2">
+        <label>Modalidad *</label>
+        <select id="rqModalidad">
+          <option value="PRÉSTAMO">PRÉSTAMO</option>
+          <option value="COPIA DIGITAL">COPIA DIGITAL</option>
+          <option value="LECTURA EN SALA">LECTURA EN SALA</option>
+        </select>
+      </div>
+      <div class="field span2">
         <label>Observación</label>
         <textarea id="rqObservacion" placeholder="Observación de la solicitud, si corresponde"></textarea>
       </div>
@@ -1090,7 +1098,7 @@ async function enrichRequestAttentionTimes(rows){
 
   const {data,error}=await sb
     .from('solicitudes_prestamo')
-    .select('id,fecha_atencion,hora_atencion')
+    .select('id,fecha_atencion,hora_atencion,modalidad')
     .in('id',ids);
 
   if(error){
@@ -1105,7 +1113,8 @@ async function enrichRequestAttentionTimes(rows){
     return a ? {
       ...r,
       fecha_atencion:a.fecha_atencion ?? r.fecha_atencion ?? null,
-      hora_atencion:a.hora_atencion ?? null
+      hora_atencion:a.hora_atencion ?? null,
+      modalidad:a.modalidad ?? r.modalidad ?? 'PRÉSTAMO'
     } : r;
   });
 }
@@ -3354,6 +3363,7 @@ function renderRequests(){
       <th>Solicitud</th>
       <th>Solicitante</th>
       <th>Asunto</th>
+      <th>Modalidad</th>
       <th>Estado</th>
       <th>Expedientes</th>
       <th>Atendidos</th>
@@ -3370,6 +3380,7 @@ function renderRequests(){
         <td><b>${esc(r.numero)}</b></td>
         <td>${esc(r.solicitante)}</td>
         <td>${esc(r.asunto)}</td>
+        <td><b>${esc(r.modalidad||'PRÉSTAMO')}</b></td>
         <td>${attentionStatePill(r.estado_atencion||r.estado)}</td>
         <td>${Number(r.total_expedientes||0)}</td>
         <td>${Number(r.atendidos||0)} / ${Number(r.total_expedientes||0)}</td>
@@ -3432,6 +3443,7 @@ async function openNewRequestModal(rowsOverride=null){
   }
 
   el('rqAsunto').value='';
+  el('rqModalidad').value='PRÉSTAMO';
   el('rqObservacion').value='';
   el('rqSaveStatus').textContent='';
 
@@ -3476,6 +3488,7 @@ function closeNewRequestModal(){
 async function saveNewRequest(){
   const solicitante=el('rqSolicitante').value.trim();
   const asunto=el('rqAsunto').value.trim();
+  const modalidad=el('rqModalidad').value.trim();
   const observacion=el('rqObservacion').value.trim();
 
   let items=[];
@@ -3494,6 +3507,12 @@ async function saveNewRequest(){
 
   if(!validarAsuntoActivo(asunto,'rqSaveStatus','rqAsunto'))return;
 
+  if(!['COPIA DIGITAL','PRÉSTAMO','LECTURA EN SALA'].includes(modalidad)){
+    el('rqSaveStatus').textContent='Seleccione una modalidad válida.';
+    el('rqModalidad').focus();
+    return;
+  }
+
   if(!items.length){
     el('rqSaveStatus').textContent='No hay expedientes en la solicitud.';
     return;
@@ -3506,10 +3525,11 @@ async function saveNewRequest(){
     `Registrando una solicitud con ${items.length} expediente(s)...`;
 
   try{
-    const {data,error}=await sb.rpc('crear_solicitud_multiple_mixta',{
+    const {data,error}=await sb.rpc('crear_solicitud_multiple_mixta_con_modalidad',{
       p_solicitante:solicitante,
       p_asunto:asunto,
       p_observacion:observacion||null,
+      p_modalidad:modalidad,
       p_items:items
     });
 
@@ -3521,7 +3541,7 @@ async function saveNewRequest(){
 
     showToast(
       `Solicitud ${data?.numero||''} registrada · `+
-      `${data?.total||items.length} expediente(s)`
+      `${data?.total||items.length} expediente(s) · ${modalidad}`
     );
 
     await loadRequests();
@@ -3579,7 +3599,9 @@ async function openRequestDetail(id){
 
   el('rqDetailTitle').textContent=`Solicitud ${r.numero||''}`;
   el('rqDetailMeta').textContent=
-    `${r.asunto||''} · Fecha solicitud: ${fmtDate(r.fecha_solicitud)}`+
+    `${r.asunto||''}`+
+    ` · Modalidad: ${r.modalidad||'PRÉSTAMO'}`+
+    ` · Fecha solicitud: ${fmtDate(r.fecha_solicitud)}`+
     `${r.fecha_atencion||r.hora_atencion
       ?` · Atención: ${requestAttentionText(r)}`
       :''}`;
