@@ -1711,6 +1711,20 @@ function movementLabel(r){
 }
 
 
+async function openAdminDirectManagement(expedienteId){
+  if(!isAdmin()){
+    alert('La gestión directa sin solicitud está reservada al ADMINISTRADOR.');
+    return;
+  }
+
+  await editRecord(expedienteId,true);
+
+  if(el('saveStatus')){
+    el('saveStatus').textContent=
+      'Gestión directa del administrador: este expediente no tiene una solicitud asociada. Puede actualizar sus datos, estado y responsable.';
+  }
+}
+
 async function manageExpedienteFromPanel(expedienteId){
   if(!sb||!session)return;
 
@@ -1727,8 +1741,15 @@ async function manageExpedienteFromPanel(expedienteId){
 
     const ids=[...new Set((movs||[]).map(x=>x.solicitud_id).filter(Boolean))];
 
+    // ADMINISTRADOR: si el expediente no nació de una solicitud,
+    // puede gestionarlo directamente sin quedar bloqueado.
     if(!ids.length){
-      alert('Este expediente no tiene una solicitud asociada para gestionar.');
+      if(isAdmin()){
+        await openAdminDirectManagement(expedienteId);
+        return;
+      }
+
+      alert('Este expediente no tiene una solicitud asociada para gestionar. El ADMINISTRADOR puede gestionarlo directamente.');
       return;
     }
 
@@ -1750,6 +1771,11 @@ async function manageExpedienteFromPanel(expedienteId){
     const target=activa||solicitudes[0];
 
     if(!target){
+      if(isAdmin()){
+        await openAdminDirectManagement(expedienteId);
+        return;
+      }
+
       alert('No se encontró la solicitud relacionada con este expediente.');
       return;
     }
@@ -1777,6 +1803,14 @@ async function manageExpedienteFromPanel(expedienteId){
     }
 
   }catch(err){
+    if(isAdmin()){
+      // Si por alguna inconsistencia histórica no puede resolver la solicitud,
+      // el administrador conserva una vía de gestión directa.
+      try{
+        await openAdminDirectManagement(expedienteId);
+        return;
+      }catch(_){}
+    }
     alert(err?.message||String(err));
   }
 }
@@ -4063,6 +4097,10 @@ async function saveBatchRecords(btn){
 }
 
 function openRecordModal(){
+  if(el('recordModeBar'))el('recordModeBar').style.display='';
+  if(el('recordModeNote'))el('recordModeNote').style.display='';
+  if(el('recordSaveBtn'))el('recordSaveBtn').textContent='Guardar expediente';
+
   el('recordForm').reset();
   el('fId').value='';
   el('fSerie').value='PAS';
@@ -4098,8 +4136,13 @@ function openRecordModal(){
   setRecordMode('single');
   el('recordModal').classList.add('show');
 }
-function closeRecordModal(){el('recordModal').classList.remove('show')}
-async function editRecord(id){
+function closeRecordModal(){
+  el('recordModal').classList.remove('show');
+  if(el('recordModeBar'))el('recordModeBar').style.display='';
+  if(el('recordModeNote'))el('recordModeNote').style.display='';
+  if(el('recordSaveBtn'))el('recordSaveBtn').textContent='Guardar expediente';
+}
+async function editRecord(id,directManagement=false){
   setRecordMode('single');
 
   const {data:r,error}=await sb.from('expedientes').select('*').eq('id',id).single();
@@ -4156,7 +4199,17 @@ async function editRecord(id){
   el('fAsunto').title='Dato del cargo existente. Se modifica desde el cargo, no desde el expediente.';
   el('fAtiende').title='Dato del cargo existente. Se modifica desde el cargo, no desde el expediente.';
 
-  el('modalTitle').textContent='Editar '+expKey(r);
+  // Al editar o gestionar un registro existente, no se permite
+  // cambiar al modo de alta múltiple.
+  if(el('recordModeBar'))el('recordModeBar').style.display='none';
+  if(el('recordModeNote'))el('recordModeNote').style.display='none';
+
+  el('modalTitle').textContent=
+    (directManagement?'Gestionar expediente · ':'Editar ')+expKey(r);
+
+  el('recordSaveBtn').textContent=
+    directManagement?'Guardar gestión':'Guardar expediente';
+
   el('saveStatus').textContent='';
   el('recordModal').classList.add('show');
 }
