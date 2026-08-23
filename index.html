@@ -903,9 +903,9 @@
 <script>
 const MASTER=[["MARCELA ALONZO", "PERSONAL"], ["ABRAHAN DAMAS", "PERSONAL"], ["ALMENDRA YALE", "PERSONAL"], ["ALVARO BOJORQUEZ", "PERSONAL"], ["ARCHIVO CENTRAL", "ÁREA / UBICACIÓN"], ["BRANDY MEZA", "PERSONAL"], ["CRISTINA ALZAMORA", "PERSONAL"], ["NINO CCALAHUILLY", "PERSONAL"], ["DANIELA FUENTES", "PERSONAL"], ["DSF-PA", "ÁREA / UBICACIÓN"], ["DVC", "ÁREA / UBICACIÓN"], ["ELEVADO AL CONAS", "ETAPA / UBICACIÓN"], ["GENARO LIZA", "PERSONAL"], ["HANS HUARACA", "PERSONAL"], ["HENRY AQUINO", "PERSONAL"], ["IGNACIO INFANTAS", "PERSONAL"], ["INSTRUCCIÓN", "ETAPA / UBICACIÓN"], ["JAIME GRADOS", "PERSONAL"], ["ALEXANDER ÑAUPARI", "PERSONAL"], ["JHUVER RIMAC", "PERSONAL"], ["JOAN VALDIVIESO", "PERSONAL"], ["JOHNNY ZAVALA", "PERSONAL"], ["JUAN GUTIERREZ", "PERSONAL"], ["LISSETH PRADO", "PERSONAL"], ["LOANY AQUINO", "PERSONAL"], ["MELISA LOPEZ", "PERSONAL"], ["MILAGRO SALINAS", "PERSONAL"], ["MILTON DIAZ", "PERSONAL"], ["MIRELLA ALEMAN", "PERSONAL"], ["MIRTHA DOMINGUEZ", "PERSONAL"], ["NOTIFICACIONES", "ÁREA / UBICACIÓN"], ["PAOLA ADANAQUE", "PERSONAL"], ["PAOLA MORENO", "PERSONAL"], ["PATRICIA MORALES", "PERSONAL"], ["PIERRE ARANDA", "PERSONAL"], ["RENEE BENITES", "PERSONAL"], ["RETORNO CONAS", "ETAPA / UBICACIÓN"], ["REVISAR OBSERVACIÓN", "ETAPA / UBICACIÓN"], ["RONALD HUARCAYA", "PERSONAL"], ["SAN LUIS", "UBICACIÓN"], ["SHEYLA GUZMAN", "PERSONAL"], ["STYVEN MEDINA", "PERSONAL"], ["VICTOR GARCIA", "PERSONAL"], ["ERICK MANTARI", "PERSONAL"], ["VICTORIA GAMBOA", "PERSONAL"], ["YRMA HUARINGA", "PERSONAL"], ["RUBYSOL RUIZ", "PERSONAL"], ["RAMIRO ARRIARAN", "PERSONAL"], ["FRANK TORRES", "PERSONAL"], ["ALBERT COLAN", "PERSONAL"], ["MARIA LAGOS", "PERSONAL"], ["IVETT SOLIS", "PERSONAL"], ["MINNEETH PACHERRES", "PERSONAL"], ["KARINA CARO", "PERSONAL"], ["GABRIELA AIQUIPA", "PERSONAL"], ["JUAN CARLOS CIFUENTES", "PERSONAL"], ["CESAR CHUQUIZUTA", "PERSONAL"], ["GISELL ESPINOZA", "PERSONAL"], ["GUSTAVO MARTIN RIOS - CASSTELL", "PERSONAL"], ["HILDA LEVANO", "PERSONAL"], ["JUAN HUAMAN", "PERSONAL"]];
 const ASUNTOS_PREDETERMINADOS=["ACCESO A LA INFORMACIÓN", "ANALISIS Y EVALUACIÓN DEL MEMORANDO DE CONCLUSIÓN DEL PROCESO CONTENCIOSO ADMINISTRATIVO, REMITIDO POR LA PROCURADURÍA PÚBLICA (PP)", "ANEXADO DE CÉDULAS DE NOTIFICACIÓN", "ANEXADO DE DOCUMENTOS", "ATENCIÓN A LA DIRECCIÓN DE EXTRACCIÓN PARA CONSUMO HUMANO DIRECTO E INDIRECTO (DECHDI)", "ATENCIÓN A LA DIRECCIÓN DE VIGILANCIA Y CONTROL (DVC) - RD ARCHIVAMIENTO", "ATENCIÓN A LA OFICINA DE CONTROL INTERNO (OCI)", "ATENCIÓN A LA OFICINA GENERAL DE ADMINISTRACIÓN (OGA)", "ATENCIÓN A LA PROCURADURÍA PÚBLICA", "ATENCIÓN AL MINISTERIO PÚBLICO (FISCALÍA)", "ATENCIÓN DE ESCRITOS", "ATENCIÓN DE ESCRITOS REMITIDOS POR EL CONSEJO DE APELACIÓN DE SANCIONES CALIDAD DE PRÉSTAMO (CONAS)", "ATENCIÓN DE QUEJAS", "CADUCIDAD", "COMUNICACIÓN DE LAS SANCIONES A LA DIRECCIÓN GENERAL DE PESCA PARA CONSUMO HUMANO DIRECTO E INDIRECTO (DGPCHDI)", "DESLINDE DE RESPONSABILIDAD", "ELEVACIÓN DEL EXPEDIENTE AL CONSEJO DE APELACIÓN DE SANCIONES (CONAS)", "ENMIENDA", "EVALUACIÓN DE OFICIO", "EVALUACIÓN DE PAGOS POR CONCEPTO DE DECOMISOS", "EVALUACIÓN DEL EXPEDIENTE QUE RETORNA DEL CONSEJO DE APELACIÓN DE SANCIONES (CONAS)", "INTERES PARTICULAR", "LECTURA EN SALA (USUARIOS INTERNOS)", "LECTURA EXPEDIENTE (USUARIOS EXTERNOS)", "NULIDAD DE OFICIO", "PERDIDA DE BENEFICIO", "PETICIÓN ADMINISTRATIVA", "RECOMENDACIÓN DE INICIO", "RECONSIDERACIÓN", "REINCIDENCIAS DEL PAS", "REVISIÓN", "REVISIÓN DEL PROCEDIMIENTO DE EJECUCIÓN COACTIVA (PEC) - OEC", "SECRETARIA TÉCNICA DE LOS ORGANOS INSTRUCTORES (STOI)", "SOLICITUD DE BENEFICIOS", "TRAMITACIÓN DEL PAS (IFIS)", "USO DE LA PALABRA O AUDIENCIA"];
-const STATUSES=['CUSTODIA','EN PRÉSTAMO','DEVUELTO','REASIGNADO','EN TRÁMITE','PENDIENTE DE ORGANIZAR','TRANSFERIDO','EN NOTIFICACIONES'];
+const STATUSES=['CUSTODIA','EN PRÉSTAMO','DEVUELTO','REASIGNADO','EN TRÁMITE'];
 const PAGE_SIZE=200;
-let sb=null, session=null, currentProfile=null, userProfiles=[], abogadoProfiles=[], summaryRows=[], panelRows=[], allRows=[], historyRows=[], cargosRows=[], selectedCargoNumero='', stateRows=[], stateDetailRows=[], requestRows=[], requestDetailRows=[], requestMovementRows=[], requestSearchRows=[], requestsByLawyerRows=[];
+let sb=null, session=null, currentProfile=null, userProfiles=[], abogadoProfiles=[], reassignmentProfiles=[], summaryRows=[], panelRows=[], allRows=[], historyRows=[], cargosRows=[], selectedCargoNumero='', stateRows=[], stateDetailRows=[], requestRows=[], requestDetailRows=[], requestMovementRows=[], requestSearchRows=[], requestsByLawyerRows=[];
 let catalogo=MASTER.map(([nombre,tipo],i)=>({id:'fallback-'+i,nombre,tipo,activo:true}));
 let asuntosCatalogo=ASUNTOS_PREDETERMINADOS.map((nombre,i)=>({id:'fallback-asunto-'+i,nombre,activo:true}));
 let selectedIds=new Set(), cargoRows=[];
@@ -1095,6 +1095,7 @@ async function afterLogin(){
     loadAsuntosCatalogo(),
     loadAbogadoProfiles()
   ]);
+  await loadReassignmentProfiles();
   fillSelects();
   renderAsuntosDatalist();
   applyRoleUI();
@@ -1116,6 +1117,56 @@ async function afterLogin(){
   }
 
   switchTab('panel',document.querySelector('[data-tab="panel"]'));
+}
+
+
+async function loadReassignmentProfiles(){
+  if(!sb||!session)return;
+
+  const {data,error}=await sb.rpc('listar_usuarios_reasignacion');
+
+  if(error){
+    console.warn('listar_usuarios_reasignacion:',error.message);
+
+    // Fallback: usar los abogados visibles y el usuario actual.
+    const fallback=[
+      ...(abogadoProfiles||[]),
+      ...(currentProfile?.nombre_personal ? [{
+        user_id:currentProfile.id,
+        email:currentProfile.email||'',
+        nombre_personal:currentProfile.nombre_personal,
+        rol:currentProfile.rol||'USUARIO'
+      }] : [])
+    ];
+
+    const seen=new Set();
+    reassignmentProfiles=fallback.filter(x=>{
+      const k=norm(x.nombre_personal||'');
+      if(!k || seen.has(k))return false;
+      seen.add(k);
+      return true;
+    });
+
+    return;
+  }
+
+  const seen=new Set();
+
+  reassignmentProfiles=(data||[])
+    .filter(x=>x.nombre_personal)
+    .filter(x=>{
+      const k=norm(x.nombre_personal||'');
+      if(!k || seen.has(k))return false;
+      seen.add(k);
+      return true;
+    })
+    .sort((a,b)=>(a.nombre_personal||'').localeCompare(b.nombre_personal||'','es'));
+}
+
+function reassignmentNames(){
+  return reassignmentProfiles
+    .map(x=>(x.nombre_personal||'').trim())
+    .filter(Boolean);
 }
 
 async function loadAbogadoProfiles(){
@@ -1190,10 +1241,17 @@ function fillSelects(){
   }
 
   if(el('rqDNuevoResponsable')){
-    const responsables=abogados.length
-      ? abogados
-      : activos.filter(x=>x.tipo==='PERSONAL').map(x=>x.nombre);
-    el('rqDNuevoResponsable').innerHTML=responsables.map(n=>`<option>${esc(n)}</option>`).join('');
+    const responsables=reassignmentNames().length
+      ? reassignmentNames()
+      : (
+          abogados.length
+            ? abogados
+            : activos.filter(x=>x.tipo==='PERSONAL').map(x=>x.nombre)
+        );
+
+    el('rqDNuevoResponsable').innerHTML=
+      '<option value="">— SELECCIONE NUEVO RESPONSABLE —</option>'+
+      responsables.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');
   }
 
   if(el('rqDRetorno')){
@@ -1591,6 +1649,7 @@ async function saveUserProfile(id){
     loadUserProfiles(),
     loadAbogadoProfiles()
   ]);
+  await loadReassignmentProfiles();
   fillSelects();
   renderSidebar();
 
@@ -2732,6 +2791,11 @@ async function saveNewRequest(){
 }
 async function openRequestDetail(id){
   currentRequestId=id;
+
+  // Actualizar la lista de posibles responsables cada vez que se abre
+  // una solicitud, para incluir usuarios creados recientemente.
+  await loadReassignmentProfiles();
+  fillSelects();
   requestSelectedIds.clear();
   el('rqActionStatus').textContent='';
   el('rqDObservacion').value='';
@@ -4147,6 +4211,16 @@ async function editRecord(id,directManagement=false){
 
   const {data:r,error}=await sb.from('expedientes').select('*').eq('id',id).single();
   if(error){serverError(error);return}
+
+  const legacyStates=['PENDIENTE DE ORGANIZAR','TRANSFERIDO','EN NOTIFICACIONES'];
+
+  if(r.estado && legacyStates.includes(r.estado) &&
+     ![...el('fEstado').options].some(o=>o.value===r.estado)){
+    const opt=document.createElement('option');
+    opt.value=r.estado;
+    opt.textContent=r.estado+' (ESTADO ANTERIOR)';
+    el('fEstado').appendChild(opt);
+  }
 
   const map={
     fId:r.id,
