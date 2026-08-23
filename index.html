@@ -272,14 +272,14 @@
           </div>
           <div style="display:flex;align-items:center;gap:10px">
             <span class="pill alert"><span id="statesReturnCount">0</span> pendientes</span>
-            <button class="btn" id="statesReturnToggleBtn" onclick="toggleReturnRequestsInStates()">
-              Ver solicitudes
+            <button class="btn secondary" id="statesReturnToggleBtn" onclick="toggleReturnRequestsInStates()">
+              Ocultar solicitudes
             </button>
           </div>
         </div>
       </div>
 
-      <div id="statesReturnPanel" class="hidden">
+      <div id="statesReturnPanel">
     <div class="kpis">
       <div class="card kpi">
         <div class="label">Solicitudes pendientes</div>
@@ -1092,7 +1092,6 @@ function applyRoleUI(){
   setVisible('peopleBtn',admin);
   setVisible('subjectsBtn',admin);
   setVisible('usersBtn',admin);
-  setVisible('statesReturnAdminBox',admin);
 
   // El buscador para solicitar es útil sobre todo para abogados.
   setVisible('searchRequestBtn',true);
@@ -2138,7 +2137,7 @@ function renderStates(){
     return;
   }
 
-  el('stateGrid').innerHTML=data.map(x=>{
+  const normalCards=data.map(x=>{
     const pct=total?((x.total/total)*100):0;
     const stateArg=x.estado.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
     return `<div class="card state-card ${selectedState===x.estado?'selected':''}">
@@ -2151,6 +2150,25 @@ function renderStates(){
       </div>
     </div>`;
   }).join('');
+
+  const returnName='SOLICITUDES DE DEVOLUCIÓN';
+  const showReturnCard=isAdmin() && (!q || norm(returnName).includes(q));
+
+  const returnCard=showReturnCard
+    ? `<div class="card state-card">
+        <div class="state-name">SOLICITUDES DE DEVOLUCIÓN</div>
+        <div class="state-count">${returnRequestRows.length||0}</div>
+        <div class="state-meta">Pendientes de recepción física</div>
+        <div class="state-progress"><span style="width:${returnRequestRows.length?100:0}%"></span></div>
+        <div style="margin-top:10px">
+          <button class="btn secondary small" onclick="toggleReturnRequestsInStates()">
+            Ver solicitudes
+          </button>
+        </div>
+      </div>`
+    :'';
+
+  el('stateGrid').innerHTML=normalCards+returnCard;
 }
 
 async function loadStateDetail(estado){
@@ -2558,18 +2576,21 @@ async function continueRequestFromSearch(){
 function toggleReturnRequestsInStates(){
   if(!isAdmin())return;
 
-  const panel=el('statesReturnPanel');
+  const box=el('statesReturnAdminBox');
   const btn=el('statesReturnToggleBtn');
-  if(!panel||!btn)return;
+  if(!box)return;
 
-  const opening=panel.classList.contains('hidden');
-  panel.classList.toggle('hidden',!opening);
-  btn.textContent=opening?'Ocultar solicitudes':'Ver solicitudes';
+  const opening=box.classList.contains('hidden');
+  box.classList.toggle('hidden',!opening);
+
+  if(btn){
+    btn.textContent=opening?'Ocultar solicitudes':'Ver solicitudes';
+  }
 
   if(opening){
     loadReturnRequests();
     setTimeout(()=>{
-      panel.scrollIntoView({behavior:'smooth',block:'start'});
+      box.scrollIntoView({behavior:'smooth',block:'start'});
     },50);
   }
 }
@@ -2659,6 +2680,9 @@ async function loadReturnRequests(){
   }
 
   renderReturnRequests();
+
+  // Refrescar la tarjeta dentro de Estados con la cantidad pendiente.
+  if(el('stateGrid'))renderStates();
 }
 
 function renderReturnRequests(){
