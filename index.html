@@ -149,7 +149,7 @@
 <aside class="sidebar">
   <div class="brand">CONTROL DE EXPEDIENTES<small>Base de datos en línea · multiusuario</small></div>
   <div class="side-item active" id="sideAll" onclick="setOwner('')"><span>TODOS</span><span class="badge" id="countAll">0</span></div>
-  <div class="side-title">Personal</div><div id="sidePersonal"></div>
+  <div class="side-title">Usuarios / abogados</div><div id="sidePersonal"></div>
   <div class="side-title">Áreas / etapas / ubicaciones</div><div id="sideAreas"></div>
 </aside>
 <main class="main">
@@ -187,7 +187,7 @@
   <section id="tab-panel">
     <div class="card filters">
       <div class="field"><label>Buscar</label><input id="searchInput" placeholder="Expediente, extensión, R.D., cargo, observación..." oninput="debouncePanel()"></div>
-      <div class="field"><label>Responsable / ubicación</label><select id="ownerSelect" onchange="setOwner(this.value)"></select></div>
+      <div class="field"><label id="ownerFilterLabel">Usuario / abogado</label><select id="ownerSelect" onchange="setOwner(this.value)"></select></div>
       <div style="display:flex;align-items:flex-end"><button class="btn secondary" onclick="setOwner('')">Limpiar</button></div>
     </div>
     <div class="kpis">
@@ -884,7 +884,7 @@ const MASTER=[["MARCELA ALONZO", "PERSONAL"], ["ABRAHAN DAMAS", "PERSONAL"], ["A
 const ASUNTOS_PREDETERMINADOS=["ACCESO A LA INFORMACIÓN", "ANALISIS Y EVALUACIÓN DEL MEMORANDO DE CONCLUSIÓN DEL PROCESO CONTENCIOSO ADMINISTRATIVO, REMITIDO POR LA PROCURADURÍA PÚBLICA (PP)", "ANEXADO DE CÉDULAS DE NOTIFICACIÓN", "ANEXADO DE DOCUMENTOS", "ATENCIÓN A LA DIRECCIÓN DE EXTRACCIÓN PARA CONSUMO HUMANO DIRECTO E INDIRECTO (DECHDI)", "ATENCIÓN A LA DIRECCIÓN DE VIGILANCIA Y CONTROL (DVC) - RD ARCHIVAMIENTO", "ATENCIÓN A LA OFICINA DE CONTROL INTERNO (OCI)", "ATENCIÓN A LA OFICINA GENERAL DE ADMINISTRACIÓN (OGA)", "ATENCIÓN A LA PROCURADURÍA PÚBLICA", "ATENCIÓN AL MINISTERIO PÚBLICO (FISCALÍA)", "ATENCIÓN DE ESCRITOS", "ATENCIÓN DE ESCRITOS REMITIDOS POR EL CONSEJO DE APELACIÓN DE SANCIONES CALIDAD DE PRÉSTAMO (CONAS)", "ATENCIÓN DE QUEJAS", "CADUCIDAD", "COMUNICACIÓN DE LAS SANCIONES A LA DIRECCIÓN GENERAL DE PESCA PARA CONSUMO HUMANO DIRECTO E INDIRECTO (DGPCHDI)", "DESLINDE DE RESPONSABILIDAD", "ELEVACIÓN DEL EXPEDIENTE AL CONSEJO DE APELACIÓN DE SANCIONES (CONAS)", "ENMIENDA", "EVALUACIÓN DE OFICIO", "EVALUACIÓN DE PAGOS POR CONCEPTO DE DECOMISOS", "EVALUACIÓN DEL EXPEDIENTE QUE RETORNA DEL CONSEJO DE APELACIÓN DE SANCIONES (CONAS)", "INTERES PARTICULAR", "LECTURA EN SALA (USUARIOS INTERNOS)", "LECTURA EXPEDIENTE (USUARIOS EXTERNOS)", "NULIDAD DE OFICIO", "PERDIDA DE BENEFICIO", "PETICIÓN ADMINISTRATIVA", "RECOMENDACIÓN DE INICIO", "RECONSIDERACIÓN", "REINCIDENCIAS DEL PAS", "REVISIÓN", "REVISIÓN DEL PROCEDIMIENTO DE EJECUCIÓN COACTIVA (PEC) - OEC", "SECRETARIA TÉCNICA DE LOS ORGANOS INSTRUCTORES (STOI)", "SOLICITUD DE BENEFICIOS", "TRAMITACIÓN DEL PAS (IFIS)", "USO DE LA PALABRA O AUDIENCIA"];
 const STATUSES=['CUSTODIA','EN PRÉSTAMO','DEVUELTO','REASIGNADO','EN TRÁMITE','PENDIENTE DE ORGANIZAR','TRANSFERIDO','EN NOTIFICACIONES'];
 const PAGE_SIZE=200;
-let sb=null, session=null, currentProfile=null, userProfiles=[], summaryRows=[], panelRows=[], allRows=[], historyRows=[], cargosRows=[], selectedCargoNumero='', stateRows=[], stateDetailRows=[], requestRows=[], requestDetailRows=[], requestMovementRows=[], requestSearchRows=[], requestsByLawyerRows=[];
+let sb=null, session=null, currentProfile=null, userProfiles=[], abogadoProfiles=[], summaryRows=[], panelRows=[], allRows=[], historyRows=[], cargosRows=[], selectedCargoNumero='', stateRows=[], stateDetailRows=[], requestRows=[], requestDetailRows=[], requestMovementRows=[], requestSearchRows=[], requestsByLawyerRows=[];
 let catalogo=MASTER.map(([nombre,tipo],i)=>({id:'fallback-'+i,nombre,tipo,activo:true}));
 let asuntosCatalogo=ASUNTOS_PREDETERMINADOS.map((nombre,i)=>({id:'fallback-asunto-'+i,nombre,activo:true}));
 let selectedIds=new Set(), cargoRows=[];
@@ -1009,7 +1009,11 @@ function applyRoleUI(){
     if(b)b.classList.toggle('hidden-by-role',!full);
   });
 
-  if(el('tabBtnPanel'))el('tabBtnPanel').textContent=limited?'Mis expedientes':'Panel por personal';
+  if(el('tabBtnPanel'))el('tabBtnPanel').textContent=limited?'Mis expedientes':'Expedientes por usuario';
+
+  const requestsTabBtn=document.querySelector('[data-tab="requests"]');
+  if(requestsTabBtn)requestsTabBtn.textContent=limited?'Mis solicitudes':'Solicitudes';
+
   if(el('tabBtnHistory')){
     el('tabBtnHistory').textContent='Historial';
     el('tabBtnHistory').classList.toggle('hidden-by-role',limited);
@@ -1017,7 +1021,7 @@ function applyRoleUI(){
 
   if(el('currentRole')){
     const label=currentProfile
-      ? `${currentProfile.rol}${currentProfile.nombre_personal?' · '+currentProfile.nombre_personal:''}`
+      ? `${currentProfile.rol}${currentProfile.nombre_personal?' · '+currentProfile.nombre_personal:''}${limited?' · ESPACIO PERSONAL':''}`
       : '—';
     el('currentRole').textContent=label;
   }
@@ -1067,7 +1071,8 @@ async function afterLogin(){
 
   await Promise.all([
     loadCatalogo(),
-    loadAsuntosCatalogo()
+    loadAsuntosCatalogo(),
+    loadAbogadoProfiles()
   ]);
   fillSelects();
   renderAsuntosDatalist();
@@ -1091,18 +1096,88 @@ async function afterLogin(){
 
   switchTab('panel',document.querySelector('[data-tab="panel"]'));
 }
+
+async function loadAbogadoProfiles(){
+  if(!sb||!session)return;
+
+  const {data,error}=await sb.rpc('listar_usuarios_abogados');
+
+  if(error){
+    console.warn('listar_usuarios_abogados:',error.message);
+    abogadoProfiles=isLimitedUser() && currentProfile?.nombre_personal
+      ? [{
+          user_id:currentProfile.id,
+          email:currentProfile.email||'',
+          nombre_personal:currentProfile.nombre_personal
+        }]
+      : [];
+    return;
+  }
+
+  abogadoProfiles=(data||[])
+    .filter(x=>x.nombre_personal)
+    .sort((a,b)=>(a.nombre_personal||'').localeCompare(b.nombre_personal||'','es'));
+}
+
+function abogadoNames(){
+  return [...new Set(
+    abogadoProfiles
+      .map(x=>(x.nombre_personal||'').trim())
+      .filter(Boolean)
+  )];
+}
+
 function fillSelects(){
   const activos=catalogo.filter(x=>x.activo!==false);
-  el('ownerSelect').innerHTML='<option value="">TODOS</option>'+activos.map(x=>`<option>${esc(x.nombre)}</option>`).join('');
+  const abogados=abogadoNames();
+  const ubicaciones=activos.filter(x=>x.tipo!=='PERSONAL');
+
+  if(el('ownerSelect')){
+    if(isLimitedUser()){
+      el('ownerFilterLabel').textContent='Usuario / abogado';
+      el('ownerSelect').innerHTML=currentProfile?.nombre_personal
+        ? `<option value="${esc(currentProfile.nombre_personal)}">${esc(currentProfile.nombre_personal)}</option>`
+        : '<option value="">SIN PERSONAL ASOCIADO</option>';
+    }else{
+      el('ownerFilterLabel').textContent='Usuario / abogado';
+      el('ownerSelect').innerHTML=
+        '<option value="">TODOS LOS USUARIOS / ABOGADOS</option>'+
+        (abogados.length
+          ? `<optgroup label="USUARIOS / ABOGADOS">${
+              abogados.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('')
+            }</optgroup>`
+          :'')+
+        (ubicaciones.length
+          ? `<optgroup label="ÁREAS / UBICACIONES">${
+              ubicaciones.map(x=>`<option value="${esc(x.nombre)}">${esc(x.nombre)}</option>`).join('')
+            }</optgroup>`
+          :'');
+    }
+  }
+
   el('fResponsable').innerHTML=activos.map(x=>`<option>${esc(x.nombre)}</option>`).join('');
   el('fEstado').innerHTML=STATUSES.map(x=>`<option>${esc(x)}</option>`).join('');
 
   if(el('bResponsable')) el('bResponsable').innerHTML=activos.map(x=>`<option>${esc(x.nombre)}</option>`).join('');
   if(el('bEstado')) el('bEstado').innerHTML=STATUSES.map(x=>`<option>${esc(x)}</option>`).join('');
 
-  if(el('rqSolicitante')) el('rqSolicitante').innerHTML=activos.filter(x=>x.tipo==='PERSONAL').map(x=>`<option>${esc(x.nombre)}</option>`).join('');
-  if(el('rqDNuevoResponsable')) el('rqDNuevoResponsable').innerHTML=activos.filter(x=>x.tipo==='PERSONAL').map(x=>`<option>${esc(x.nombre)}</option>`).join('');
-  if(el('rqDRetorno')) el('rqDRetorno').innerHTML=activos.filter(x=>x.tipo!=='PERSONAL').map(x=>`<option>${esc(x.nombre)}</option>`).join('');
+  if(el('rqSolicitante')){
+    const solicitantes=abogados.length
+      ? abogados
+      : activos.filter(x=>x.tipo==='PERSONAL').map(x=>x.nombre);
+    el('rqSolicitante').innerHTML=solicitantes.map(n=>`<option>${esc(n)}</option>`).join('');
+  }
+
+  if(el('rqDNuevoResponsable')){
+    const responsables=abogados.length
+      ? abogados
+      : activos.filter(x=>x.tipo==='PERSONAL').map(x=>x.nombre);
+    el('rqDNuevoResponsable').innerHTML=responsables.map(n=>`<option>${esc(n)}</option>`).join('');
+  }
+
+  if(el('rqDRetorno')){
+    el('rqDRetorno').innerHTML=ubicaciones.map(x=>`<option>${esc(x.nombre)}</option>`).join('');
+  }
 
   if(currentProfile?.rol==='USUARIO' && el('rqSolicitante')){
     el('rqSolicitante').innerHTML=currentProfile.nombre_personal
@@ -1112,7 +1187,6 @@ function fillSelects(){
     el('rqSolicitante').disabled=true;
   }
 }
-
 
 
 function asuntoActivo(nombre){
@@ -1376,7 +1450,16 @@ async function togglePerson(id,activo){
 }
 async function refreshCatalogoUI(){
   await loadCatalogo();fillSelects();renderSidebar();renderSummary();renderPeople();
-  if(selectedOwner&&!catalogo.some(x=>x.nombre===selectedOwner&&x.activo)){selectedOwner='';el('ownerSelect').value='';page=0;await loadPanel()}
+  if(
+    selectedOwner &&
+    !catalogo.some(x=>x.nombre===selectedOwner&&x.activo) &&
+    !abogadoNames().includes(selectedOwner)
+  ){
+    selectedOwner='';
+    el('ownerSelect').value='';
+    page=0;
+    await loadPanel()
+  }
 }
 
 
@@ -1483,7 +1566,12 @@ async function saveUserProfile(id){
   }
 
   el('usersStatus').textContent='Permisos actualizados.';
-  await loadUserProfiles();
+  await Promise.all([
+    loadUserProfiles(),
+    loadAbogadoProfiles()
+  ]);
+  fillSelects();
+  renderSidebar();
 
   if(id===session.user.id){
     await loadMyProfile();
@@ -1507,11 +1595,32 @@ function summaryFor(name){
 function renderKpis(){const s=summaryFor(selectedOwner);el('kTotal').textContent=s.total;el('kPending').textContent=s.pendientes;el('kLoan').textContent=s.en_prestamo;el('kAlert').textContent=s.alertas}
 function renderSidebar(){
   const activos=catalogo.filter(x=>x.activo!==false);
+  const abogados=abogadoNames();
   const map=new Map(summaryRows.map(x=>[x.responsable,Number(x.pendientes||0)]));
-  const make=x=>`<div class="side-item ${selectedOwner===x.nombre?'active':''}" onclick="setOwner('${x.nombre.replace(/'/g,"\\'")}')"><span>${esc(x.nombre)}</span><span class="badge">${map.get(x.nombre)||0}</span></div>`;
-  el('sidePersonal').innerHTML=activos.filter(x=>x.tipo==='PERSONAL').map(make).join('');
-  el('sideAreas').innerHTML=activos.filter(x=>x.tipo!=='PERSONAL').map(make).join('');
-  el('countAll').textContent=summaryFor('').pendientes;el('sideAll').classList.toggle('active',!selectedOwner)
+
+  const makeName=name=>`<div class="side-item ${selectedOwner===name?'active':''}"
+    onclick="setOwner('${name.replace(/'/g,"\\'")}')">
+      <span>${esc(name)}</span>
+      <span class="badge">${map.get(name)||0}</span>
+    </div>`;
+
+  const makeArea=x=>`<div class="side-item ${selectedOwner===x.nombre?'active':''}"
+    onclick="setOwner('${x.nombre.replace(/'/g,"\\'")}')">
+      <span>${esc(x.nombre)}</span>
+      <span class="badge">${map.get(x.nombre)||0}</span>
+    </div>`;
+
+  el('sidePersonal').innerHTML=abogados.length
+    ? abogados.map(makeName).join('')
+    : '<div class="note" style="padding:8px">No hay usuarios/abogados asociados.</div>';
+
+  el('sideAreas').innerHTML=activos
+    .filter(x=>x.tipo!=='PERSONAL')
+    .map(makeArea)
+    .join('');
+
+  el('countAll').textContent=summaryFor('').pendientes;
+  el('sideAll').classList.toggle('active',!selectedOwner);
 }
 function renderSummary(){
   const activos=catalogo.filter(x=>x.activo!==false);
@@ -1670,8 +1779,10 @@ async function loadPanel(){
   panelRows=await attachLatestMovementToRecords(panelRows);
   panelCount=count||0;
   el('panelTitle').textContent=isLimitedUser()
-    ? `Mis expedientes${currentProfile?.nombre_personal?' · '+currentProfile.nombre_personal:''}`
-    : (selectedOwner?`Expedientes de ${selectedOwner} · ${typeOf(selectedOwner)}`:'Todos los expedientes');
+    ? `Mis expedientes · Espacio personal${currentProfile?.nombre_personal?' · '+currentProfile.nombre_personal:''}`
+    : (selectedOwner
+        ? `Expedientes de ${selectedOwner}${abogadoNames().includes(selectedOwner)?' · USUARIO / ABOGADO':' · '+typeOf(selectedOwner)}`
+        : 'Todos los expedientes');
   el('pageInfo').textContent=`${page+1} · ${panelCount} registros`;
   el('panelTable').innerHTML=recordTable(panelRows,false,'panel')
 }
@@ -3285,9 +3396,12 @@ function recordTable(data,withOwner=false,source='panel'){
   if(!data.length)return '<div class="empty">No hay expedientes registrados para esta selección.</div>';
 
   const limited=isLimitedUser();
-  const ownerHead=withOwner
-    ?'<th>Responsable / ubicación</th>'
-    :(limited?'<th>Responsable actual</th>':'');
+
+  // Siempre mostrar quién tiene actualmente el expediente.
+  // Esto permite que una búsqueda por N° de expediente indique
+  // inmediatamente la persona o ubicación responsable.
+  const showOwner=true;
+  const ownerHead='<th>Responsable actual / ubicación</th>';
 
   const movementHead=limited?'<th>Último movimiento</th>':'';
   const allChecked=data.length>0&&data.every(r=>selectedIds.has(r.id));
@@ -3298,9 +3412,9 @@ function recordTable(data,withOwner=false,source='panel'){
     <td>${r.extension?esc(r.extension):'—'}</td>
     <td>${esc(r.rd)}</td>
 
-    ${withOwner
-      ?`<td>${esc(r.responsable)}</td>`
-      :(limited?`<td><b>${esc(r.responsable||'—')}</b></td>`:'')}
+    ${showOwner
+      ?`<td><b>${esc(r.responsable||'—')}</b></td>`
+      :''}
 
     <td>${rowStatus(r)}</td>
     ${limited?`<td>${movementLabel(r)}</td>`:''}
