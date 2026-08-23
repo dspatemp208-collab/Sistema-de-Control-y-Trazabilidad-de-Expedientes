@@ -17,7 +17,12 @@
 .tabs{display:flex;gap:7px;margin-bottom:14px;flex-wrap:wrap}.tab{border:1px solid var(--line);background:white;color:var(--muted);padding:8px 13px;border-radius:8px;cursor:pointer;font-weight:650}.tab.active{background:var(--navy);color:white;border-color:var(--navy)}
 .card{background:white;border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow)}.filters{display:grid;grid-template-columns:minmax(260px,2fr) minmax(220px,1fr) auto;gap:12px;padding:14px;margin-bottom:14px}
 .field label{display:block;font-size:11px;font-weight:700;color:var(--muted);margin-bottom:5px;text-transform:uppercase}.field input,.field select,.field textarea{width:100%;border:1px solid var(--line);border-radius:7px;padding:9px 10px;font:inherit;background:white}.field textarea{min-height:72px;resize:vertical}
-.kpis{display:grid;grid-template-columns:repeat(4,minmax(150px,1fr));gap:12px;margin-bottom:14px}.kpi{padding:14px 16px}.kpi .label{font-size:11px;text-transform:uppercase;font-weight:800;color:var(--muted)}.kpi .value{font-size:28px;font-weight:800;color:var(--navy);margin-top:4px}.kpi.warn .value{color:#a15c00}.kpi.danger .value{color:#a61b1b}
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(150px,1fr));gap:12px;margin-bottom:14px}
+.kpi-view{margin-top:9px;border:0;background:transparent;padding:0;color:var(--navy);font:inherit;font-size:12px;font-weight:750;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+.kpi-view:hover{opacity:.75}
+.kpi.quick-active{outline:2px solid var(--navy);outline-offset:1px}
+.kpi.quick-active.warn{outline-color:#a15c00}
+.kpi.quick-active.danger{outline-color:#a61b1b}.kpi{padding:14px 16px}.kpi .label{font-size:11px;text-transform:uppercase;font-weight:800;color:var(--muted)}.kpi .value{font-size:28px;font-weight:800;color:var(--navy);margin-top:4px}.kpi.warn .value{color:#a15c00}.kpi.danger .value{color:#a61b1b}
 .table-wrap{overflow:auto}.table-head{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid var(--line);gap:10px}.table-head strong{color:var(--navy)}table{border-collapse:collapse;width:100%;font-size:12px}th{position:sticky;top:0;background:var(--navy);color:white;text-align:left;padding:9px 8px;white-space:nowrap}td{padding:8px;border-bottom:1px solid #edf1f5;vertical-align:top}tr:hover td{background:#f8fbff}
 .pill{display:inline-block;padding:3px 7px;border-radius:999px;font-weight:700;font-size:10px;background:#e8eef6}.pill.loan{background:var(--warn)}.pill.returned{background:var(--ok)}.pill.alert{background:var(--danger);color:#8a1414}.empty{padding:30px;text-align:center;color:var(--muted)}
 .summary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:10px}.summary-card{padding:12px 14px;display:flex;justify-content:space-between;align-items:center;cursor:pointer}.summary-card h3{margin:0;font-size:13px}.summary-card small{display:block;color:var(--muted);margin-top:3px}.summary-num{font-size:22px;font-weight:800;color:var(--navy)}
@@ -188,13 +193,29 @@
     <div class="card filters">
       <div class="field"><label>Buscar</label><input id="searchInput" placeholder="Expediente, extensión, R.D., cargo, observación..." oninput="debouncePanel()"></div>
       <div class="field"><label id="ownerFilterLabel">Usuario / abogado</label><select id="ownerSelect" onchange="setOwner(this.value)"></select></div>
-      <div style="display:flex;align-items:flex-end"><button class="btn secondary" onclick="setOwner('')">Limpiar</button></div>
+      <div style="display:flex;align-items:flex-end"><button class="btn secondary" onclick="clearPanelFilters()">Limpiar</button></div>
     </div>
     <div class="kpis">
-      <div class="card kpi"><div class="label">Total registros</div><div class="value" id="kTotal">0</div></div>
-      <div class="card kpi"><div class="label">Pendientes de devolución</div><div class="value" id="kPending">0</div></div>
-      <div class="card kpi warn"><div class="label">En préstamo</div><div class="value" id="kLoan">0</div></div>
-      <div class="card kpi danger"><div class="label">Alertas > 30 días</div><div class="value" id="kAlert">0</div></div>
+      <div class="card kpi" id="kpiTotalCard">
+        <div class="label">Total registros</div>
+        <div class="value" id="kTotal">0</div>
+        <button class="kpi-view" onclick="showKpiExpedientes('total')">Visualizar expedientes</button>
+      </div>
+      <div class="card kpi" id="kpiPendingCard">
+        <div class="label">Pendientes de devolución</div>
+        <div class="value" id="kPending">0</div>
+        <button class="kpi-view" onclick="showKpiExpedientes('pending')">Visualizar expedientes</button>
+      </div>
+      <div class="card kpi warn" id="kpiLoanCard">
+        <div class="label">En préstamo</div>
+        <div class="value" id="kLoan">0</div>
+        <button class="kpi-view" onclick="showKpiExpedientes('loan')">Visualizar expedientes</button>
+      </div>
+      <div class="card kpi danger" id="kpiAlertCard">
+        <div class="label">Alertas &gt; 30 días</div>
+        <div class="value" id="kAlert">0</div>
+        <button class="kpi-view" onclick="showKpiExpedientes('alert')">Visualizar expedientes</button>
+      </div>
     </div>
     <div class="card table-wrap">
       <div class="table-head"><strong id="panelTitle">Todos los expedientes</strong><div class="pager"><button class="btn secondary small" onclick="changePage(-1)">Anterior</button><span id="pageInfo">1</span><button class="btn secondary small" onclick="changePage(1)">Siguiente</button></div></div>
@@ -889,7 +910,7 @@ let catalogo=MASTER.map(([nombre,tipo],i)=>({id:'fallback-'+i,nombre,tipo,activo
 let asuntosCatalogo=ASUNTOS_PREDETERMINADOS.map((nombre,i)=>({id:'fallback-asunto-'+i,nombre,activo:true}));
 let selectedIds=new Set(), cargoRows=[];
 let recordMode='single', batchCargoHeader=null;
-let selectedOwner='', selectedState='', currentRequestId='', currentRequest=null, requestSelectedIds=new Set(), requestSearchSelectedIds=new Set(), requestDraftItems=[], addToExistingRequestId='', page=0, panelCount=0, allCountValue=0, stateDetailCount=0, panelTimer=null, allTimer=null, historyTimer=null, cargosTimer=null, requestsTimer=null;
+let selectedOwner='', selectedState='', panelQuickFilter='', currentRequestId='', currentRequest=null, requestSelectedIds=new Set(), requestSearchSelectedIds=new Set(), requestDraftItems=[], addToExistingRequestId='', page=0, panelCount=0, allCountValue=0, stateDetailCount=0, panelTimer=null, allTimer=null, historyTimer=null, cargosTimer=null, requestsTimer=null;
 
 function el(id){return document.getElementById(id)}
 function norm(v){return String(v??'').trim().toUpperCase()}
@@ -1592,7 +1613,7 @@ function summaryFor(name){
   const x=summaryRows.find(s=>s.responsable===name);
   return x?{total:Number(x.total||0),pendientes:Number(x.pendientes||0),en_prestamo:Number(x.en_prestamo||0),alertas:Number(x.alertas||0)}:{total:0,pendientes:0,en_prestamo:0,alertas:0}
 }
-function renderKpis(){const s=summaryFor(selectedOwner);el('kTotal').textContent=s.total;el('kPending').textContent=s.pendientes;el('kLoan').textContent=s.en_prestamo;el('kAlert').textContent=s.alertas}
+function renderKpis(){const s=summaryFor(selectedOwner);el('kTotal').textContent=s.total;el('kPending').textContent=s.pendientes;el('kLoan').textContent=s.en_prestamo;el('kAlert').textContent=s.alertas;updateKpiQuickUI()}
 function renderSidebar(){
   const activos=catalogo.filter(x=>x.activo!==false);
   const abogados=abogadoNames();
@@ -1760,34 +1781,145 @@ async function manageExpedienteFromPanel(expedienteId){
   }
 }
 
+
+function alertCutoffDate(){
+  // Devuelve el día correspondiente al 31.er día hábil contado
+  // hacia atrás, porque la alerta se activa cuando rowDays() > 30.
+  const d=new Date();
+  d.setHours(0,0,0,0);
+
+  let count=0;
+  while(count<31){
+    const w=d.getDay();
+    if(w!==0 && w!==6)count++;
+    if(count<31)d.setDate(d.getDate()-1);
+  }
+
+  const y=d.getFullYear();
+  const m=String(d.getMonth()+1).padStart(2,'0');
+  const day=String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
+
+function panelQuickLabel(){
+  return panelQuickFilter==='pending'?'Pendientes de devolución':
+    panelQuickFilter==='loan'?'En préstamo':
+    panelQuickFilter==='alert'?'Alertas > 30 días':
+    '';
+}
+
+function updateKpiQuickUI(){
+  const map={
+    total:'kpiTotalCard',
+    pending:'kpiPendingCard',
+    loan:'kpiLoanCard',
+    alert:'kpiAlertCard'
+  };
+
+  Object.entries(map).forEach(([key,id])=>{
+    if(el(id))el(id).classList.toggle(
+      'quick-active',
+      (panelQuickFilter||'total')===key
+    );
+  });
+}
+
+async function showKpiExpedientes(tipo){
+  panelQuickFilter=tipo==='total'?'':tipo;
+  page=0;
+  updateKpiQuickUI();
+  await loadPanel();
+
+  // Llevar visualmente a la relación de expedientes.
+  el('panelTable')?.scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+async function clearPanelFilters(){
+  panelQuickFilter='';
+  selectedOwner='';
+  page=0;
+
+  if(el('searchInput'))el('searchInput').value='';
+  if(el('ownerSelect'))el('ownerSelect').value='';
+
+  renderSidebar();
+  renderKpis();
+  updateKpiQuickUI();
+  await loadPanel();
+}
+
 async function loadPanel(){
   if(!sb||!session)return;
+
   const from=page*PAGE_SIZE,to=from+PAGE_SIZE-1;
-  let q=sb.from('expedientes').select('*',{count:'exact'}).order('updated_at',{ascending:false}).range(from,to);
+
+  let q=sb
+    .from('expedientes')
+    .select('*',{count:'exact'})
+    .order('updated_at',{ascending:false});
 
   // ARCHIVO/ADMIN filtran por responsable actual.
-  // USUARIO/ABOGADO ve todos los expedientes vinculados a su trazabilidad
-  // (RLS de Supabase decide cuáles puede consultar), incluso si después
-  // fueron reasignados o devueltos.
-  if(selectedOwner && !isLimitedUser())q=q.eq('responsable',selectedOwner);
+  // USUARIO/ABOGADO mantiene el alcance definido por RLS.
+  if(selectedOwner && !isLimitedUser()){
+    q=q.eq('responsable',selectedOwner);
+  }
+
+  // Filtros rápidos de los indicadores.
+  if(panelQuickFilter==='pending'){
+    q=q
+      .is('fecha_devolucion',null)
+      .neq('modalidad','COPIA DIGITAL');
+  }
+
+  if(panelQuickFilter==='loan'){
+    q=q
+      .eq('estado','EN PRÉSTAMO')
+      .is('fecha_devolucion',null)
+      .neq('modalidad','COPIA DIGITAL');
+  }
+
+  if(panelQuickFilter==='alert'){
+    q=q
+      .is('fecha_devolucion',null)
+      .neq('modalidad','COPIA DIGITAL')
+      .not('fecha_entrega','is',null)
+      .lte('fecha_entrega',alertCutoffDate());
+  }
 
   q=applySearch(q,el('searchInput').value);
+  q=q.range(from,to);
+
   const {data,error,count}=await q;
-  if(error){serverError(error);return}
+  if(error){
+    serverError(error);
+    return;
+  }
 
   panelRows=data||[];
   panelRows=await attachLatestMovementToRecords(panelRows);
   panelCount=count||0;
-  el('panelTitle').textContent=isLimitedUser()
+
+  const baseTitle=isLimitedUser()
     ? `Mis expedientes · Espacio personal${currentProfile?.nombre_personal?' · '+currentProfile.nombre_personal:''}`
-    : (selectedOwner
-        ? `Expedientes de ${selectedOwner}${abogadoNames().includes(selectedOwner)?' · USUARIO / ABOGADO':' · '+typeOf(selectedOwner)}`
-        : 'Todos los expedientes');
+    : (
+        selectedOwner
+          ? `Expedientes de ${selectedOwner}${abogadoNames().includes(selectedOwner)?' · USUARIO / ABOGADO':' · '+typeOf(selectedOwner)}`
+          : 'Todos los expedientes'
+      );
+
+  const quickLabel=panelQuickLabel();
+
+  el('panelTitle').textContent=quickLabel
+    ? `${baseTitle} · ${quickLabel}`
+    : baseTitle;
+
   el('pageInfo').textContent=`${page+1} · ${panelCount} registros`;
-  el('panelTable').innerHTML=recordTable(panelRows,false,'panel')
+  el('panelTable').innerHTML=recordTable(panelRows,false,'panel');
+
+  updateKpiQuickUI();
 }
 function debouncePanel(){clearTimeout(panelTimer);page=0;panelTimer=setTimeout(loadPanel,300)}
-async function setOwner(v){if(isLimitedUser())v=currentProfile?.nombre_personal||'';selectedOwner=v||'';page=0;el('ownerSelect').value=selectedOwner;switchTab('panel',document.querySelector('[data-tab="panel"]'));renderSidebar();renderKpis();await loadPanel()}
+async function setOwner(v){if(isLimitedUser())v=currentProfile?.nombre_personal||'';selectedOwner=v||'';panelQuickFilter='';page=0;el('ownerSelect').value=selectedOwner;switchTab('panel',document.querySelector('[data-tab="panel"]'));renderSidebar();renderKpis();updateKpiQuickUI();await loadPanel()}
 async function changePage(d){const next=page+d;if(next<0)return;if(next*PAGE_SIZE>=panelCount&&d>0)return;page=next;await loadPanel()}
 
 
