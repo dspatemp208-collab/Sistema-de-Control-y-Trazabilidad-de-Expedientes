@@ -2092,10 +2092,12 @@ async function loadStates(){
 
   const [
     {data,error},
-    {data:reassignData,error:reassignError}
+    {data:reassignData,error:reassignError},
+    {data:loanData,error:loanError}
   ]=await Promise.all([
     sb.rpc('resumen_estados'),
-    sb.rpc('resumen_reasignaciones')
+    sb.rpc('resumen_reasignaciones'),
+    sb.rpc('resumen_en_prestamo_ultimo_estado')
   ]);
 
   if(error){
@@ -2106,6 +2108,16 @@ async function loadStates(){
   if(reassignError){
     console.warn('resumen_reasignaciones:',reassignError.message);
   }
+
+  if(loanError){
+    console.warn('resumen_en_prestamo_ultimo_estado:',loanError.message);
+  }
+
+  const totalEnPrestamo=Number(
+    Array.isArray(loanData)
+      ? (loanData[0]?.total||0)
+      : (loanData?.total||0)
+  );
 
   const totalReasignaciones=Number(
     Array.isArray(reassignData)
@@ -2124,8 +2136,9 @@ async function loadStates(){
   // La vista unifica:
   // CUSTODIA + DEVUELTO = DEVUELTOS AL ARCHIVO.
   //
-  // REASIGNADO se calcula según el ÚLTIMO MOVIMIENTO de cada expediente.
-  // Solo se incluye si ese último movimiento es una REASIGNACIÓN.
+  // EN PRÉSTAMO y REASIGNADO se calculan según el ÚLTIMO MOVIMIENTO
+  // de cada expediente, para evitar que un expediente figure en dos
+  // estados operativos incompatibles.
   const map=new Map();
 
   ['EN PRÉSTAMO','DEVUELTOS AL ARCHIVO','REASIGNADO','EN TRÁMITE']
@@ -2137,12 +2150,15 @@ async function loadStates(){
         'DEVUELTOS AL ARCHIVO',
         Number(map.get('DEVUELTOS AL ARCHIVO')||0)+Number(x.total||0)
       );
-    }else if(x.estado!=='REASIGNADO'){
+    }else if(x.estado!=='REASIGNADO' && x.estado!=='EN PRÉSTAMO'){
       map.set(x.estado,Number(x.total||0));
     }
   });
 
-  // Expedientes cuyo último movimiento es REASIGNACIÓN.
+  // EN PRÉSTAMO: solo expedientes cuyo ÚLTIMO estado operativo es EN PRÉSTAMO.
+  map.set('EN PRÉSTAMO',totalEnPrestamo);
+
+  // REASIGNADO: solo expedientes cuyo último movimiento es REASIGNACIÓN.
   map.set('REASIGNADO',totalReasignaciones);
 
   stateRows=[...map.entries()]
@@ -2189,7 +2205,9 @@ function renderStates(){
 
     const meta=x.estado==='REASIGNADO'
       ?'Último estado: REASIGNADO'
-      :`${pct.toFixed(1)}% del total`;
+      :x.estado==='EN PRÉSTAMO'
+        ?'Último estado: EN PRÉSTAMO'
+        :`${pct.toFixed(1)}% del total`;
 
     const buttonText='Ver expedientes';
 
@@ -2227,6 +2245,33 @@ function renderStates(){
 async function loadStateDetail(estado){
   selectedState=estado;
   renderStates();
+
+  if(estado==='EN PRÉSTAMO'){
+    el('stateDetailTitle').textContent='Expedientes cuyo último estado es: EN PRÉSTAMO';
+    el('stateDetailTable').innerHTML='<div class="empty">Cargando expedientes en préstamo...</div>';
+
+    const {data,error}=await sb.rpc('listar_expedientes_en_prestamo_ultimo_estado');
+
+    if(error){
+      el('stateDetailTable').innerHTML=`<div class="empty">${esc(error.message)}</div>`;
+      return;
+    }
+
+    stateDetailRows=data||[];
+    stateDetailRows=await attachLatestMovementToRecords(stateDetailRows);
+    stateDetailCount=stateDetailRows.length;
+
+    el('stateDetailCount').textContent=`${stateDetailCount} expedientes`;
+
+    if(!stateDetailRows.length){
+      el('stateDetailTable').innerHTML=
+        '<div class="empty">No hay expedientes cuyo último estado sea EN PRÉSTAMO.</div>';
+      return;
+    }
+
+    el('stateDetailTable').innerHTML=recordTable(stateDetailRows,true,'states');
+    return;
+  }
 
   if(estado==='REASIGNADO'){
     el('stateDetailTitle').textContent='Expedientes cuyo último estado es: REASIGNADO';
