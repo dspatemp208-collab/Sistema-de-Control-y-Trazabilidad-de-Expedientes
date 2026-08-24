@@ -242,6 +242,19 @@
 .excel-result-table th{position:sticky;top:0}
 @media(max-width:760px){.excel-import-summary{grid-template-columns:repeat(2,1fr)}}
 
+
+#fullAccessKpis.owner-user-kpis{
+  grid-template-columns:repeat(5,minmax(145px,1fr))
+}
+@media(max-width:1180px){
+  #fullAccessKpis.owner-user-kpis{grid-template-columns:repeat(3,1fr)}
+}
+@media(max-width:760px){
+  #fullAccessKpis.owner-user-kpis{grid-template-columns:repeat(2,1fr)}
+}
+@media(max-width:520px){
+  #fullAccessKpis.owner-user-kpis{grid-template-columns:1fr}
+}
 </style>
 </head>
 <body>
@@ -295,20 +308,29 @@
     </div>
     <div class="kpis" id="fullAccessKpis">
       <div class="card kpi" id="kpiTotalCard">
-        <div class="label">Total registros</div>
+        <div class="label" id="kTotalLabel">Total registros</div>
         <div class="value" id="kTotal">0</div>
         <button class="kpi-view" onclick="showKpiExpedientes('total')">Visualizar expedientes</button>
       </div>
-      <div class="card kpi" id="kpiPendingCard">
-        <div class="label">Pendientes de devolución</div>
-        <div class="value" id="kPending">0</div>
-        <button class="kpi-view" onclick="showKpiExpedientes('pending')">Visualizar expedientes</button>
-      </div>
+
       <div class="card kpi warn" id="kpiLoanCard">
-        <div class="label">En préstamo</div>
+        <div class="label" id="kLoanLabel">En préstamo</div>
         <div class="value" id="kLoan">0</div>
         <button class="kpi-view" onclick="showKpiExpedientes('loan')">Visualizar expedientes</button>
       </div>
+
+      <div class="card kpi hidden" id="kpiReassignedCard">
+        <div class="label">Reasignados al usuario</div>
+        <div class="value" id="kReassigned">0</div>
+        <button class="kpi-view" onclick="showKpiExpedientes('reassigned')">Visualizar expedientes</button>
+      </div>
+
+      <div class="card kpi" id="kpiPendingCard">
+        <div class="label" id="kPendingLabel">Pendientes de devolución</div>
+        <div class="value" id="kPending">0</div>
+        <button class="kpi-view" onclick="showKpiExpedientes('pending')">Visualizar expedientes</button>
+      </div>
+
       <div class="card kpi danger" id="kpiAlertCard">
         <div class="label">Alertas &gt; 30 días</div>
         <div class="value" id="kAlert">0</div>
@@ -1255,7 +1277,7 @@ let catalogo=MASTER.map(([nombre,tipo],i)=>({id:'fallback-'+i,nombre,tipo,activo
 let asuntosCatalogo=ASUNTOS_PREDETERMINADOS.map((nombre,i)=>({id:'fallback-asunto-'+i,nombre,activo:true}));
 let selectedIds=new Set(), cargoRows=[];
 let recordMode='single', batchCargoHeader=null;
-let selectedOwner='', selectedState='', panelQuickFilter='', userPanelMode='TODOS', userPanelSummary={todos:0,en_prestamo:0,reasignados_por_mi:0,reasignados_a_mi:0,devueltos:0,alertas_30:0}, currentRequestId='', currentRequest=null, requestSelectedIds=new Set(), requestSearchSelectedIds=new Set(), requestDraftItems=[], addToExistingRequestId='', page=0, panelCount=0, allCountValue=0, stateDetailCount=0, panelTimer=null, allTimer=null, historyTimer=null, cargosTimer=null, requestsTimer=null, returnRequestsTimer=null, notificationsPollTimer=null;
+let selectedOwner='', selectedState='', panelQuickFilter='', ownerUserKpiSummary={total_entregados:0,en_prestamo:0,reasignados:0,pendientes_devolucion:0,alertas_30:0}, userPanelMode='TODOS', userPanelSummary={todos:0,en_prestamo:0,reasignados_por_mi:0,reasignados_a_mi:0,devueltos:0,alertas_30:0}, currentRequestId='', currentRequest=null, requestSelectedIds=new Set(), requestSearchSelectedIds=new Set(), requestDraftItems=[], addToExistingRequestId='', page=0, panelCount=0, allCountValue=0, stateDetailCount=0, panelTimer=null, allTimer=null, historyTimer=null, cargosTimer=null, requestsTimer=null, returnRequestsTimer=null, notificationsPollTimer=null;
 
 function el(id){return document.getElementById(id)}
 function norm(v){return String(v??'').trim().toUpperCase()}
@@ -2504,12 +2526,117 @@ async function loadUserPersonalSummary(){
 }
 function summaryFor(name){
   if(!name){
-    return summaryRows.reduce((a,x)=>({total:a.total+Number(x.total||0),pendientes:a.pendientes+Number(x.pendientes||0),en_prestamo:a.en_prestamo+Number(x.en_prestamo||0),alertas:a.alertas+Number(x.alertas||0)}),{total:0,pendientes:0,en_prestamo:0,alertas:0})
+    return summaryRows.reduce(
+      (a,x)=>({
+        total:a.total+Number(x.total||0),
+        pendientes:a.pendientes+Number(x.pendientes||0),
+        en_prestamo:a.en_prestamo+Number(x.en_prestamo||0),
+        alertas:a.alertas+Number(x.alertas||0)
+      }),
+      {total:0,pendientes:0,en_prestamo:0,alertas:0}
+    );
   }
+
   const x=summaryRows.find(s=>s.responsable===name);
-  return x?{total:Number(x.total||0),pendientes:Number(x.pendientes||0),en_prestamo:Number(x.en_prestamo||0),alertas:Number(x.alertas||0)}:{total:0,pendientes:0,en_prestamo:0,alertas:0}
+  return x
+    ?{
+      total:Number(x.total||0),
+      pendientes:Number(x.pendientes||0),
+      en_prestamo:Number(x.en_prestamo||0),
+      alertas:Number(x.alertas||0)
+    }
+    :{total:0,pendientes:0,en_prestamo:0,alertas:0};
 }
-function renderKpis(){const s=summaryFor(selectedOwner);el('kTotal').textContent=s.total;el('kPending').textContent=s.pendientes;el('kLoan').textContent=s.en_prestamo;el('kAlert').textContent=s.alertas;updateKpiQuickUI()}
+
+function selectedOwnerIsUser(){
+  return !!(
+    selectedOwner &&
+    !isLimitedUser() &&
+    abogadoNames().includes(selectedOwner)
+  );
+}
+
+async function loadOwnerUserKpis(name){
+  if(!name||!sb||!session)return;
+
+  const requested=name;
+
+  const {data,error}=await sb.rpc(
+    'resumen_expedientes_por_usuario_admin',
+    {p_nombre:name}
+  );
+
+  // Evitar pintar datos si el usuario cambió mientras cargaba.
+  if(selectedOwner!==requested)return;
+
+  if(error){
+    console.warn('resumen_expedientes_por_usuario_admin:',error.message);
+    if(el('kTotal'))el('kTotal').textContent='—';
+    if(el('kLoan'))el('kLoan').textContent='—';
+    if(el('kReassigned'))el('kReassigned').textContent='—';
+    if(el('kPending'))el('kPending').textContent='—';
+    if(el('kAlert'))el('kAlert').textContent='—';
+    return;
+  }
+
+  const s=Array.isArray(data)?(data[0]||{}):(data||{});
+
+  ownerUserKpiSummary={
+    total_entregados:Number(s.total_entregados||0),
+    en_prestamo:Number(s.en_prestamo||0),
+    reasignados:Number(s.reasignados||0),
+    pendientes_devolucion:Number(s.pendientes_devolucion||0),
+    alertas_30:Number(s.alertas_30||0)
+  };
+
+  el('kTotal').textContent=ownerUserKpiSummary.total_entregados;
+  el('kLoan').textContent=ownerUserKpiSummary.en_prestamo;
+  el('kReassigned').textContent=ownerUserKpiSummary.reasignados;
+  el('kPending').textContent=ownerUserKpiSummary.pendientes_devolucion;
+  el('kAlert').textContent=ownerUserKpiSummary.alertas_30;
+
+  updateKpiQuickUI();
+}
+
+function renderKpis(){
+  const special=selectedOwnerIsUser();
+  const box=el('fullAccessKpis');
+
+  if(box){
+    box.classList.toggle('owner-user-kpis',special);
+  }
+
+  setVisible('kpiReassignedCard',special);
+
+  if(special){
+    el('kTotalLabel').textContent='Total entregados al usuario';
+    el('kLoanLabel').textContent='En préstamo';
+    el('kPendingLabel').textContent='Pendientes de devolución';
+
+    el('kTotal').textContent='…';
+    el('kLoan').textContent='…';
+    el('kReassigned').textContent='…';
+    el('kPending').textContent='…';
+    el('kAlert').textContent='…';
+
+    loadOwnerUserKpis(selectedOwner);
+    updateKpiQuickUI();
+    return;
+  }
+
+  el('kTotalLabel').textContent='Total registros';
+  el('kLoanLabel').textContent='En préstamo';
+  el('kPendingLabel').textContent='Pendientes de devolución';
+
+  const s=summaryFor(selectedOwner);
+  el('kTotal').textContent=s.total;
+  el('kPending').textContent=s.pendientes;
+  el('kLoan').textContent=s.en_prestamo;
+  el('kAlert').textContent=s.alertas;
+
+  updateKpiQuickUI();
+}
+
 function renderSidebar(){
   const activos=catalogo.filter(x=>x.activo!==false);
   const abogados=abogadoNames();
@@ -2773,8 +2900,10 @@ async function showUserCard(tipo){
 }
 
 function panelQuickLabel(){
-  return panelQuickFilter==='pending'?'Pendientes de devolución':
+  return panelQuickFilter==='delivered'?'Total entregados al usuario':
+    panelQuickFilter==='pending'?'Pendientes de devolución':
     panelQuickFilter==='loan'?'En préstamo':
+    panelQuickFilter==='reassigned'?'Reasignados al usuario':
     panelQuickFilter==='alert'?'Alertas > 30 días':
     '';
 }
@@ -2782,21 +2911,34 @@ function panelQuickLabel(){
 function updateKpiQuickUI(){
   const map={
     total:'kpiTotalCard',
+    delivered:'kpiTotalCard',
     pending:'kpiPendingCard',
     loan:'kpiLoanCard',
+    reassigned:'kpiReassignedCard',
     alert:'kpiAlertCard'
   };
 
-  Object.entries(map).forEach(([key,id])=>{
-    if(el(id))el(id).classList.toggle(
-      'quick-active',
-      (panelQuickFilter||'total')===key
-    );
-  });
+  document.querySelectorAll('#fullAccessKpis .kpi').forEach(
+    x=>x.classList.remove('quick-active')
+  );
+
+  let key=panelQuickFilter||'total';
+
+  if(selectedOwnerIsUser() && !panelQuickFilter){
+    key='delivered';
+  }
+
+  const id=map[key]||'kpiTotalCard';
+  if(el(id))el(id).classList.add('quick-active');
 }
 
 async function showKpiExpedientes(tipo){
-  panelQuickFilter=tipo==='total'?'':tipo;
+  if(selectedOwnerIsUser()){
+    panelQuickFilter=tipo==='total'?'delivered':tipo;
+  }else{
+    panelQuickFilter=tipo==='total'?'':tipo;
+  }
+
   page=0;
   updateKpiQuickUI();
   await loadPanel();
@@ -2869,6 +3011,56 @@ async function loadPanel(){
     return;
   }
 
+  // ADMINISTRADOR / ARCHIVO: al seleccionar un USUARIO / ABOGADO,
+  // las tarjetas se calculan por la trazabilidad del usuario, no por
+  // el simple valor de expedientes.estado.
+  if(selectedOwnerIsUser()){
+    const tipoMap={
+      delivered:'ENTREGADOS',
+      loan:'PRESTAMO',
+      reassigned:'REASIGNADOS',
+      pending:'PENDIENTES',
+      alert:'ALERTAS'
+    };
+
+    const tipo=tipoMap[panelQuickFilter||'delivered']||'ENTREGADOS';
+    const search=cleanSearch(el('searchInput')?.value||'');
+
+    const {data,error}=await sb.rpc(
+      'listar_expedientes_por_usuario_admin',
+      {
+        p_nombre:selectedOwner,
+        p_tipo:tipo,
+        p_busqueda:search||null
+      }
+    );
+
+    if(error){
+      el('panelTable').innerHTML=
+        `<div class="empty">${esc(error.message)}</div>`;
+      panelRows=[];
+      panelCount=0;
+      return;
+    }
+
+    const all=data||[];
+    panelCount=all.length;
+    panelRows=all.slice(from,to+1);
+    panelRows=await attachLatestMovementToRecords(panelRows);
+
+    const baseTitle=
+      `Expedientes de ${selectedOwner} · USUARIO / ABOGADO`;
+
+    const quickLabel=panelQuickLabel()||'Total entregados al usuario';
+
+    el('panelTitle').textContent=`${baseTitle} · ${quickLabel}`;
+    el('pageInfo').textContent=`${page+1} · ${panelCount} registros`;
+    el('panelTable').innerHTML=recordTable(panelRows,false,'panel');
+
+    updateKpiQuickUI();
+    return;
+  }
+
   let q=sb
     .from('expedientes')
     .select('*',{count:'exact'})
@@ -2935,7 +3127,25 @@ async function loadPanel(){
   updateKpiQuickUI();
 }
 function debouncePanel(){clearTimeout(panelTimer);page=0;panelTimer=setTimeout(loadPanel,300)}
-async function setOwner(v){if(isLimitedUser())v=currentProfile?.nombre_personal||'';selectedOwner=v||'';panelQuickFilter='';page=0;el('ownerSelect').value=selectedOwner;switchTab('panel',document.querySelector('[data-tab="panel"]'));renderSidebar();renderKpis();updateKpiQuickUI();await loadPanel()}
+async function setOwner(v){
+  if(isLimitedUser())v=currentProfile?.nombre_personal||'';
+
+  selectedOwner=v||'';
+  panelQuickFilter=(
+    selectedOwner &&
+    !isLimitedUser() &&
+    abogadoNames().includes(selectedOwner)
+  )?'delivered':'';
+
+  page=0;
+  el('ownerSelect').value=selectedOwner;
+
+  switchTab('panel',document.querySelector('[data-tab="panel"]'));
+  renderSidebar();
+  renderKpis();
+  updateKpiQuickUI();
+  await loadPanel();
+}
 async function changePage(d){const next=page+d;if(next<0)return;if(next*PAGE_SIZE>=panelCount&&d>0)return;page=next;await loadPanel()}
 
 
