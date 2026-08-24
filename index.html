@@ -255,6 +255,78 @@
 @media(max-width:520px){
   #fullAccessKpis.owner-user-kpis{grid-template-columns:1fr}
 }
+
+.owner-cards-grid{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(250px,1fr));
+  gap:14px
+}
+.owner-user-card{
+  border:1px solid var(--line);
+  border-radius:12px;
+  padding:15px;
+  background:#fff
+}
+.owner-user-card:hover{
+  box-shadow:0 4px 16px rgba(15,23,42,.07)
+}
+.owner-user-name{
+  font-weight:900;
+  color:var(--navy);
+  font-size:14px;
+  margin-bottom:8px
+}
+.owner-user-total{
+  font-size:28px;
+  line-height:1;
+  font-weight:900;
+  color:var(--navy)
+}
+.owner-user-caption{
+  margin-top:5px;
+  font-size:11px;
+  color:var(--muted)
+}
+.owner-user-stats{
+  display:grid;
+  grid-template-columns:repeat(2,1fr);
+  gap:8px 14px;
+  margin-top:12px;
+  padding-top:10px;
+  border-top:1px solid var(--line)
+}
+.owner-user-stat span{
+  display:block;
+  font-size:9px;
+  text-transform:uppercase;
+  color:var(--muted)
+}
+.owner-user-stat b{
+  display:block;
+  margin-top:2px;
+  font-size:18px;
+  color:#0f2747
+}
+.owner-user-actions{
+  display:flex;
+  gap:7px;
+  flex-wrap:wrap;
+  margin-top:12px
+}
+.owner-cards-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  margin-bottom:12px
+}
+@media(max-width:1200px){
+  .owner-cards-grid{grid-template-columns:repeat(2,minmax(230px,1fr))}
+}
+@media(max-width:720px){
+  .owner-cards-grid{grid-template-columns:1fr}
+}
+
 </style>
 </head>
 <body>
@@ -306,6 +378,25 @@
       <div class="field"><label id="ownerFilterLabel">Usuario / abogado</label><select id="ownerSelect" onchange="setOwner(this.value)"></select></div>
       <div style="display:flex;align-items:flex-end"><button class="btn secondary" onclick="clearPanelFilters()">Limpiar</button></div>
     </div>
+
+    <div id="ownerCardsPanel" class="hidden-by-role">
+      <div class="card" style="margin-bottom:14px">
+        <div class="owner-cards-head">
+          <div>
+            <strong>Expedientes por usuario / abogado</strong>
+            <div class="note" style="margin-top:3px">
+              Cada tarjeta resume los expedientes vinculados a ese usuario.
+            </div>
+          </div>
+          <span class="note" id="ownerCardsCount">0 usuarios</span>
+        </div>
+
+        <div id="ownerCardsGrid" class="owner-cards-grid">
+          <div class="empty">Cargando usuarios...</div>
+        </div>
+      </div>
+    </div>
+
     <div class="kpis" id="fullAccessKpis">
       <div class="card kpi" id="kpiTotalCard">
         <div class="label" id="kTotalLabel">Total registros</div>
@@ -375,7 +466,7 @@
         <button class="kpi-view" onclick="showUserCard('ALERTAS_30')">Ver expedientes</button>
       </div>
     </div>
-    <div class="card table-wrap">
+    <div class="card table-wrap" id="panelDetailWrap">
       <div class="table-head"><strong id="panelTitle">Todos los expedientes</strong><div class="pager"><button class="btn secondary small" onclick="changePage(-1)">Anterior</button><span id="pageInfo">1</span><button class="btn secondary small" onclick="changePage(1)">Siguiente</button></div></div>
       <div id="panelTable"><div class="empty">Conectando...</div></div>
     </div>
@@ -1277,7 +1368,7 @@ let catalogo=MASTER.map(([nombre,tipo],i)=>({id:'fallback-'+i,nombre,tipo,activo
 let asuntosCatalogo=ASUNTOS_PREDETERMINADOS.map((nombre,i)=>({id:'fallback-asunto-'+i,nombre,activo:true}));
 let selectedIds=new Set(), cargoRows=[];
 let recordMode='single', batchCargoHeader=null;
-let selectedOwner='', selectedState='', panelQuickFilter='', ownerUserKpiSummary={total_entregados:0,en_prestamo:0,reasignados:0,pendientes_devolucion:0,alertas_30:0}, userPanelMode='TODOS', userPanelSummary={todos:0,en_prestamo:0,reasignados_por_mi:0,reasignados_a_mi:0,devueltos:0,alertas_30:0}, currentRequestId='', currentRequest=null, requestSelectedIds=new Set(), requestSearchSelectedIds=new Set(), requestDraftItems=[], addToExistingRequestId='', page=0, panelCount=0, allCountValue=0, stateDetailCount=0, panelTimer=null, allTimer=null, historyTimer=null, cargosTimer=null, requestsTimer=null, returnRequestsTimer=null, notificationsPollTimer=null;
+let selectedOwner='', selectedState='', panelQuickFilter='', ownerCardsRows=[], ownerUserKpiSummary={total_entregados:0,en_prestamo:0,reasignados:0,pendientes_devolucion:0,alertas_30:0}, userPanelMode='TODOS', userPanelSummary={todos:0,en_prestamo:0,reasignados_por_mi:0,reasignados_a_mi:0,devueltos:0,alertas_30:0}, currentRequestId='', currentRequest=null, requestSelectedIds=new Set(), requestSearchSelectedIds=new Set(), requestDraftItems=[], addToExistingRequestId='', page=0, panelCount=0, allCountValue=0, stateDetailCount=0, panelTimer=null, allTimer=null, historyTimer=null, cargosTimer=null, requestsTimer=null, returnRequestsTimer=null, notificationsPollTimer=null;
 
 function el(id){return document.getElementById(id)}
 
@@ -2564,6 +2655,197 @@ async function loadUserPersonalSummary(){
 
   updateUserPersonalKpiUI();
 }
+
+function ownerCardsMode(){
+  return !!(
+    hasFullAccess() &&
+    !isLimitedUser() &&
+    !selectedOwner
+  );
+}
+
+function updateOwnerPanelVisibility(){
+  const cardsMode=ownerCardsMode();
+
+  if(el('ownerCardsPanel')){
+    el('ownerCardsPanel').classList.toggle('hidden-by-role',!cardsMode);
+    el('ownerCardsPanel').classList.toggle('hidden',!cardsMode);
+  }
+
+  if(el('fullAccessKpis')){
+    el('fullAccessKpis').classList.toggle('hidden',cardsMode);
+  }
+
+  if(el('panelDetailWrap')){
+    el('panelDetailWrap').classList.toggle('hidden',cardsMode);
+  }
+
+  if(el('searchInput')){
+    el('searchInput').placeholder=cardsMode
+      ?'Buscar usuario / abogado...'
+      :'Expediente, extensión, R.D., cargo, observación...';
+  }
+}
+
+async function loadOwnerCards(){
+  if(!ownerCardsMode()){
+    updateOwnerPanelVisibility();
+    return;
+  }
+
+  updateOwnerPanelVisibility();
+
+  const grid=el('ownerCardsGrid');
+  const names=abogadoNames();
+
+  if(el('ownerCardsCount')){
+    el('ownerCardsCount').textContent=
+      `${names.length} usuario${names.length===1?'':'s'}`;
+  }
+
+  if(!names.length){
+    ownerCardsRows=[];
+    if(grid){
+      grid.innerHTML='<div class="empty">No hay usuarios / abogados registrados.</div>';
+    }
+    return;
+  }
+
+  if(grid){
+    grid.innerHTML='<div class="empty">Cargando expedientes por usuario...</div>';
+  }
+
+  const results=await Promise.all(
+    names.map(async nombre=>{
+      const {data,error}=await sb.rpc(
+        'resumen_expedientes_por_usuario_admin',
+        {p_nombre:nombre}
+      );
+
+      if(error){
+        console.warn('resumen usuario '+nombre+':',error.message);
+        return {
+          nombre,
+          error:error.message,
+          total_entregados:0,
+          en_prestamo:0,
+          reasignados:0,
+          pendientes_devolucion:0,
+          alertas_30:0
+        };
+      }
+
+      const s=Array.isArray(data)?(data[0]||{}):(data||{});
+
+      return {
+        nombre,
+        total_entregados:Number(s.total_entregados||0),
+        en_prestamo:Number(s.en_prestamo||0),
+        reasignados:Number(s.reasignados||0),
+        pendientes_devolucion:Number(s.pendientes_devolucion||0),
+        alertas_30:Number(s.alertas_30||0)
+      };
+    })
+  );
+
+  // Si durante la carga ya se eligió a un usuario, no repintar el resumen.
+  if(!ownerCardsMode())return;
+
+  ownerCardsRows=results.sort((a,b)=>
+    Number(b.total_entregados||0)-Number(a.total_entregados||0) ||
+    a.nombre.localeCompare(b.nombre,'es')
+  );
+
+  renderOwnerCards();
+}
+
+function renderOwnerCards(){
+  const grid=el('ownerCardsGrid');
+  if(!grid)return;
+
+  const q=norm(el('searchInput')?.value||'');
+
+  const rows=ownerCardsRows.filter(x=>
+    !q || norm(x.nombre).includes(q)
+  );
+
+  if(el('ownerCardsCount')){
+    el('ownerCardsCount').textContent=
+      `${rows.length} usuario${rows.length===1?'':'s'}`;
+  }
+
+  if(!rows.length){
+    grid.innerHTML='<div class="empty">No hay usuarios que coincidan con la búsqueda.</div>';
+    return;
+  }
+
+  grid.innerHTML=rows.map(x=>`
+    <div class="owner-user-card">
+      <div class="owner-user-name">${esc(x.nombre)}</div>
+
+      <div class="owner-user-total">${Number(x.total_entregados||0)}</div>
+      <div class="owner-user-caption">expedientes entregados al usuario</div>
+
+      <div class="owner-user-stats">
+        <div class="owner-user-stat">
+          <span>En préstamo</span>
+          <b>${Number(x.en_prestamo||0)}</b>
+        </div>
+
+        <div class="owner-user-stat">
+          <span>Reasignados</span>
+          <b>${Number(x.reasignados||0)}</b>
+        </div>
+
+        <div class="owner-user-stat">
+          <span>Pend. devolución</span>
+          <b>${Number(x.pendientes_devolucion||0)}</b>
+        </div>
+
+        <div class="owner-user-stat">
+          <span>Alertas &gt; 30 días</span>
+          <b>${Number(x.alertas_30||0)}</b>
+        </div>
+      </div>
+
+      ${x.error
+        ?`<div class="note" style="margin-top:8px;color:#a61b1b">${esc(x.error)}</div>`
+        :''}
+
+      <div class="owner-user-actions">
+        <button class="btn secondary small"
+          onclick="openOwnerExpedientes('${String(x.nombre).replace(/'/g,"\\'")}','delivered')">
+          Ver expedientes
+        </button>
+
+        ${Number(x.pendientes_devolucion||0)>0
+          ?`<button class="btn small"
+              onclick="openOwnerExpedientes('${String(x.nombre).replace(/'/g,"\\'")}','pending')">
+              Pendientes (${Number(x.pendientes_devolucion||0)})
+            </button>`
+          :''}
+      </div>
+    </div>
+  `).join('');
+}
+
+async function openOwnerExpedientes(nombre,tipo='delivered'){
+  // En la vista de tarjetas el buscador filtra nombres.
+  // Al entrar al detalle debe quedar vacío para no filtrar expedientes.
+  if(el('searchInput'))el('searchInput').value='';
+
+  await setOwner(nombre);
+
+  if(tipo && tipo!=='delivered'){
+    await showKpiExpedientes(tipo);
+  }
+
+  el('fullAccessKpis')?.scrollIntoView({
+    behavior:'smooth',
+    block:'start'
+  });
+}
+
 function summaryFor(name){
   if(!name){
     return summaryRows.reduce(
@@ -2639,6 +2921,12 @@ async function loadOwnerUserKpis(name){
 }
 
 function renderKpis(){
+  updateOwnerPanelVisibility();
+
+  if(ownerCardsMode()){
+    return;
+  }
+
   const special=selectedOwnerIsUser();
   const box=el('fullAccessKpis');
 
@@ -3006,6 +3294,7 @@ async function clearPanelFilters(){
   if(el('ownerSelect'))el('ownerSelect').value='';
 
   renderSidebar();
+  updateOwnerPanelVisibility();
   renderKpis();
   updateKpiQuickUI();
   await loadPanel();
@@ -3015,6 +3304,16 @@ async function loadPanel(){
   if(!sb||!session)return;
 
   const from=page*PAGE_SIZE,to=from+PAGE_SIZE-1;
+
+  // ADMINISTRADOR / ARCHIVO:
+  // en TODOS se muestra una tarjeta por cada usuario / abogado.
+  if(ownerCardsMode()){
+    updateOwnerPanelVisibility();
+    await loadOwnerCards();
+    return;
+  }
+
+  updateOwnerPanelVisibility();
 
   // USUARIO / ABOGADO: panel personal por último movimiento.
   if(isLimitedUser()){
@@ -3166,9 +3465,18 @@ async function loadPanel(){
 
   updateKpiQuickUI();
 }
-function debouncePanel(){clearTimeout(panelTimer);page=0;panelTimer=setTimeout(loadPanel,300)}
+function debouncePanel(){
+  clearTimeout(panelTimer);
+  page=0;
+  panelTimer=setTimeout(()=>{
+    if(ownerCardsMode())renderOwnerCards();
+    else loadPanel();
+  },300)
+}
 async function setOwner(v){
   if(isLimitedUser())v=currentProfile?.nombre_personal||'';
+
+  const wasCardsMode=ownerCardsMode();
 
   selectedOwner=v||'';
   panelQuickFilter=(
@@ -3177,11 +3485,17 @@ async function setOwner(v){
     abogadoNames().includes(selectedOwner)
   )?'delivered':'';
 
+  // El buscador cambia de "usuario" a "expediente".
+  if(wasCardsMode && selectedOwner && el('searchInput')){
+    el('searchInput').value='';
+  }
+
   page=0;
   el('ownerSelect').value=selectedOwner;
 
   switchTab('panel',document.querySelector('[data-tab="panel"]'));
   renderSidebar();
+  updateOwnerPanelVisibility();
   renderKpis();
   updateKpiQuickUI();
   await loadPanel();
