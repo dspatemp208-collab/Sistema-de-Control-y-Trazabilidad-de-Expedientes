@@ -1305,6 +1305,36 @@ function businessDays(start,end){
   return n;
 }
 
+
+function requestNumberParts(v){
+  const s=String(v||'').toUpperCase().trim();
+  const m=s.match(/SOL-(\d+)-(\d{4})/);
+  if(!m)return {year:0,num:0,text:s};
+  return {
+    year:Number(m[2]||0),
+    num:Number(m[1]||0),
+    text:s
+  };
+}
+
+function sortRequestsDesc(rows,field='numero'){
+  return [...(rows||[])].sort((a,b)=>{
+    const A=requestNumberParts(a?.[field]);
+    const B=requestNumberParts(b?.[field]);
+
+    // Primero año mayor, luego correlativo mayor.
+    if(B.year!==A.year)return B.year-A.year;
+    if(B.num!==A.num)return B.num-A.num;
+
+    // Respaldo por fecha de creación / solicitud si existiera.
+    const ad=new Date(a?.created_at||a?.fecha_solicitud||0).getTime()||0;
+    const bd=new Date(b?.created_at||b?.fecha_solicitud||0).getTime()||0;
+    if(bd!==ad)return bd-ad;
+
+    return String(b?.[field]||'').localeCompare(String(a?.[field]||''),'es');
+  });
+}
+
 function fmtTime(v){
   if(!v)return '—';
   const s=String(v).trim();
@@ -3373,7 +3403,7 @@ async function loadStateDetail(estado){
       return;
     }
 
-    const rows=data||[];
+    const rows=sortRequestsDesc(data||[],'solicitud_numero');
     pendingRegisterRows=rows;
     stateDetailCount=rows.length;
     el('stateDetailCount').textContent=`${rows.length} expedientes`;
@@ -3445,7 +3475,7 @@ async function loadStateDetail(estado){
       return;
     }
 
-    const rows=data||[];
+    const rows=sortRequestsDesc(data||[],'solicitud_numero');
     pendingVerifyRows=rows;
     stateDetailCount=rows.length;
     el('stateDetailCount').textContent=`${rows.length} expedientes`;
@@ -5090,7 +5120,7 @@ async function loadRequests(){
     return;
   }
 
-  let allRequestRows=await enrichRequestAttentionTimes(allData||[]);
+  let allRequestRows=sortRequestsDesc(await enrichRequestAttentionTimes(allData||[]),'numero');
 
   if(origin){
     allRequestRows=allRequestRows.filter(
@@ -5148,7 +5178,7 @@ async function loadRequests(){
       return;
     }
 
-    requestRows=await enrichRequestAttentionTimes(data||[]);
+    requestRows=sortRequestsDesc(await enrichRequestAttentionTimes(data||[]),'numero');
 
     if(origin){
       requestRows=requestRows.filter(
