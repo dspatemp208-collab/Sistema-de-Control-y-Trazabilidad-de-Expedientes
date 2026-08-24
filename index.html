@@ -3236,6 +3236,166 @@ function openAddItemsToExistingRequest(){
 
 
 
+
+function closeNewRequestModal(){
+  const modal=el('newRequestModal');
+  if(modal)modal.classList.remove('show');
+  window.__newRequestHeaderDraft=null;
+}
+
+async function saveNewRequest(){
+  const status=el('rqSaveStatus');
+  const btn=el('rqSaveBtn');
+
+  const solicitante=(el('rqSolicitante')?.value||'').trim();
+  const asunto=(el('rqAsunto')?.value||'').trim();
+  const modalidad=(el('rqModalidad')?.value||'').trim();
+  const observacion=(el('rqObservacion')?.value||'').trim();
+
+  let items=[];
+  try{
+    items=JSON.parse(el('newRequestModal')?.dataset.items||'[]');
+  }catch(_){
+    items=[];
+  }
+
+  if(!solicitante){
+    if(status)status.textContent='Seleccione el solicitante.';
+    el('rqSolicitante')?.focus();
+    return;
+  }
+
+  if(!asunto){
+    if(status)status.textContent='Seleccione el asunto.';
+    el('rqAsunto')?.focus();
+    return;
+  }
+
+  if(!validarAsuntoActivo(asunto,'rqSaveStatus','rqAsunto')){
+    return;
+  }
+
+  if(!['PRÉSTAMO','COPIA DIGITAL','LECTURA EN SALA'].includes(modalidad)){
+    if(status)status.textContent='Seleccione una modalidad válida.';
+    el('rqModalidad')?.focus();
+    return;
+  }
+
+  if(!Array.isArray(items)||!items.length){
+    if(status){
+      status.textContent=
+        'Agregue al menos un expediente usando Manual, Buscar en la base o Cargar Excel.';
+    }
+    return;
+  }
+
+  // Limpiar y validar datos antes de enviar.
+  const cleanItems=[];
+  const seen=new Set();
+
+  for(const raw of items){
+    const expediente=(raw?.expediente||'').trim();
+    if(!expediente)continue;
+
+    const key=[
+      expediente.toUpperCase(),
+      (raw?.extension||'').trim().toUpperCase()
+    ].join('|');
+
+    if(seen.has(key))continue;
+    seen.add(key);
+
+    cleanItems.push({
+      id:raw?.id||null,
+      expediente,
+      extension:raw?.extension||null,
+      rd:raw?.rd||null,
+      ultimo_folio:raw?.ultimo_folio||null,
+      observacion:raw?.observacion||null,
+      nuevo:!!raw?.nuevo
+    });
+  }
+
+  if(!cleanItems.length){
+    if(status)status.textContent='No hay expedientes válidos para enviar.';
+    return;
+  }
+
+  if(btn){
+    btn.disabled=true;
+    btn.textContent='Enviando...';
+  }
+
+  if(status){
+    status.textContent=
+      `Registrando solicitud con ${cleanItems.length} expediente(s)...`;
+  }
+
+  try{
+    const {data,error}=await sb.rpc(
+      'crear_solicitud_multiple_mixta_con_modalidad',
+      {
+        p_solicitante:solicitante,
+        p_asunto:asunto,
+        p_observacion:observacion||null,
+        p_modalidad:modalidad,
+        p_items:cleanItems
+      }
+    );
+
+    if(error)throw error;
+
+    selectedIds.clear();
+    updateSelectionUI();
+
+    // Limpiar borradores solo después de guardar correctamente.
+    requestDraftItems=[];
+    requestSearchSelectedIds.clear();
+    requestExcelRows=[];
+    requestExcelMissing=[];
+    requestExcelDuplicates=0;
+
+    closeNewRequestModal();
+
+    showToast(
+      `Solicitud ${data?.numero||''} registrada · `+
+      `${data?.total||cleanItems.length} expediente(s) · ${modalidad}`
+    );
+
+    await loadRequests();
+
+    if(hasFullAccess()){
+      await loadRequestsByLawyer();
+    }
+
+    // Actualizar también panel personal del usuario.
+    if(isLimitedUser()){
+      await loadSummary();
+      await loadPanel();
+    }
+
+    switchTab(
+      'requests',
+      document.querySelector('[data-tab="requests"]')
+    );
+
+  }catch(err){
+    console.error('saveNewRequest:',err);
+
+    if(status){
+      status.textContent=
+        err?.message ||
+        'No se pudo registrar la solicitud. Revise los datos e intente nuevamente.';
+    }
+
+  }finally{
+    if(btn){
+      btn.disabled=false;
+      btn.textContent='Enviar solicitud';
+    }
+  }
+}
+
 async function openNewRequestModal(rowsOverride=null,preserveHeader=false){
   if(!sb||!session){
     alert('Debe iniciar sesión.');
