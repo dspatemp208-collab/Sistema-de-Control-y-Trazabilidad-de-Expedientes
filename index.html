@@ -244,7 +244,7 @@
 
 
 #fullAccessKpis.owner-user-kpis{
-  grid-template-columns:repeat(5,minmax(145px,1fr))
+  grid-template-columns:repeat(3,minmax(180px,1fr))
 }
 @media(max-width:1180px){
   #fullAccessKpis.owner-user-kpis{grid-template-columns:repeat(3,1fr)}
@@ -453,10 +453,19 @@
       </div>
 
       <div class="card kpi" id="kpiPendingCard">
-        <div class="label" id="kPendingLabel">Pendientes de devolución</div>
+        <div class="label" id="kPendingLabel">Pendientes de aceptar devolución</div>
         <div class="value" id="kPending">0</div>
+        <div class="note" style="margin-top:4px">Archivo aún no confirma la recepción física</div>
         <div class="kpi-state-info" id="kPendingStates"></div>
         <button class="kpi-view" onclick="showKpiExpedientes('pending')">Visualizar expedientes</button>
+      </div>
+
+      <div class="card kpi hidden" id="kpiReturnedHistoryCard">
+        <div class="label">Todas las devoluciones del usuario</div>
+        <div class="value" id="kReturnedHistory">0</div>
+        <div class="note" style="margin-top:4px">Devoluciones ya confirmadas por Archivo</div>
+        <div class="kpi-state-info" id="kReturnedHistoryStates"></div>
+        <button class="kpi-view" onclick="showKpiExpedientes('returns')">Visualizar expedientes</button>
       </div>
 
       <div class="card kpi danger" id="kpiAlertCard">
@@ -1406,7 +1415,7 @@ let catalogo=MASTER.map(([nombre,tipo],i)=>({id:'fallback-'+i,nombre,tipo,activo
 let asuntosCatalogo=ASUNTOS_PREDETERMINADOS.map((nombre,i)=>({id:'fallback-asunto-'+i,nombre,activo:true}));
 let selectedIds=new Set(), cargoRows=[];
 let recordMode='single', batchCargoHeader=null;
-let selectedOwner='', selectedState='', panelQuickFilter='', ownerCardsRows=[], ownerUserKpiSummary={total_entregados:0,en_prestamo:0,reasignados:0,pendientes_devolucion:0,alertas_30:0}, userPanelMode='TODOS', userPanelSummary={todos:0,en_prestamo:0,reasignados_por_mi:0,reasignados_a_mi:0,devueltos:0,alertas_30:0}, currentRequestId='', currentRequest=null, requestSelectedIds=new Set(), requestSearchSelectedIds=new Set(), requestDraftItems=[], addToExistingRequestId='', page=0, panelCount=0, allCountValue=0, stateDetailCount=0, panelTimer=null, allTimer=null, historyTimer=null, cargosTimer=null, requestsTimer=null, returnRequestsTimer=null, notificationsPollTimer=null;
+let selectedOwner='', selectedState='', panelQuickFilter='', ownerCardsRows=[], ownerUserKpiSummary={total_custodia:0,en_prestamo:0,reasignados:0,devoluciones_pendientes_aceptacion:0,devoluciones_realizadas:0,alertas_30:0}, userPanelMode='TODOS', userPanelSummary={todos:0,en_prestamo:0,reasignados_por_mi:0,reasignados_a_mi:0,devueltos:0,alertas_30:0}, currentRequestId='', currentRequest=null, requestSelectedIds=new Set(), requestSearchSelectedIds=new Set(), requestDraftItems=[], addToExistingRequestId='', page=0, panelCount=0, allCountValue=0, stateDetailCount=0, panelTimer=null, allTimer=null, historyTimer=null, cargosTimer=null, requestsTimer=null, returnRequestsTimer=null, notificationsPollTimer=null;
 
 function el(id){return document.getElementById(id)}
 
@@ -2756,7 +2765,7 @@ async function loadOwnerCards(){
   const results=await Promise.all(
     names.map(async nombre=>{
       const {data,error}=await sb.rpc(
-        'resumen_expedientes_por_usuario_admin',
+        'resumen_expedientes_por_usuario_admin_v2',
         {p_nombre:nombre}
       );
 
@@ -2765,10 +2774,11 @@ async function loadOwnerCards(){
         return {
           nombre,
           error:error.message,
-          total_entregados:0,
+          total_custodia:0,
           en_prestamo:0,
           reasignados:0,
-          pendientes_devolucion:0,
+          devoluciones_pendientes_aceptacion:0,
+          devoluciones_realizadas:0,
           alertas_30:0
         };
       }
@@ -2777,10 +2787,11 @@ async function loadOwnerCards(){
 
       return {
         nombre,
-        total_entregados:Number(s.total_entregados||0),
+        total_custodia:Number(s.total_custodia||0),
         en_prestamo:Number(s.en_prestamo||0),
         reasignados:Number(s.reasignados||0),
-        pendientes_devolucion:Number(s.pendientes_devolucion||0),
+        devoluciones_pendientes_aceptacion:Number(s.devoluciones_pendientes_aceptacion||0),
+        devoluciones_realizadas:Number(s.devoluciones_realizadas||0),
         alertas_30:Number(s.alertas_30||0)
       };
     })
@@ -2790,7 +2801,7 @@ async function loadOwnerCards(){
   if(!ownerCardsMode())return;
 
   ownerCardsRows=results.sort((a,b)=>
-    Number(b.total_entregados||0)-Number(a.total_entregados||0) ||
+    Number(b.total_custodia||0)-Number(a.total_custodia||0) ||
     a.nombre.localeCompare(b.nombre,'es')
   );
 
@@ -2821,7 +2832,7 @@ function renderOwnerCards(){
     <div class="owner-user-card">
       <div class="owner-user-name">${esc(x.nombre)}</div>
 
-      <div class="owner-user-total">${Number(x.total_entregados||0)}</div>
+      <div class="owner-user-total">${Number(x.total_custodia||0)}</div>
       <div class="owner-user-caption">expedientes actualmente en custodia</div>
 
       <div class="owner-user-stats">
@@ -2836,8 +2847,13 @@ function renderOwnerCards(){
         </div>
 
         <div class="owner-user-stat">
-          <span>Pend. devolución</span>
-          <b>${Number(x.pendientes_devolucion||0)}</b>
+          <span>Pend. aceptar devolución</span>
+          <b>${Number(x.devoluciones_pendientes_aceptacion||0)}</b>
+        </div>
+
+        <div class="owner-user-stat">
+          <span>Devoluciones realizadas</span>
+          <b>${Number(x.devoluciones_realizadas||0)}</b>
         </div>
 
         <div class="owner-user-stat">
@@ -2856,10 +2872,17 @@ function renderOwnerCards(){
           Ver expedientes
         </button>
 
-        ${Number(x.pendientes_devolucion||0)>0
+        ${Number(x.devoluciones_pendientes_aceptacion||0)>0
           ?`<button class="btn small"
               onclick="openOwnerExpedientes('${String(x.nombre).replace(/'/g,"\\'")}','pending')">
-              Pendientes (${Number(x.pendientes_devolucion||0)})
+              Por aceptar (${Number(x.devoluciones_pendientes_aceptacion||0)})
+            </button>`
+          :''}
+
+        ${Number(x.devoluciones_realizadas||0)>0
+          ?`<button class="btn secondary small"
+              onclick="openOwnerExpedientes('${String(x.nombre).replace(/'/g,"\\'")}','returns')">
+              Devoluciones (${Number(x.devoluciones_realizadas||0)})
             </button>`
           :''}
       </div>
@@ -2964,7 +2987,7 @@ function renderKpiStateSummary(id,rows){
 }
 
 function setOwnerKpiStatesLoading(){
-  ['kTotalStates','kLoanStates','kReassignedStates','kPendingStates','kAlertStates']
+  ['kTotalStates','kLoanStates','kReassignedStates','kPendingStates','kReturnedHistoryStates','kAlertStates']
     .forEach(id=>{
       if(el(id)){
         el(id).innerHTML=
@@ -2974,7 +2997,7 @@ function setOwnerKpiStatesLoading(){
 }
 
 function clearOwnerKpiStateSummaries(){
-  ['kTotalStates','kLoanStates','kReassignedStates','kPendingStates','kAlertStates']
+  ['kTotalStates','kLoanStates','kReassignedStates','kPendingStates','kReturnedHistoryStates','kAlertStates']
     .forEach(id=>{
       if(el(id))el(id).innerHTML='';
     });
@@ -2986,6 +3009,7 @@ async function loadOwnerUserKpiStates(name,requestedName){
     ['PRESTAMO','kLoanStates'],
     ['REASIGNADOS','kReassignedStates'],
     ['PENDIENTES','kPendingStates'],
+    ['DEVOLUCIONES','kReturnedHistoryStates'],
     ['ALERTAS','kAlertStates']
   ];
 
@@ -3048,7 +3072,7 @@ async function loadOwnerUserKpis(name){
   const requested=name;
 
   const {data,error}=await sb.rpc(
-    'resumen_expedientes_por_usuario_admin',
+    'resumen_expedientes_por_usuario_admin_v2',
     {p_nombre:name}
   );
 
@@ -3061,8 +3085,9 @@ async function loadOwnerUserKpis(name){
     if(el('kLoan'))el('kLoan').textContent='—';
     if(el('kReassigned'))el('kReassigned').textContent='—';
     if(el('kPending'))el('kPending').textContent='—';
+    if(el('kReturnedHistory'))el('kReturnedHistory').textContent='—';
     if(el('kAlert'))el('kAlert').textContent='—';
-    ['kTotalStates','kLoanStates','kReassignedStates','kPendingStates','kAlertStates']
+    ['kTotalStates','kLoanStates','kReassignedStates','kPendingStates','kReturnedHistoryStates','kAlertStates']
       .forEach(id=>{
         if(el(id))el(id).innerHTML='<span class="state-summary-title">Estados:</span> no disponible';
       });
@@ -3072,17 +3097,19 @@ async function loadOwnerUserKpis(name){
   const s=Array.isArray(data)?(data[0]||{}):(data||{});
 
   ownerUserKpiSummary={
-    total_entregados:Number(s.total_entregados||0),
+    total_custodia:Number(s.total_custodia||0),
     en_prestamo:Number(s.en_prestamo||0),
     reasignados:Number(s.reasignados||0),
-    pendientes_devolucion:Number(s.pendientes_devolucion||0),
+    devoluciones_pendientes_aceptacion:Number(s.devoluciones_pendientes_aceptacion||0),
+    devoluciones_realizadas:Number(s.devoluciones_realizadas||0),
     alertas_30:Number(s.alertas_30||0)
   };
 
-  el('kTotal').textContent=ownerUserKpiSummary.total_entregados;
+  el('kTotal').textContent=ownerUserKpiSummary.total_custodia;
   el('kLoan').textContent=ownerUserKpiSummary.en_prestamo;
   el('kReassigned').textContent=ownerUserKpiSummary.reasignados;
-  el('kPending').textContent=ownerUserKpiSummary.pendientes_devolucion;
+  el('kPending').textContent=ownerUserKpiSummary.devoluciones_pendientes_aceptacion;
+  el('kReturnedHistory').textContent=ownerUserKpiSummary.devoluciones_realizadas;
   el('kAlert').textContent=ownerUserKpiSummary.alertas_30;
 
   setOwnerKpiStatesLoading();
@@ -3106,16 +3133,18 @@ function renderKpis(){
   }
 
   setVisible('kpiReassignedCard',special);
+  setVisible('kpiReturnedHistoryCard',special);
 
   if(special){
     el('kTotalLabel').textContent='Total en custodia del usuario';
     el('kLoanLabel').textContent='En préstamo';
-    el('kPendingLabel').textContent='Pendientes de devolución';
+    el('kPendingLabel').textContent='Pendientes de aceptar devolución';
 
     el('kTotal').textContent='…';
     el('kLoan').textContent='…';
     el('kReassigned').textContent='…';
     el('kPending').textContent='…';
+    el('kReturnedHistory').textContent='…';
     el('kAlert').textContent='…';
     setOwnerKpiStatesLoading();
 
@@ -3402,7 +3431,9 @@ async function showUserCard(tipo){
 
 function panelQuickLabel(){
   return panelQuickFilter==='custody'?'Total en custodia del usuario':
-    panelQuickFilter==='pending'?'Pendientes de devolución':
+    panelQuickFilter==='pending'
+      ?(selectedOwnerIsUser()?'Pendientes de aceptar devolución':'Pendientes de devolución'):
+    panelQuickFilter==='returns'?'Todas las devoluciones del usuario':
     panelQuickFilter==='loan'?'En préstamo':
     panelQuickFilter==='reassigned'?'Reasignados al usuario':
     panelQuickFilter==='alert'?'Alertas > 30 días':
@@ -3414,6 +3445,7 @@ function updateKpiQuickUI(){
     total:'kpiTotalCard',
     custody:'kpiTotalCard',
     pending:'kpiPendingCard',
+    returns:'kpiReturnedHistoryCard',
     loan:'kpiLoanCard',
     reassigned:'kpiReassignedCard',
     alert:'kpiAlertCard'
@@ -3532,6 +3564,7 @@ async function loadPanel(){
       loan:'PRESTAMO',
       reassigned:'REASIGNADOS',
       pending:'PENDIENTES',
+      returns:'DEVOLUCIONES',
       alert:'ALERTAS'
     };
 
