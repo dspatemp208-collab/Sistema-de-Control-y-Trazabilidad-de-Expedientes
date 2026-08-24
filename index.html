@@ -376,6 +376,98 @@
   color:#173f6b
 }
 
+
+/* ===== Tarjetas de expediente por usuario: versión mejorada ===== */
+#fullAccessKpis.owner-user-kpis .kpi.user-status-card{
+  position:relative;
+  cursor:pointer;
+  min-height:185px;
+  transition:transform .12s ease,box-shadow .12s ease,border-color .12s ease;
+  overflow:hidden
+}
+#fullAccessKpis.owner-user-kpis .kpi.user-status-card:hover{
+  transform:translateY(-1px);
+  box-shadow:0 6px 18px rgba(15,39,71,.09)
+}
+#fullAccessKpis.owner-user-kpis .kpi.user-status-card:focus-visible{
+  outline:2px solid #173f6b;
+  outline-offset:2px
+}
+#fullAccessKpis.owner-user-kpis .kpi.user-status-card::before{
+  content:"";
+  position:absolute;
+  left:0;
+  top:0;
+  width:5px;
+  height:100%;
+  background:#bdc8d7
+}
+#fullAccessKpis.owner-user-kpis .kpi.card-custody::before{background:#234f7d}
+#fullAccessKpis.owner-user-kpis .kpi.card-loan::before{background:#b16b00}
+#fullAccessKpis.owner-user-kpis .kpi.card-reassigned::before{background:#7151a8}
+#fullAccessKpis.owner-user-kpis .kpi.card-return-pending::before{background:#b54848}
+#fullAccessKpis.owner-user-kpis .kpi.card-returned::before{background:#3c7b5a}
+#fullAccessKpis.owner-user-kpis .kpi.card-alert::before{background:#a71919}
+
+.user-card-caption{
+  margin-top:7px;
+  font-size:11px;
+  line-height:1.35;
+  color:var(--muted);
+  min-height:30px
+}
+.user-card-breakdown{
+  margin-top:10px;
+  display:flex;
+  gap:6px;
+  flex-wrap:wrap
+}
+.user-card-breakdown .kpi-state-chip{
+  margin:0
+}
+.user-card-footer{
+  margin-top:auto;
+  padding-top:12px
+}
+#fullAccessKpis.owner-user-kpis .kpi.user-status-card{
+  display:flex;
+  flex-direction:column
+}
+#fullAccessKpis.owner-user-kpis .kpi.user-status-card .kpi-view{
+  align-self:flex-start;
+  border:0;
+  background:transparent;
+  padding:0;
+  font-size:11px;
+  font-weight:800;
+  color:#173f6b;
+  text-decoration:none;
+  cursor:pointer
+}
+#fullAccessKpis.owner-user-kpis .kpi.user-status-card .kpi-view:hover{
+  text-decoration:underline
+}
+#fullAccessKpis.owner-user-kpis .kpi.quick-active{
+  box-shadow:0 0 0 2px #173f6b inset
+}
+.owner-context-banner{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  margin-bottom:10px;
+  padding:9px 12px;
+  border:1px solid var(--line);
+  border-radius:9px;
+  background:#f8fafc;
+  font-size:11px;
+  color:var(--muted)
+}
+.owner-context-banner b{color:var(--navy)}
+@media(max-width:760px){
+  #fullAccessKpis.owner-user-kpis .kpi.user-status-card{min-height:160px}
+}
+
 </style>
 </head>
 <body>
@@ -446,51 +538,83 @@
       </div>
     </div>
 
+    <div id="ownerSelectedContext" class="owner-context-banner hidden">
+      <span>Vista actual: <b id="ownerSelectedContextName">—</b></span>
+      <button class="btn secondary small" type="button" onclick="clearPanelFilters()">← Ver todos los usuarios</button>
+    </div>
+
     <div class="kpis" id="fullAccessKpis">
-      <div class="card kpi" id="kpiTotalCard">
-        <div class="label" id="kTotalLabel">Total registros</div>
+      <div class="card kpi user-status-card card-custody" id="kpiTotalCard"
+           role="button" tabindex="0"
+           onclick="showKpiExpedientes('total')"
+           onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();showKpiExpedientes('total')}">
+        <div class="label" id="kTotalLabel">Total en custodia del usuario</div>
         <div class="value" id="kTotal">0</div>
-        <div class="note" style="margin-top:4px">Expedientes que actualmente permanecen con el usuario</div>
-        <div class="kpi-state-info" id="kTotalStates"></div>
-        <button class="kpi-view" onclick="showKpiExpedientes('total')">Visualizar expedientes</button>
+        <div class="user-card-caption">Expedientes que actualmente permanecen bajo responsabilidad del usuario.</div>
+        <div class="user-card-breakdown" id="kTotalStates"></div>
+        <div class="user-card-footer">
+          <button class="kpi-view" type="button" onclick="event.stopPropagation();showKpiExpedientes('total')">Ver expedientes →</button>
+        </div>
       </div>
 
-      <div class="card kpi warn" id="kpiLoanCard">
+      <div class="card kpi user-status-card card-loan" id="kpiLoanCard"
+           role="button" tabindex="0"
+           onclick="showKpiExpedientes('loan')"
+           onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();showKpiExpedientes('loan')}">
         <div class="label" id="kLoanLabel">En préstamo</div>
         <div class="value" id="kLoan">0</div>
-        <div class="kpi-state-info" id="kLoanStates"></div>
-        <button class="kpi-view" onclick="showKpiExpedientes('loan')">Visualizar expedientes</button>
+        <div class="user-card-caption">Entregados directamente por Archivo y todavía bajo custodia del usuario.</div>
+        <div class="user-card-footer">
+          <button class="kpi-view" type="button" onclick="event.stopPropagation();showKpiExpedientes('loan')">Ver expedientes →</button>
+        </div>
       </div>
 
-      <div class="card kpi hidden" id="kpiReassignedCard">
+      <div class="card kpi user-status-card card-reassigned hidden" id="kpiReassignedCard"
+           role="button" tabindex="0"
+           onclick="showKpiExpedientes('reassigned')"
+           onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();showKpiExpedientes('reassigned')}">
         <div class="label">Reasignados al usuario</div>
         <div class="value" id="kReassigned">0</div>
-        <div class="note" style="margin-top:4px">Reasignados que aún permanecen con el usuario</div>
-        <div class="kpi-state-info" id="kReassignedStates"></div>
-        <button class="kpi-view" onclick="showKpiExpedientes('reassigned')">Visualizar expedientes</button>
+        <div class="user-card-caption">Recibidos mediante reasignación y que todavía permanecen con el usuario.</div>
+        <div class="user-card-footer">
+          <button class="kpi-view" type="button" onclick="event.stopPropagation();showKpiExpedientes('reassigned')">Ver expedientes →</button>
+        </div>
       </div>
 
-      <div class="card kpi" id="kpiPendingCard">
+      <div class="card kpi user-status-card card-return-pending" id="kpiPendingCard"
+           role="button" tabindex="0"
+           onclick="showKpiExpedientes('pending')"
+           onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();showKpiExpedientes('pending')}">
         <div class="label" id="kPendingLabel">Pendientes de aceptar devolución</div>
         <div class="value" id="kPending">0</div>
-        <div class="note" style="margin-top:4px">Archivo aún no confirma la recepción física</div>
-        <div class="kpi-state-info" id="kPendingStates"></div>
-        <button class="kpi-view" onclick="showKpiExpedientes('pending')">Visualizar expedientes</button>
+        <div class="user-card-caption">El usuario solicitó devolverlos; Archivo todavía no confirma la recepción física.</div>
+        <div class="user-card-footer">
+          <button class="kpi-view" type="button" onclick="event.stopPropagation();showKpiExpedientes('pending')">Ver expedientes →</button>
+        </div>
       </div>
 
-      <div class="card kpi hidden" id="kpiReturnedHistoryCard">
-        <div class="label">Todas las devoluciones del usuario</div>
+      <div class="card kpi user-status-card card-returned hidden" id="kpiReturnedHistoryCard"
+           role="button" tabindex="0"
+           onclick="showKpiExpedientes('returns')"
+           onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();showKpiExpedientes('returns')}">
+        <div class="label">Devueltos al Archivo</div>
         <div class="value" id="kReturnedHistory">0</div>
-        <div class="note" style="margin-top:4px">Devoluciones ya confirmadas por Archivo</div>
-        <div class="kpi-state-info" id="kReturnedHistoryStates"></div>
-        <button class="kpi-view" onclick="showKpiExpedientes('returns')">Visualizar expedientes</button>
+        <div class="user-card-caption">Histórico de devoluciones cuya recepción ya fue confirmada por Archivo.</div>
+        <div class="user-card-footer">
+          <button class="kpi-view" type="button" onclick="event.stopPropagation();showKpiExpedientes('returns')">Ver expedientes →</button>
+        </div>
       </div>
 
-      <div class="card kpi danger" id="kpiAlertCard">
+      <div class="card kpi user-status-card card-alert danger" id="kpiAlertCard"
+           role="button" tabindex="0"
+           onclick="showKpiExpedientes('alert')"
+           onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();showKpiExpedientes('alert')}">
         <div class="label">Alertas &gt; 30 días</div>
         <div class="value" id="kAlert">0</div>
-        <div class="kpi-state-info" id="kAlertStates"></div>
-        <button class="kpi-view" onclick="showKpiExpedientes('alert')">Visualizar expedientes</button>
+        <div class="user-card-caption">Expedientes todavía en custodia y sin movimiento por más de 30 días hábiles.</div>
+        <div class="user-card-footer">
+          <button class="kpi-view" type="button" onclick="event.stopPropagation();showKpiExpedientes('alert')">Ver expedientes →</button>
+        </div>
       </div>
     </div>
 
@@ -2235,6 +2359,20 @@ function fillSelects(){
             }</optgroup>`
           :'');
     }
+
+    // Mantener coherencia entre lo que muestra el selector y la vista cargada.
+    // Evita que aparezca "TODOS" mientras selectedOwner sigue apuntando a un usuario.
+    if(!isLimitedUser()){
+      const values=[...el('ownerSelect').options].map(o=>o.value);
+      if(selectedOwner && values.includes(selectedOwner)){
+        el('ownerSelect').value=selectedOwner;
+      }else if(selectedOwner && !values.includes(selectedOwner)){
+        selectedOwner='';
+        el('ownerSelect').value='';
+      }else{
+        el('ownerSelect').value='';
+      }
+    }
   }
 
   el('fResponsable').innerHTML=activos.map(x=>`<option>${esc(x.nombre)}</option>`).join('');
@@ -2731,6 +2869,15 @@ function ownerCardsMode(){
 
 function updateOwnerPanelVisibility(){
   const cardsMode=ownerCardsMode();
+  const individualUser=selectedOwnerIsUser();
+
+  if(el('ownerSelectedContext')){
+    el('ownerSelectedContext').classList.toggle('hidden',!individualUser);
+  }
+  if(el('ownerSelectedContextName')){
+    el('ownerSelectedContextName').textContent=
+      individualUser ? selectedOwner : '—';
+  }
 
   if(el('ownerCardsPanel')){
     el('ownerCardsPanel').classList.toggle('hidden-by-role',!cardsMode);
@@ -3005,85 +3152,43 @@ function renderKpiStateSummary(id,rows){
 }
 
 function setOwnerKpiStatesLoading(){
-  ['kTotalStates','kLoanStates','kReassignedStates','kPendingStates','kReturnedHistoryStates','kAlertStates']
-    .forEach(id=>{
-      if(el(id)){
-        el(id).innerHTML=
-          '<span class="state-summary-title">Estados:</span> cargando...';
-      }
-    });
+  if(el('kTotalStates')){
+    el('kTotalStates').innerHTML=
+      '<span class="state-summary-title">Estados:</span> cargando...';
+  }
 }
 
 function clearOwnerKpiStateSummaries(){
-  ['kTotalStates','kLoanStates','kReassignedStates','kPendingStates','kReturnedHistoryStates','kAlertStates']
-    .forEach(id=>{
-      if(el(id))el(id).innerHTML='';
-    });
+  if(el('kTotalStates'))el('kTotalStates').innerHTML='';
 }
 
 async function loadOwnerUserKpiStates(name,requestedName){
-  const config=[
-    ['CUSTODIA','kTotalStates'],
-    ['PRESTAMO','kLoanStates'],
-    ['REASIGNADOS','kReassignedStates'],
-    ['PENDIENTES','kPendingStates'],
-    ['DEVOLUCIONES','kReturnedHistoryStates'],
-    ['ALERTAS','kAlertStates']
-  ];
-
-  const responses=await Promise.all(
-    config.map(async ([tipo,id])=>{
-      const {data,error}=await sb.rpc(
-        'listar_expedientes_por_usuario_admin',
-        {
-          p_nombre:name,
-          p_tipo:tipo,
-          p_busqueda:null
-        }
-      );
-
-      return {
-        tipo,
-        id,
-        rows:data||[],
-        error
-      };
-    })
+  const {data,error}=await sb.rpc(
+    'listar_expedientes_por_usuario_admin',
+    {
+      p_nombre:name,
+      p_tipo:'CUSTODIA',
+      p_busqueda:null
+    }
   );
 
-  // El usuario seleccionado pudo cambiar mientras cargaban las consultas.
   if(selectedOwner!==requestedName)return;
 
-  // Obtener el último movimiento una sola vez para todos los expedientes.
-  const unique=new Map();
-
-  responses.forEach(r=>{
-    if(r.error)return;
-    (r.rows||[]).forEach(x=>{
-      if(x?.id&&!unique.has(x.id))unique.set(x.id,x);
-    });
-  });
-
-  const enriched=await attachLatestMovementToRecords([...unique.values()]);
-  const enrichedMap=new Map(enriched.map(x=>[x.id,x]));
-
-  if(selectedOwner!==requestedName)return;
-
-  responses.forEach(r=>{
-    if(r.error){
-      console.warn(`${r.tipo}:`,r.error.message);
-      if(el(r.id)){
-        el(r.id).innerHTML=
-          '<span class="state-summary-title">Estados:</span> no disponible';
-      }
-      return;
+  if(error){
+    console.warn('CUSTODIA:',error.message);
+    if(el('kTotalStates')){
+      el('kTotalStates').innerHTML=
+        '<span class="state-summary-title">Estados:</span> no disponible';
     }
+    return;
+  }
 
-    const rows=(r.rows||[]).map(x=>enrichedMap.get(x.id)||x);
-    renderKpiStateSummary(r.id,rows);
-  });
+  const enriched=await attachLatestMovementToRecords(data||[]);
+
+  if(selectedOwner!==requestedName)return;
+
+  renderKpiStateSummary('kTotalStates',enriched);
 }
-
 async function loadOwnerUserKpis(name){
   if(!name||!sb||!session)return;
 
@@ -3451,7 +3556,7 @@ function panelQuickLabel(){
   return panelQuickFilter==='custody'?'Total en custodia del usuario':
     panelQuickFilter==='pending'
       ?(selectedOwnerIsUser()?'Pendientes de aceptar devolución':'Pendientes de devolución'):
-    panelQuickFilter==='returns'?'Todas las devoluciones del usuario':
+    panelQuickFilter==='returns'?'Devueltos al Archivo':
     panelQuickFilter==='loan'?'En préstamo':
     panelQuickFilter==='reassigned'?'Reasignados al usuario':
     panelQuickFilter==='alert'?'Alertas > 30 días':
@@ -3612,7 +3717,7 @@ async function loadPanel(){
     panelRows=await attachLatestMovementToRecords(panelRows);
 
     const baseTitle=
-      `Expedientes de ${selectedOwner} · USUARIO / ABOGADO`;
+      `Expedientes de ${selectedOwner}`;
 
     const quickLabel=panelQuickLabel()||'Total en custodia del usuario';
 
@@ -3702,7 +3807,13 @@ async function setOwner(v){
 
   const wasCardsMode=ownerCardsMode();
 
-  selectedOwner=v||'';
+  selectedOwner=(v||'').trim();
+
+  // Valor vacío = TODOS LOS USUARIOS / ABOGADOS.
+  if(!selectedOwner){
+    panelQuickFilter='';
+  }
+
   panelQuickFilter=(
     selectedOwner &&
     !isLimitedUser() &&
