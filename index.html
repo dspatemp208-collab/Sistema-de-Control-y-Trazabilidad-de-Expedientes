@@ -629,6 +629,58 @@
   #ownerDetailFilters{grid-template-columns:1fr}
 }
 
+
+.master-search-grid{
+  display:grid;
+  grid-template-columns:minmax(320px,1fr) auto;
+  gap:10px;
+  align-items:end
+}
+.master-advanced{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(180px,1fr)) auto auto;
+  gap:10px;
+  align-items:end;
+  margin-top:10px;
+  padding-top:10px;
+  border-top:1px solid var(--line)
+}
+.master-actions{
+  display:flex;
+  gap:7px;
+  flex-wrap:wrap;
+  align-items:end
+}
+.master-table-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  flex-wrap:wrap
+}
+.master-page-controls{
+  display:flex;
+  align-items:center;
+  gap:7px;
+  flex-wrap:wrap
+}
+.master-page-info{
+  font-size:11px;
+  color:var(--muted);
+  white-space:nowrap
+}
+.master-summary{
+  margin-top:8px;
+  font-size:11px;
+  color:var(--muted)
+}
+@media(max-width:1000px){
+  .master-advanced{grid-template-columns:repeat(2,1fr)}
+}
+@media(max-width:700px){
+  .master-search-grid,.master-advanced{grid-template-columns:1fr}
+}
+
 </style>
 </head>
 <body>
@@ -669,7 +721,7 @@
     <button class="tab" data-tab="states" onclick="switchTab('states',this);loadStates();if(isAdmin())loadReturnRequests()">Estados</button>
     <button class="tab" data-tab="requests" onclick="switchTab('requests',this);loadRequests()">Solicitudes</button>
     <button class="tab" id="tabBtnRequestsByLawyer" data-tab="requestsByLawyer" onclick="switchTab('requestsByLawyer',this);loadRequestsByLawyer()">Solicitudes por abogado</button>
-    <button class="tab" data-tab="all" onclick="switchTab('all',this)">Registro maestro</button>
+    <button class="tab" data-tab="all" onclick="switchTab('all',this);loadAll()">Registro maestro</button>
     <button class="tab" data-tab="cargos" onclick="switchTab('cargos',this);loadCargos()">Cargos</button>
     <button class="tab" id="tabBtnHistory" data-tab="history" onclick="switchTab('history',this)">Historial</button>
   </div>
@@ -1070,10 +1122,81 @@
 
 
   <section id="tab-all" class="hidden">
-    <div class="card filters"><div class="field"><label>Buscar en registro maestro</label><input id="allSearch" placeholder="Buscar cualquier dato..." oninput="debounceAll()"></div><div class="note">EXTENSIÓN siempre visible. Si no existe, se muestra “—”. No existe columna AÑO.</div><div></div></div>
-    <div class="card table-wrap"><div class="table-head"><strong>Registro maestro</strong><span id="allCount">0</span></div><div id="allTable"></div></div>
-  </section>
+    <div class="card" style="margin-bottom:12px">
+      <div class="master-search-grid">
+        <div class="field">
+          <label>Buscar en todos los expedientes</label>
+          <input id="allSearch"
+                 placeholder="Expediente, extensión, R.D., responsable, estado, cargo, observación..."
+                 oninput="debounceAll()"
+                 onkeydown="if(event.key==='Enter'){event.preventDefault();resetAllAndLoad()}">
+        </div>
 
+        <button class="btn secondary" type="button" onclick="toggleMasterAdvanced()">
+          ⚙ Filtros
+        </button>
+      </div>
+
+      <div id="allAdvancedFilters" class="master-advanced hidden">
+        <div class="field">
+          <label>Estado</label>
+          <select id="allStateFilter" onchange="resetAllAndLoad()">
+            <option value="">TODOS LOS ESTADOS</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label>Responsable / ubicación</label>
+          <select id="allOwnerFilter" onchange="resetAllAndLoad()">
+            <option value="">TODOS</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label>Modalidad</label>
+          <select id="allModeFilter" onchange="resetAllAndLoad()">
+            <option value="">TODAS</option>
+            <option value="FÍSICO">FÍSICO</option>
+            <option value="PRÉSTAMO">PRÉSTAMO</option>
+            <option value="COPIA DIGITAL">COPIA DIGITAL</option>
+            <option value="LECTURA EN SALA">LECTURA EN SALA</option>
+            <option value="DIGITAL">DIGITAL</option>
+          </select>
+        </div>
+
+        <button class="btn secondary" type="button" onclick="clearMasterFilters()">
+          Limpiar
+        </button>
+
+        <button class="btn" id="exportMasterResultsBtn" type="button"
+                onclick="exportMasterResults(this)">
+          Exportar resultados
+        </button>
+      </div>
+
+      <div class="master-summary">
+        Buscador global del sistema. La búsqueda se realiza directamente en Supabase
+        y la coincidencia exacta del número de expediente aparece primero.
+      </div>
+    </div>
+
+    <div class="card table-wrap">
+      <div class="table-head master-table-head">
+        <strong>Registro maestro</strong>
+
+        <div class="master-page-controls">
+          <span id="allCount">0 expedientes</span>
+          <button class="btn secondary small" id="allPrevBtn"
+                  type="button" onclick="changeAllPage(-1)">Anterior</button>
+          <span class="master-page-info" id="allPageInfo">Página 1</span>
+          <button class="btn secondary small" id="allNextBtn"
+                  type="button" onclick="changeAllPage(1)">Siguiente</button>
+        </div>
+      </div>
+
+      <div id="allTable"></div>
+    </div>
+  </section>
 
   <section id="tab-cargos" class="hidden">
     <div class="card filters">
@@ -1740,7 +1863,8 @@ let catalogo=MASTER.map(([nombre,tipo],i)=>({id:'fallback-'+i,nombre,tipo,activo
 let asuntosCatalogo=ASUNTOS_PREDETERMINADOS.map((nombre,i)=>({id:'fallback-asunto-'+i,nombre,activo:true}));
 let selectedIds=new Set(), cargoRows=[];
 let recordMode='single', batchCargoHeader=null;
-let selectedOwner='', selectedState='', panelQuickFilter='', ownerCardsRows=[], ownerUserKpiSummary={total_custodia:0,en_prestamo:0,reasignados:0,devoluciones_pendientes_aceptacion:0,devoluciones_realizadas:0,alertas_30:0}, userPanelMode='TODOS', userPanelSummary={todos:0,en_prestamo:0,reasignados_por_mi:0,reasignados_a_mi:0,devueltos:0,alertas_30:0}, currentRequestId='', currentRequest=null, requestSelectedIds=new Set(), requestSearchSelectedIds=new Set(), requestDraftItems=[], addToExistingRequestId='', page=0, panelCount=0, allCountValue=0, stateDetailCount=0, panelTimer=null, allTimer=null, historyTimer=null, cargosTimer=null, requestsTimer=null, returnRequestsTimer=null, notificationsPollTimer=null;
+const ALL_PAGE_SIZE=50;
+let selectedOwner='', selectedState='', panelQuickFilter='', ownerCardsRows=[], ownerUserKpiSummary={total_custodia:0,en_prestamo:0,reasignados:0,devoluciones_pendientes_aceptacion:0,devoluciones_realizadas:0,alertas_30:0}, userPanelMode='TODOS', userPanelSummary={todos:0,en_prestamo:0,reasignados_por_mi:0,reasignados_a_mi:0,devueltos:0,alertas_30:0}, currentRequestId='', currentRequest=null, requestSelectedIds=new Set(), requestSearchSelectedIds=new Set(), requestDraftItems=[], addToExistingRequestId='', page=0, panelCount=0, allPage=0, allCountValue=0, allTotalGeneral=0, stateDetailCount=0, panelTimer=null, allTimer=null, historyTimer=null, cargosTimer=null, requestsTimer=null, returnRequestsTimer=null, notificationsPollTimer=null;
 
 function el(id){return document.getElementById(id)}
 
@@ -3544,9 +3668,23 @@ function renderSummary(){
 }
 
 function applySearch(query,q){
-  q=cleanSearch(q);if(!q)return query;
+  q=cleanSearch(q);
+  if(!q)return query;
+
   const p=`%${q}%`;
-  return query.or(`expediente.ilike.${p},extension.ilike.${p},rd.ilike.${p},responsable.ilike.${p},cargo.ilike.${p},observacion.ilike.${p},acumulado.ilike.${p},ultimo_folio.ilike.${p}`)
+
+  return query.or(
+    `expediente.ilike.${p},`+
+    `extension.ilike.${p},`+
+    `rd.ilike.${p},`+
+    `responsable.ilike.${p},`+
+    `estado.ilike.${p},`+
+    `modalidad.ilike.${p},`+
+    `cargo.ilike.${p},`+
+    `observacion.ilike.${p},`+
+    `acumulado.ilike.${p},`+
+    `ultimo_folio.ilike.${p}`
+  );
 }
 
 async function attachLatestMovementToRecords(rows){
@@ -6805,20 +6943,232 @@ async function refreshRequestDetail(){
   await openRequestDetail(currentRequestId);
 }
 
+function masterStateOptions(){
+  return [
+    'CUSTODIA',
+    'EN PRÉSTAMO',
+    'REASIGNADO',
+    'DEVOLUCIÓN SOLICITADA',
+    'DEVUELTO AL ARCHIVO',
+    'PENDIENTE DE VERIFICACIÓN',
+    'EN TRÁMITE'
+  ];
+}
+
+function populateMasterFilters(){
+  const state=el('allStateFilter');
+  const owner=el('allOwnerFilter');
+
+  if(state){
+    const current=state.value||'';
+    state.innerHTML=
+      '<option value="">TODOS LOS ESTADOS</option>'+
+      masterStateOptions()
+        .map(x=>`<option value="${esc(x)}">${esc(x)}</option>`)
+        .join('');
+    state.value=[...state.options].some(o=>o.value===current)?current:'';
+  }
+
+  if(owner){
+    const current=owner.value||'';
+
+    const names=[...new Set([
+      ...abogadoNames(),
+      ...(catalogo||[])
+        .filter(x=>x.activo!==false)
+        .map(x=>x.nombre)
+        .filter(Boolean)
+    ])].sort((a,b)=>a.localeCompare(b,'es'));
+
+    owner.innerHTML=
+      '<option value="">TODOS</option>'+
+      names.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('');
+
+    owner.value=[...owner.options].some(o=>o.value===current)?current:'';
+  }
+}
+
+function masterParams(limit=ALL_PAGE_SIZE,offset=allPage*ALL_PAGE_SIZE){
+  return {
+    p_busqueda:cleanSearch(el('allSearch')?.value||'')||null,
+    p_estado:(el('allStateFilter')?.value||'').trim()||null,
+    p_responsable:(el('allOwnerFilter')?.value||'').trim()||null,
+    p_modalidad:(el('allModeFilter')?.value||'').trim()||null,
+    p_limite:limit,
+    p_offset:offset
+  };
+}
+
+function toggleMasterAdvanced(){
+  el('allAdvancedFilters')?.classList.toggle('hidden');
+  populateMasterFilters();
+}
+
+async function resetAllAndLoad(){
+  allPage=0;
+  await loadAll();
+}
+
+async function clearMasterFilters(){
+  if(el('allSearch'))el('allSearch').value='';
+  if(el('allStateFilter'))el('allStateFilter').value='';
+  if(el('allOwnerFilter'))el('allOwnerFilter').value='';
+  if(el('allModeFilter'))el('allModeFilter').value='';
+  allPage=0;
+  await loadAll();
+}
+
+function masterNormalizeRow(r){
+  return {
+    ...r,
+    estado:r.estado_operativo||r.estado,
+    responsable:r.responsable_operativo||r.responsable
+  };
+}
+
 async function loadAll(){
   if(!sb||!session)return;
-  let q=sb.from('expedientes').select('*',{count:'exact'}).order('updated_at',{ascending:false}).limit(500);
-  q=applySearch(q,el('allSearch').value);
-  const {data,error,count}=await q;
-  if(error){serverError(error);return}
-  allRows=data||[];
-  allRows=await attachLatestMovementToRecords(allRows);
-  allCountValue=count||0;
-  el('allCount').textContent=`${allCountValue} registros · mostrando ${allRows.length}`;
-  el('allTable').innerHTML=recordTable(allRows,true,'all')
-}
-function debounceAll(){clearTimeout(allTimer);allTimer=setTimeout(loadAll,300)}
 
+  populateMasterFilters();
+
+  const {data,error}=await sb.rpc(
+    'buscar_registro_maestro_v2',
+    masterParams()
+  );
+
+  if(error){
+    serverError(error);
+    return;
+  }
+
+  const result=data||{};
+  const rows=Array.isArray(result.rows)?result.rows:[];
+
+  allRows=rows.map(masterNormalizeRow);
+  allCountValue=Number(result.total_encontrados||0);
+  allTotalGeneral=Number(result.total_general||0);
+
+  const startRow=allCountValue?allPage*ALL_PAGE_SIZE+1:0;
+  const endRow=Math.min((allPage+1)*ALL_PAGE_SIZE,allCountValue);
+  const totalPages=Math.max(1,Math.ceil(allCountValue/ALL_PAGE_SIZE));
+
+  el('allCount').textContent=
+    allCountValue===allTotalGeneral
+      ?`${allTotalGeneral} expedientes totales`
+      :`${allCountValue} encontrados de ${allTotalGeneral} expedientes totales`;
+
+  el('allPageInfo').textContent=
+    allCountValue
+      ?`${startRow}-${endRow} · Página ${allPage+1} de ${totalPages}`
+      :`Página 1 de 1`;
+
+  if(el('allPrevBtn'))el('allPrevBtn').disabled=allPage<=0;
+  if(el('allNextBtn')){
+    el('allNextBtn').disabled=(allPage+1)*ALL_PAGE_SIZE>=allCountValue;
+  }
+
+  el('allTable').innerHTML=allRows.length
+    ?recordTable(allRows,true,'all')
+    :'<div class="empty">No se encontraron expedientes con los criterios seleccionados.</div>';
+}
+
+async function changeAllPage(delta){
+  const next=allPage+delta;
+  if(next<0)return;
+  if(delta>0 && next*ALL_PAGE_SIZE>=allCountValue)return;
+
+  allPage=next;
+  await loadAll();
+
+  el('tab-all')?.scrollIntoView({
+    behavior:'smooth',
+    block:'start'
+  });
+}
+
+function debounceAll(){
+  clearTimeout(allTimer);
+  allTimer=setTimeout(()=>{
+    allPage=0;
+    loadAll();
+  },300);
+}
+
+async function fetchMasterFilteredRows(){
+  const BATCH=1000;
+  let offset=0;
+  const all=[];
+
+  while(true){
+    const {data,error}=await sb.rpc(
+      'buscar_registro_maestro_v2',
+      masterParams(BATCH,offset)
+    );
+
+    if(error)throw error;
+
+    const result=data||{};
+    const rows=Array.isArray(result.rows)?result.rows:[];
+
+    all.push(...rows.map(masterNormalizeRow));
+
+    if(rows.length<BATCH)break;
+
+    offset+=BATCH;
+
+    if(offset>=Number(result.total_encontrados||0))break;
+  }
+
+  return all;
+}
+
+async function exportMasterResults(btn){
+  const old=btn.textContent;
+  btn.disabled=true;
+  btn.textContent='Exportando...';
+
+  try{
+    const rows=await fetchMasterFilteredRows();
+
+    if(!rows.length){
+      alert('No hay resultados para exportar.');
+      return;
+    }
+
+    const vals=rows.map(r=>[
+      r.expediente,
+      r.extension,
+      r.rd,
+      r.serie,
+      r.estado,
+      r.responsable,
+      r.fecha_solicitud,
+      r.fecha_entrega,
+      r.fecha_devolucion,
+      r.fecha_reasignacion,
+      r.modalidad,
+      r.ultimo_folio,
+      r.digitalizado,
+      r.enlace,
+      r.cargo,
+      r.acumulado,
+      r.observacion
+    ]);
+
+    downloadBlob(
+      'RESULTADOS_REGISTRO_MAESTRO.csv',
+      [
+        CSV_HEADERS.join(';'),
+        ...vals.map(x=>x.map(csvEscape).join(';'))
+      ].join('\n')
+    );
+  }catch(e){
+    serverError(e);
+  }finally{
+    btn.disabled=false;
+    btn.textContent=old;
+  }
+}
 
 async function loadCargos(){
   if(!sb||!session)return;
@@ -6972,6 +7322,7 @@ function renderCargos(){
 async function verExpedientesCargo(numero){
   switchTab('all',document.querySelector('[data-tab="all"]'));
   el('allSearch').value=numero;
+  allPage=0;
   await loadAll();
 }
 
