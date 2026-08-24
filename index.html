@@ -169,6 +169,23 @@
 .notification-message{font-size:13px;margin-top:8px;line-height:1.45}
 .notification-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}
 
+
+.user-personal-kpis{
+  display:grid;
+  grid-template-columns:repeat(5,minmax(145px,1fr));
+  gap:12px;
+  margin-bottom:14px
+}
+@media(max-width:1200px){
+  .user-personal-kpis{grid-template-columns:repeat(3,1fr)}
+}
+@media(max-width:760px){
+  .user-personal-kpis{grid-template-columns:1fr 1fr}
+}
+@media(max-width:480px){
+  .user-personal-kpis{grid-template-columns:1fr}
+}
+
 </style>
 </head>
 <body>
@@ -220,7 +237,7 @@
       <div class="field"><label id="ownerFilterLabel">Usuario / abogado</label><select id="ownerSelect" onchange="setOwner(this.value)"></select></div>
       <div style="display:flex;align-items:flex-end"><button class="btn secondary" onclick="clearPanelFilters()">Limpiar</button></div>
     </div>
-    <div class="kpis">
+    <div class="kpis" id="fullAccessKpis">
       <div class="card kpi" id="kpiTotalCard">
         <div class="label">Total registros</div>
         <div class="value" id="kTotal">0</div>
@@ -240,6 +257,38 @@
         <div class="label">Alertas &gt; 30 días</div>
         <div class="value" id="kAlert">0</div>
         <button class="kpi-view" onclick="showKpiExpedientes('alert')">Visualizar expedientes</button>
+      </div>
+    </div>
+
+    <div class="user-personal-kpis hidden-by-role" id="userPersonalKpis">
+      <div class="card kpi" id="userKpiLoanCard">
+        <div class="label">En préstamo</div>
+        <div class="value" id="uKLoan">0</div>
+        <button class="kpi-view" onclick="showUserCard('PRESTAMO')">Ver expedientes</button>
+      </div>
+
+      <div class="card kpi" id="userKpiReassignedByCard">
+        <div class="label">Reasignados por mí</div>
+        <div class="value" id="uKReassignedBy">0</div>
+        <button class="kpi-view" onclick="showUserCard('REASIGNADOS_POR_MI')">Ver expedientes</button>
+      </div>
+
+      <div class="card kpi" id="userKpiReassignedToCard">
+        <div class="label">Reasignados a mí</div>
+        <div class="value" id="uKReassignedTo">0</div>
+        <button class="kpi-view" onclick="showUserCard('REASIGNADOS_A_MI')">Ver expedientes</button>
+      </div>
+
+      <div class="card kpi" id="userKpiReturnedCard">
+        <div class="label">Devueltos</div>
+        <div class="value" id="uKReturned">0</div>
+        <button class="kpi-view" onclick="showUserCard('DEVUELTOS')">Ver expedientes</button>
+      </div>
+
+      <div class="card kpi danger" id="userKpiAlertCard">
+        <div class="label">Alertas &gt; 30 días sin movimiento</div>
+        <div class="value" id="uKAlert">0</div>
+        <button class="kpi-view" onclick="showUserCard('ALERTAS_30')">Ver expedientes</button>
       </div>
     </div>
     <div class="card table-wrap">
@@ -1048,7 +1097,7 @@ let catalogo=MASTER.map(([nombre,tipo],i)=>({id:'fallback-'+i,nombre,tipo,activo
 let asuntosCatalogo=ASUNTOS_PREDETERMINADOS.map((nombre,i)=>({id:'fallback-asunto-'+i,nombre,activo:true}));
 let selectedIds=new Set(), cargoRows=[];
 let recordMode='single', batchCargoHeader=null;
-let selectedOwner='', selectedState='', panelQuickFilter='', currentRequestId='', currentRequest=null, requestSelectedIds=new Set(), requestSearchSelectedIds=new Set(), requestDraftItems=[], addToExistingRequestId='', page=0, panelCount=0, allCountValue=0, stateDetailCount=0, panelTimer=null, allTimer=null, historyTimer=null, cargosTimer=null, requestsTimer=null, returnRequestsTimer=null, notificationsPollTimer=null;
+let selectedOwner='', selectedState='', panelQuickFilter='', userPanelMode='PRESTAMO', userPanelSummary={en_prestamo:0,reasignados_por_mi:0,reasignados_a_mi:0,devueltos:0,alertas_30:0}, currentRequestId='', currentRequest=null, requestSelectedIds=new Set(), requestSearchSelectedIds=new Set(), requestDraftItems=[], addToExistingRequestId='', page=0, panelCount=0, allCountValue=0, stateDetailCount=0, panelTimer=null, allTimer=null, historyTimer=null, cargosTimer=null, requestsTimer=null, returnRequestsTimer=null, notificationsPollTimer=null;
 
 function el(id){return document.getElementById(id)}
 function norm(v){return String(v??'').trim().toUpperCase()}
@@ -1120,7 +1169,30 @@ async function enrichRequestAttentionTimes(rows){
 }
 
 function rowDays(r){return businessDays(r.fecha_entrega,r.fecha_devolucion)}
-function rowAlert(r){return !r.fecha_devolucion&&r.estado!=='DEVUELTO'&&r.modalidad!=='COPIA DIGITAL'&&r.fecha_entrega&&rowDays(r)>30}
+function rowAlert(r){
+  if(isLimitedUser()){
+    const myName=norm(currentProfile?.nombre_personal||'');
+    const owner=norm(r.responsable||'');
+    const state=operationalStatus(r);
+    const activeWithMe=
+      owner===myName &&
+      ['EN PRÉSTAMO','REASIGNADO'].includes(state);
+
+    const lastDate=r.ultimo_movimiento_fecha||r.fecha_entrega;
+
+    return !!(
+      activeWithMe &&
+      lastDate &&
+      businessDays(lastDate,null)>30
+    );
+  }
+
+  return !r.fecha_devolucion &&
+    r.estado!=='DEVUELTO' &&
+    r.modalidad!=='COPIA DIGITAL' &&
+    r.fecha_entrega &&
+    rowDays(r)>30;
+}
 function normalizeDate(v){
   const s=String(v||'').trim();
   if(!s)return null;
@@ -1213,6 +1285,8 @@ function applyRoleUI(){
   setVisible('peopleBtn',admin);
   setVisible('subjectsBtn',admin);
   setVisible('usersBtn',admin);
+  setVisible('fullAccessKpis',!limited);
+  setVisible('userPersonalKpis',limited);
 
   // El buscador para solicitar es útil sobre todo para abogados.
   setVisible('searchRequestBtn',true);
@@ -2041,10 +2115,44 @@ async function saveUserProfile(id){
 }
 
 async function loadSummary(){
+  if(isLimitedUser()){
+    await loadUserPersonalSummary();
+    return;
+  }
+
   const {data,error}=await sb.rpc('resumen_responsables');
   if(error){serverError(error);return}
   summaryRows=data||[];
   renderSidebar();renderSummary();renderKpis()
+}
+
+async function loadUserPersonalSummary(){
+  if(!sb||!session||!isLimitedUser())return;
+
+  const {data,error}=await sb.rpc('resumen_mis_tarjetas_usuario');
+
+  if(error){
+    console.warn('resumen_mis_tarjetas_usuario:',error.message);
+    return;
+  }
+
+  const s=Array.isArray(data)?(data[0]||{}):(data||{});
+
+  userPanelSummary={
+    en_prestamo:Number(s.en_prestamo||0),
+    reasignados_por_mi:Number(s.reasignados_por_mi||0),
+    reasignados_a_mi:Number(s.reasignados_a_mi||0),
+    devueltos:Number(s.devueltos||0),
+    alertas_30:Number(s.alertas_30||0)
+  };
+
+  if(el('uKLoan'))el('uKLoan').textContent=userPanelSummary.en_prestamo;
+  if(el('uKReassignedBy'))el('uKReassignedBy').textContent=userPanelSummary.reasignados_por_mi;
+  if(el('uKReassignedTo'))el('uKReassignedTo').textContent=userPanelSummary.reasignados_a_mi;
+  if(el('uKReturned'))el('uKReturned').textContent=userPanelSummary.devueltos;
+  if(el('uKAlert'))el('uKAlert').textContent=userPanelSummary.alertas_30;
+
+  updateUserPersonalKpiUI();
 }
 function summaryFor(name){
   if(!name){
@@ -2275,6 +2383,45 @@ function alertCutoffDate(){
   return `${y}-${m}-${day}`;
 }
 
+
+function userPanelLabel(){
+  const labels={
+    PRESTAMO:'En préstamo',
+    REASIGNADOS_POR_MI:'Reasignados por mí',
+    REASIGNADOS_A_MI:'Reasignados a mí',
+    DEVUELTOS:'Devueltos',
+    ALERTAS_30:'Alertas > 30 días sin movimiento'
+  };
+  return labels[userPanelMode]||'Mis expedientes';
+}
+
+function updateUserPersonalKpiUI(){
+  const map={
+    PRESTAMO:'userKpiLoanCard',
+    REASIGNADOS_POR_MI:'userKpiReassignedByCard',
+    REASIGNADOS_A_MI:'userKpiReassignedToCard',
+    DEVUELTOS:'userKpiReturnedCard',
+    ALERTAS_30:'userKpiAlertCard'
+  };
+
+  Object.entries(map).forEach(([key,id])=>{
+    if(el(id)){
+      el(id).classList.toggle('quick-active',userPanelMode===key);
+    }
+  });
+}
+
+async function showUserCard(tipo){
+  if(!isLimitedUser())return;
+
+  userPanelMode=tipo||'PRESTAMO';
+  page=0;
+  updateUserPersonalKpiUI();
+  await loadPanel();
+
+  el('panelTable')?.scrollIntoView({behavior:'smooth',block:'start'});
+}
+
 function panelQuickLabel(){
   return panelQuickFilter==='pending'?'Pendientes de devolución':
     panelQuickFilter==='loan'?'En préstamo':
@@ -2310,10 +2457,20 @@ async function showKpiExpedientes(tipo){
 
 async function clearPanelFilters(){
   panelQuickFilter='';
-  selectedOwner='';
   page=0;
 
   if(el('searchInput'))el('searchInput').value='';
+
+  if(isLimitedUser()){
+    userPanelMode='PRESTAMO';
+    selectedOwner=currentProfile?.nombre_personal||'';
+    if(el('ownerSelect'))el('ownerSelect').value=selectedOwner;
+    updateUserPersonalKpiUI();
+    await loadPanel();
+    return;
+  }
+
+  selectedOwner='';
   if(el('ownerSelect'))el('ownerSelect').value='';
 
   renderSidebar();
@@ -2326,6 +2483,35 @@ async function loadPanel(){
   if(!sb||!session)return;
 
   const from=page*PAGE_SIZE,to=from+PAGE_SIZE-1;
+
+  // USUARIO / ABOGADO: panel personal por último movimiento.
+  if(isLimitedUser()){
+    const search=cleanSearch(el('searchInput')?.value||'');
+
+    const {data,error}=await sb.rpc('listar_mis_expedientes_tarjeta',{
+      p_tipo:userPanelMode,
+      p_busqueda:search||null
+    });
+
+    if(error){
+      serverError(error);
+      return;
+    }
+
+    const all=data||[];
+    panelCount=all.length;
+    panelRows=all.slice(from,to+1);
+    panelRows=await attachLatestMovementToRecords(panelRows);
+
+    el('panelTitle').textContent=
+      `${userPanelLabel()} · ${currentProfile?.nombre_personal||'Mi espacio personal'}`;
+
+    el('pageInfo').textContent=`${page+1} · ${panelCount} registros`;
+    el('panelTable').innerHTML=recordTable(panelRows,false,'panel');
+
+    updateUserPersonalKpiUI();
+    return;
+  }
 
   let q=sb
     .from('expedientes')
