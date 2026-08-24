@@ -1250,7 +1250,7 @@ const MASTER=[["MARCELA ALONZO", "PERSONAL"], ["ABRAHAN DAMAS", "PERSONAL"], ["A
 const ASUNTOS_PREDETERMINADOS=["ACCESO A LA INFORMACIÓN", "ANALISIS Y EVALUACIÓN DEL MEMORANDO DE CONCLUSIÓN DEL PROCESO CONTENCIOSO ADMINISTRATIVO, REMITIDO POR LA PROCURADURÍA PÚBLICA (PP)", "ANEXADO DE CÉDULAS DE NOTIFICACIÓN", "ANEXADO DE DOCUMENTOS", "ATENCIÓN A LA DIRECCIÓN DE EXTRACCIÓN PARA CONSUMO HUMANO DIRECTO E INDIRECTO (DECHDI)", "ATENCIÓN A LA DIRECCIÓN DE VIGILANCIA Y CONTROL (DVC) - RD ARCHIVAMIENTO", "ATENCIÓN A LA OFICINA DE CONTROL INTERNO (OCI)", "ATENCIÓN A LA OFICINA GENERAL DE ADMINISTRACIÓN (OGA)", "ATENCIÓN A LA PROCURADURÍA PÚBLICA", "ATENCIÓN AL MINISTERIO PÚBLICO (FISCALÍA)", "ATENCIÓN DE ESCRITOS", "ATENCIÓN DE ESCRITOS REMITIDOS POR EL CONSEJO DE APELACIÓN DE SANCIONES CALIDAD DE PRÉSTAMO (CONAS)", "ATENCIÓN DE QUEJAS", "CADUCIDAD", "COMUNICACIÓN DE LAS SANCIONES A LA DIRECCIÓN GENERAL DE PESCA PARA CONSUMO HUMANO DIRECTO E INDIRECTO (DGPCHDI)", "DESLINDE DE RESPONSABILIDAD", "ELEVACIÓN DEL EXPEDIENTE AL CONSEJO DE APELACIÓN DE SANCIONES (CONAS)", "ENMIENDA", "EVALUACIÓN DE OFICIO", "EVALUACIÓN DE PAGOS POR CONCEPTO DE DECOMISOS", "EVALUACIÓN DEL EXPEDIENTE QUE RETORNA DEL CONSEJO DE APELACIÓN DE SANCIONES (CONAS)", "INTERES PARTICULAR", "LECTURA EN SALA (USUARIOS INTERNOS)", "LECTURA EXPEDIENTE (USUARIOS EXTERNOS)", "NULIDAD DE OFICIO", "PERDIDA DE BENEFICIO", "PETICIÓN ADMINISTRATIVA", "RECOMENDACIÓN DE INICIO", "RECONSIDERACIÓN", "REINCIDENCIAS DEL PAS", "REVISIÓN", "REVISIÓN DEL PROCEDIMIENTO DE EJECUCIÓN COACTIVA (PEC) - OEC", "SECRETARIA TÉCNICA DE LOS ORGANOS INSTRUCTORES (STOI)", "SOLICITUD DE BENEFICIOS", "TRAMITACIÓN DEL PAS (IFIS)", "USO DE LA PALABRA O AUDIENCIA"];
 const STATUSES=['CUSTODIA','EN PRÉSTAMO','DEVUELTO','REASIGNADO','EN TRÁMITE'];
 const PAGE_SIZE=200;
-let sb=null, session=null, currentProfile=null, userProfiles=[], abogadoProfiles=[], reassignmentProfiles=[], returnRequestRows=[], notificationRows=[], notificationUnread=0, notificationsLoaded=false, requestExcelRows=[], requestExcelMissing=[], requestExcelDuplicates=0, summaryRows=[], panelRows=[], allRows=[], historyRows=[], cargosRows=[], selectedCargoNumero='', stateRows=[], stateDetailRows=[], requestRows=[], requestDetailRows=[], requestMovementRows=[], requestSearchRows=[], requestsByLawyerRows=[];
+let sb=null, session=null, currentProfile=null, userProfiles=[], abogadoProfiles=[], reassignmentProfiles=[], returnRequestRows=[], pendingRegisterRows=[], notificationRows=[], notificationUnread=0, notificationsLoaded=false, requestExcelRows=[], requestExcelMissing=[], requestExcelDuplicates=0, summaryRows=[], panelRows=[], allRows=[], historyRows=[], cargosRows=[], selectedCargoNumero='', stateRows=[], stateDetailRows=[], requestRows=[], requestDetailRows=[], requestMovementRows=[], requestSearchRows=[], requestsByLawyerRows=[];
 let catalogo=MASTER.map(([nombre,tipo],i)=>({id:'fallback-'+i,nombre,tipo,activo:true}));
 let asuntosCatalogo=ASUNTOS_PREDETERMINADOS.map((nombre,i)=>({id:'fallback-asunto-'+i,nombre,activo:true}));
 let selectedIds=new Set(), cargoRows=[];
@@ -2907,11 +2907,13 @@ async function loadStates(){
   const [
     {data,error},
     {data:reassignData,error:reassignError},
-    {data:loanData,error:loanError}
+    {data:loanData,error:loanError},
+    {data:pendingRegisterData,error:pendingRegisterError}
   ]=await Promise.all([
     sb.rpc('resumen_estados'),
     sb.rpc('resumen_reasignaciones'),
-    sb.rpc('resumen_en_prestamo_ultimo_estado')
+    sb.rpc('resumen_en_prestamo_ultimo_estado'),
+    sb.rpc('listar_pendientes_por_registrar')
   ]);
 
   if(error){
@@ -2926,6 +2928,12 @@ async function loadStates(){
   if(loanError){
     console.warn('resumen_en_prestamo_ultimo_estado:',loanError.message);
   }
+
+  if(pendingRegisterError){
+    console.warn('listar_pendientes_por_registrar:',pendingRegisterError.message);
+  }
+
+  pendingRegisterRows=pendingRegisterError?[]:(pendingRegisterData||[]);
 
   const totalEnPrestamo=Number(
     Array.isArray(loanData)
@@ -3036,6 +3044,27 @@ function renderStates(){
     </div>`;
   }).join('');
 
+  const pendingRegisterName='PENDIENTES POR REGISTRAR';
+  const showPendingRegisterCard=hasFullAccess() &&
+    (!q || norm(pendingRegisterName).includes(q));
+
+  const pendingRegisterCard=showPendingRegisterCard
+    ? `<div class="card state-card ${selectedState===pendingRegisterName?'selected':''}">
+        <div class="state-name">PENDIENTES POR REGISTRAR</div>
+        <div class="state-count">${pendingRegisterRows.length||0}</div>
+        <div class="state-meta">Nuevos de solicitudes pendientes de regularizar</div>
+        <div class="state-progress">
+          <span style="width:${pendingRegisterRows.length?100:0}%"></span>
+        </div>
+        <div style="margin-top:10px">
+          <button class="btn secondary small"
+            onclick="loadStateDetail('PENDIENTES POR REGISTRAR')">
+            Ver expedientes
+          </button>
+        </div>
+      </div>`
+    :'';
+
   const returnName='SOLICITUDES DE DEVOLUCIÓN';
   const showReturnCard=isAdmin() && (!q || norm(returnName).includes(q));
 
@@ -3053,12 +3082,81 @@ function renderStates(){
       </div>`
     :'';
 
-  el('stateGrid').innerHTML=normalCards+returnCard;
+  el('stateGrid').innerHTML=normalCards+pendingRegisterCard+returnCard;
 }
 
 async function loadStateDetail(estado){
   selectedState=estado;
   renderStates();
+
+  if(estado==='PENDIENTES POR REGISTRAR'){
+    el('stateDetailTitle').textContent='Expedientes pendientes por registrar';
+    el('stateDetailTable').innerHTML=
+      '<div class="empty">Cargando expedientes pendientes...</div>';
+
+    const {data,error}=await sb.rpc('listar_pendientes_por_registrar');
+
+    if(error){
+      el('stateDetailTable').innerHTML=
+        `<div class="empty">${esc(error.message)}</div>`;
+      return;
+    }
+
+    const rows=data||[];
+    pendingRegisterRows=rows;
+    stateDetailCount=rows.length;
+    el('stateDetailCount').textContent=`${rows.length} expedientes`;
+
+    if(!rows.length){
+      el('stateDetailTable').innerHTML=
+        '<div class="empty">No hay expedientes pendientes por registrar.</div>';
+      return;
+    }
+
+    el('stateDetailTable').innerHTML=`<table>
+      <thead>
+        <tr>
+          <th>Expediente</th>
+          <th>Extensión</th>
+          <th>R.D.</th>
+          <th>Solicitud</th>
+          <th>Solicitante</th>
+          <th>Fecha solicitud</th>
+          <th>Origen</th>
+          <th>Estado</th>
+          <th>Observación</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows.map(x=>`<tr>
+          <td><b>${esc(x.expediente||'—')}</b></td>
+          <td>${esc(x.extension||'—')}</td>
+          <td>${esc(x.rd||'—')}</td>
+          <td><b>${esc(x.solicitud_numero||'—')}</b></td>
+          <td>${esc(x.solicitante||'—')}</td>
+          <td>${fmtDate(x.fecha_solicitud)}</td>
+          <td>${esc(x.origen_registro||'SOLICITUD')}</td>
+          <td><span class="pill pending">PENDIENTE POR REGISTRAR</span></td>
+          <td>${esc(x.observacion||'')}</td>
+          <td>
+            <div style="display:flex;gap:6px;white-space:nowrap">
+              <button class="btn secondary small"
+                onclick="showExpHistory('${x.expediente_id}')">
+                Historial
+              </button>
+              <button class="btn small"
+                onclick="manageExpedienteFromPanel('${x.expediente_id}')">
+                Gestionar
+              </button>
+            </div>
+          </td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
+
+    return;
+  }
 
   if(estado==='EN PRÉSTAMO'){
     el('stateDetailTitle').textContent='Expedientes cuyo último estado es: EN PRÉSTAMO';
