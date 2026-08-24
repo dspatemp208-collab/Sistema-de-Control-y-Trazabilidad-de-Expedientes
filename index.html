@@ -3056,8 +3056,10 @@ function updateOwnerPanelVisibility(){
   const showDetail=limited||individualUser;
 
   // ADMINISTRADOR / ARCHIVO: al entrar solo ven las tarjetas de usuarios.
+  // Cuando ya seleccionan una tarjeta, las tarjetas se ocultan para dejar solo
+  // el bloque de filtros y el detalle del usuario elegido.
   if(el('ownerCardsPanel')){
-    const showCards=cardsAvailable;
+    const showCards=cardsAvailable && !showDetail;
     el('ownerCardsPanel').classList.toggle('hidden-by-role',!showCards);
     el('ownerCardsPanel').classList.toggle('hidden',!showCards);
   }
