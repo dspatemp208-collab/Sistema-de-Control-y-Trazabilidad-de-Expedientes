@@ -186,6 +186,23 @@
   .user-personal-kpis{grid-template-columns:1fr}
 }
 
+
+.req-card-click{cursor:pointer;transition:.15s ease}
+.req-card-click:hover{transform:translateY(-1px);box-shadow:0 4px 14px rgba(15,23,42,.08)}
+.req-card-click.selected{
+  border-color:#173f6b;
+  box-shadow:0 0 0 2px rgba(23,63,107,.10)
+}
+.req-card-click .kpi-view{margin-top:8px}
+.user-request-kpis{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(160px,1fr));
+  gap:12px;
+  margin-bottom:14px
+}
+@media(max-width:900px){.user-request-kpis{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:520px){.user-request-kpis{grid-template-columns:1fr}}
+
 </style>
 </head>
 <body>
@@ -423,12 +440,42 @@
 
 
   <section id="tab-requests" class="hidden">
-    <div class="req-kpis">
+    <div class="req-kpis" id="fullRequestKpis">
       <div class="card kpi"><div class="label">Registradas</div><div class="value" id="rqSolicitado">0</div></div>
       <div class="card kpi"><div class="label">Registradas por Archivo</div><div class="value" id="rqAceptado">0</div></div>
       <div class="card kpi warn"><div class="label">Entregadas</div><div class="value" id="rqPrestamo">0</div></div>
       <div class="card kpi"><div class="label">Pendientes de cierre</div><div class="value" id="rqPendienteRecepcion">0</div></div>
       <div class="card kpi"><div class="label">Cerradas</div><div class="value" id="rqDevuelto">0</div></div>
+    </div>
+
+    <div class="user-request-kpis hidden-by-role" id="userRequestKpis">
+      <div class="card kpi req-card-click" id="userRqRegistradas"
+           onclick="selectMyRequestCard('REGISTRADA')">
+        <div class="label">Registradas</div>
+        <div class="value" id="uRqRegistradas">0</div>
+        <button class="kpi-view" type="button">Ver solicitudes</button>
+      </div>
+
+      <div class="card kpi req-card-click" id="userRqArchivo"
+           onclick="selectMyRequestCard('REGISTRADA POR ARCHIVO')">
+        <div class="label">Registradas por Archivo</div>
+        <div class="value" id="uRqArchivo">0</div>
+        <button class="kpi-view" type="button">Ver solicitudes</button>
+      </div>
+
+      <div class="card kpi warn req-card-click" id="userRqParcial"
+           onclick="selectMyRequestCard('ENTREGA PARCIAL')">
+        <div class="label">Entrega parcial</div>
+        <div class="value" id="uRqParcial">0</div>
+        <button class="kpi-view" type="button">Ver solicitudes</button>
+      </div>
+
+      <div class="card kpi req-card-click" id="userRqTotal"
+           onclick="selectMyRequestCard('ENTREGA TOTAL')">
+        <div class="label">Entrega total</div>
+        <div class="value" id="uRqTotal">0</div>
+        <button class="kpi-view" type="button">Ver solicitudes</button>
+      </div>
     </div>
 
     <div class="card filters">
@@ -1293,6 +1340,8 @@ function applyRoleUI(){
   setVisible('usersBtn',admin);
   setVisible('fullAccessKpis',!limited);
   setVisible('userPersonalKpis',limited);
+  setVisible('fullRequestKpis',!limited);
+  setVisible('userRequestKpis',limited);
 
   // El buscador para solicitar es útil sobre todo para abogados.
   setVisible('searchRequestBtn',true);
@@ -2139,6 +2188,15 @@ async function loadUserPersonalSummary(){
 
   if(error){
     console.warn('resumen_mis_tarjetas_usuario:',error.message);
+
+    if(el('panelTable')){
+      el('panelTable').innerHTML=
+        `<div class="empty">
+          No se pudo cargar el panel personal.<br>
+          <b>${esc(error.message)}</b><br><br>
+          Ejecute en Supabase el archivo de reparación del panel de usuario.
+        </div>`;
+    }
     return;
   }
 
@@ -2504,7 +2562,13 @@ async function loadPanel(){
     });
 
     if(error){
-      serverError(error);
+      console.warn('listar_mis_expedientes_tarjeta:',error.message);
+      el('panelTable').innerHTML=
+        `<div class="empty">
+          No se pudieron cargar los expedientes del usuario.<br>
+          <b>${esc(error.message)}</b><br><br>
+          Ejecute en Supabase el archivo de reparación del panel de usuario.
+        </div>`;
       return;
     }
 
@@ -3482,23 +3546,59 @@ async function openLawyerRequests(nombre,estado=''){
   await loadRequests();
 }
 
+
+function updateMyRequestCards(){
+  if(!isLimitedUser())return;
+
+  const state=el('requestStateFilter')?.value||'';
+  const map={
+    'REGISTRADA':'userRqRegistradas',
+    'REGISTRADA POR ARCHIVO':'userRqArchivo',
+    'ENTREGA PARCIAL':'userRqParcial',
+    'ENTREGA TOTAL':'userRqTotal'
+  };
+
+  Object.entries(map).forEach(([key,id])=>{
+    if(el(id))el(id).classList.toggle('selected',state===key);
+  });
+}
+
+async function selectMyRequestCard(estado){
+  if(!isLimitedUser())return;
+
+  if(el('requestStateFilter')){
+    el('requestStateFilter').value=estado;
+  }
+
+  updateMyRequestCards();
+  await loadRequests();
+
+  if(el('requestsTable')){
+    el('requestsTable').scrollIntoView({behavior:'smooth',block:'start'});
+  }
+}
+
 async function loadRequests(){
   if(!sb||!session)return;
 
   const search=cleanSearch(el('requestSearch')?.value||'');
   const state=el('requestStateFilter')?.value||'';
 
-  const {data,error}=await sb.rpc('listar_solicitudes_prestamo',{
+  // Primera consulta: siempre sin filtro de estado.
+  // Sirve para mantener las cantidades correctas de todas las tarjetas.
+  const {data:allData,error:allError}=await sb.rpc('listar_solicitudes_prestamo',{
     p_busqueda:search||null,
-    p_estado:state||null
+    p_estado:null
   });
 
-  if(error){
-    if(el('requestsTable'))el('requestsTable').innerHTML=`<div class="empty">${esc(error.message)}</div>`;
+  if(allError){
+    if(el('requestsTable')){
+      el('requestsTable').innerHTML=`<div class="empty">${esc(allError.message)}</div>`;
+    }
     return;
   }
 
-  requestRows=await enrichRequestAttentionTimes(data||[]);
+  const allRequestRows=await enrichRequestAttentionTimes(allData||[]);
 
   const counts={
     'REGISTRADA':0,
@@ -3508,21 +3608,68 @@ async function loadRequests(){
     'PENDIENTE DE CIERRE':0,
     'CERRADA POR ARCHIVO':0
   };
-  requestRows.forEach(x=>{
+
+  allRequestRows.forEach(x=>{
     const st=x.estado_atencion||x.estado;
     if(counts[st]!==undefined)counts[st]++;
   });
 
+  // Tarjetas ADMINISTRADOR / ARCHIVO
   if(el('rqSolicitado'))el('rqSolicitado').textContent=counts['REGISTRADA'];
   if(el('rqAceptado'))el('rqAceptado').textContent=counts['REGISTRADA POR ARCHIVO'];
-  if(el('rqPrestamo'))el('rqPrestamo').textContent=
-    counts['ENTREGA PARCIAL']+counts['ENTREGA TOTAL'];
-  if(el('rqPendienteRecepcion')){
-    el('rqPendienteRecepcion').textContent=requestRows.reduce((a,x)=>a+Number(x.devoluciones_pendientes||0),0);
+  if(el('rqPrestamo')){
+    el('rqPrestamo').textContent=
+      counts['ENTREGA PARCIAL']+counts['ENTREGA TOTAL'];
   }
-  if(el('rqDevuelto'))el('rqDevuelto').textContent=counts.DEVUELTO;
-  if(el('requestsCount'))el('requestsCount').textContent=requestRows.length+' solicitudes';
+  if(el('rqPendienteRecepcion')){
+    el('rqPendienteRecepcion').textContent=
+      allRequestRows.reduce((a,x)=>a+Number(x.devoluciones_pendientes||0),0);
+  }
+  if(el('rqDevuelto')){
+    el('rqDevuelto').textContent=counts['CERRADA POR ARCHIVO'];
+  }
 
+  // Tarjetas exclusivas del USUARIO
+  if(el('uRqRegistradas'))el('uRqRegistradas').textContent=counts['REGISTRADA'];
+  if(el('uRqArchivo'))el('uRqArchivo').textContent=counts['REGISTRADA POR ARCHIVO'];
+  if(el('uRqParcial'))el('uRqParcial').textContent=counts['ENTREGA PARCIAL'];
+  if(el('uRqTotal'))el('uRqTotal').textContent=counts['ENTREGA TOTAL'];
+
+  // Segunda consulta: solo lo que se debe mostrar en la tabla.
+  if(state){
+    const {data,error}=await sb.rpc('listar_solicitudes_prestamo',{
+      p_busqueda:search||null,
+      p_estado:state
+    });
+
+    if(error){
+      if(el('requestsTable')){
+        el('requestsTable').innerHTML=`<div class="empty">${esc(error.message)}</div>`;
+      }
+      return;
+    }
+
+    requestRows=await enrichRequestAttentionTimes(data||[]);
+  }else{
+    requestRows=allRequestRows;
+  }
+
+  if(el('requestsCount')){
+    el('requestsCount').textContent=
+      requestRows.length+' solicitud'+(requestRows.length===1?'':'es');
+  }
+
+  if(isLimitedUser()){
+    const label=state||'TODAS';
+    const title=el('requestsTable')?.previousElementSibling?.querySelector('strong');
+    if(title){
+      title.textContent=state
+        ?`Mis solicitudes · ${label}`
+        :'Mis solicitudes';
+    }
+  }
+
+  updateMyRequestCards();
   renderRequests();
 }
 
