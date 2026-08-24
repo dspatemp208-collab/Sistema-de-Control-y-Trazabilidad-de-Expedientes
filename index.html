@@ -584,6 +584,51 @@
 .owner-user-summary-box{margin:8px 0 10px;padding:9px 11px;border:1px solid var(--line);border-radius:8px;background:#fbfcfe;font-size:12px;color:var(--muted)}
 .owner-user-card.selected-user-card{border-color:#173f6b;box-shadow:0 0 0 2px #173f6b inset}
 
+
+.owner-user-options{
+  display:flex;
+  gap:6px;
+  flex-wrap:wrap;
+  margin-top:10px;
+  padding-top:10px;
+  border-top:1px solid var(--line)
+}
+.owner-user-options .btn{
+  padding:5px 8px;
+  font-size:10px;
+  min-height:auto
+}
+
+
+/* ===== Flujo Expedientes por usuario: seleccionar tarjeta -> filtrar detalle ===== */
+#ownerDetailFilters{
+  display:grid;
+  grid-template-columns:minmax(190px,.75fr) minmax(300px,1.4fr) minmax(220px,.8fr) auto;
+  gap:10px;
+  align-items:end;
+  margin-top:12px;
+  margin-bottom:12px
+}
+#ownerDetailFilters .selected-owner-readonly{
+  font-weight:850;
+  color:var(--navy);
+  background:#f8fafc
+}
+#ownerDetailFilters select,#ownerDetailFilters input{width:100%}
+.owner-detail-title{
+  margin-top:12px;
+  margin-bottom:6px;
+  font-size:12px;
+  font-weight:850;
+  color:var(--navy)
+}
+@media(max-width:1000px){
+  #ownerDetailFilters{grid-template-columns:1fr 1fr}
+}
+@media(max-width:650px){
+  #ownerDetailFilters{grid-template-columns:1fr}
+}
+
 </style>
 </head>
 <body>
@@ -630,19 +675,13 @@
   </div>
 
   <section id="tab-panel">
-    <div class="card filters">
-      <div class="field"><label>Buscar</label><input id="searchInput" placeholder="Expediente, extensión, R.D., cargo, observación..." oninput="debouncePanel()"></div>
-      <div class="field"><label id="ownerFilterLabel">Usuario / abogado</label><select id="ownerSelect" onchange="setOwner(this.value)"></select></div>
-      <div style="display:flex;align-items:flex-end"><button class="btn secondary" onclick="clearPanelFilters()">Limpiar</button></div>
-    </div>
-
     <div id="ownerCardsPanel" class="hidden-by-role">
       <div class="card" style="margin-bottom:14px">
         <div class="owner-cards-head">
           <div>
             <strong>Expedientes por usuario / abogado</strong>
             <div class="note" style="margin-top:3px">
-              Seleccione un usuario para ver debajo el detalle de sus expedientes.
+              Seleccione un usuario o una opción de la tarjeta para ver directamente sus expedientes.
             </div>
           </div>
           <span class="note" id="ownerCardsCount">0 usuarios</span>
@@ -651,6 +690,34 @@
         <div id="ownerCardsGrid" class="owner-cards-grid">
           <div class="empty">Cargando usuarios...</div>
         </div>
+      </div>
+    </div>
+
+    <div id="ownerDetailFilters" class="card hidden">
+      <div class="field">
+        <label>Usuario seleccionado</label>
+        <input id="selectedOwnerDisplay" class="selected-owner-readonly" readonly value="">
+      </div>
+
+      <div class="field">
+        <label>Buscar expediente</label>
+        <input id="searchInput" placeholder="Expediente, extensión, R.D., cargo, observación..." oninput="debouncePanel()">
+      </div>
+
+      <div class="field" id="ownerStateField">
+        <label id="ownerStateLabel">Estado del expediente</label>
+        <select id="ownerStateFilter" onchange="changeOwnerStateFilter(this.value)">
+          <option value="custody">TODOS EN CUSTODIA</option>
+          <option value="loan">EN PRÉSTAMO</option>
+          <option value="reassigned">REASIGNADO</option>
+          <option value="pending">DEVOLUCIÓN SOLICITADA</option>
+          <option value="returns">DEVUELTO AL ARCHIVO</option>
+          <option value="alert">ALERTAS &gt; 30 DÍAS</option>
+        </select>
+      </div>
+
+      <div id="ownerBackWrap" style="display:flex;align-items:flex-end">
+        <button class="btn secondary" type="button" onclick="clearPanelFilters()">← Ver todos los usuarios</button>
       </div>
     </div>
 
@@ -2481,7 +2548,7 @@ function fillSelects(){
     if(!isLimitedUser()){
       const values=[...el('ownerSelect').options].map(o=>o.value);
       if(selectedOwner && values.includes(selectedOwner)){
-        el('ownerSelect').value=selectedOwner;
+        if(el('ownerSelect'))el('ownerSelect').value=selectedOwner;
       }else if(selectedOwner && !values.includes(selectedOwner)){
         selectedOwner='';
         el('ownerSelect').value='';
@@ -2799,7 +2866,7 @@ async function refreshCatalogoUI(){
     !abogadoNames().includes(selectedOwner)
   ){
     selectedOwner='';
-    el('ownerSelect').value='';
+    if(el('ownerSelect'))el('ownerSelect').value='';
     page=0;
     await loadPanel()
   }
@@ -2984,37 +3051,76 @@ function ownerCardsMode(){
 
 function updateOwnerPanelVisibility(){
   const cardsAvailable=ownerCardsMode();
+  const limited=isLimitedUser();
   const individualUser=selectedOwnerIsUser();
+  const showDetail=limited||individualUser;
 
+  // ADMINISTRADOR / ARCHIVO: al entrar solo ven las tarjetas de usuarios.
   if(el('ownerCardsPanel')){
-    el('ownerCardsPanel').classList.toggle('hidden-by-role',!cardsAvailable);
-    el('ownerCardsPanel').classList.toggle('hidden',!cardsAvailable);
+    const showCards=cardsAvailable;
+    el('ownerCardsPanel').classList.toggle('hidden-by-role',!showCards);
+    el('ownerCardsPanel').classList.toggle('hidden',!showCards);
+  }
+
+  // El bloque de búsqueda/estado aparece después de seleccionar usuario.
+  // Para USUARIO normal permanece disponible en su espacio personal.
+  if(el('ownerDetailFilters')){
+    el('ownerDetailFilters').classList.toggle('hidden',!showDetail);
+  }
+
+  if(el('selectedOwnerDisplay')){
+    el('selectedOwnerDisplay').value=limited
+      ?(currentProfile?.nombre_personal||'')
+      :(individualUser?selectedOwner:'');
+  }
+
+  if(el('ownerBackWrap')){
+    el('ownerBackWrap').classList.toggle('hidden',limited||!individualUser);
   }
 
   if(el('ownerSelectedContext')){
-    el('ownerSelectedContext').classList.toggle('hidden',!individualUser);
+    el('ownerSelectedContext').classList.add('hidden');
   }
 
-  if(el('ownerSelectedContextName')){
-    el('ownerSelectedContextName').textContent=
-      individualUser ? selectedOwner : '—';
-  }
-
-  // Las tarjetas de estados solo aparecen al seleccionar un usuario.
+  // ADMIN/ARCHIVO ya no usan una segunda fila de tarjetas de estado.
   if(el('fullAccessKpis')){
-    el('fullAccessKpis').classList.toggle('hidden',!individualUser);
+    el('fullAccessKpis').classList.add('hidden');
   }
 
-  // La tabla de expedientes también solo aparece al seleccionar usuario.
   if(el('panelDetailWrap')){
-    el('panelDetailWrap').classList.toggle('hidden',!individualUser);
+    el('panelDetailWrap').classList.toggle('hidden',!showDetail);
   }
 
-  if(el('searchInput')){
-    el('searchInput').placeholder=
-      individualUser
-        ?'Expediente, extensión, R.D., cargo, observación...'
-        :'Buscar usuario / abogado...';
+  if(el('ownerStateLabel')){
+    el('ownerStateLabel').textContent=limited
+      ?'Estado de mis expedientes'
+      :'Estado del expediente';
+  }
+
+  if(el('ownerStateFilter')){
+    if(limited){
+      const current=userPanelMode||'TODOS';
+      el('ownerStateFilter').innerHTML=`
+        <option value="TODOS">TODOS MIS EXPEDIENTES</option>
+        <option value="PRESTAMO">EN PRÉSTAMO</option>
+        <option value="REASIGNADOS_POR_MI">REASIGNADOS POR MÍ</option>
+        <option value="REASIGNADOS_A_MI">REASIGNADOS A MÍ</option>
+        <option value="DEVUELTOS">DEVUELTOS</option>
+        <option value="ALERTAS_30">ALERTAS &gt; 30 DÍAS</option>`;
+      el('ownerStateFilter').value=current;
+    }else if(individualUser){
+      const current=['custody','loan','reassigned','pending','returns','alert'].includes(panelQuickFilter)
+        ?panelQuickFilter
+        :'custody';
+      el('ownerStateFilter').innerHTML=`
+        <option value="custody">TODOS EN CUSTODIA</option>
+        <option value="loan">EN PRÉSTAMO</option>
+        <option value="reassigned">REASIGNADO</option>
+        <option value="pending">DEVOLUCIÓN SOLICITADA</option>
+        <option value="returns">DEVUELTO AL ARCHIVO</option>
+        <option value="alert">ALERTAS &gt; 30 DÍAS</option>`;
+      el('ownerStateFilter').value=current;
+    }
   }
 }
 async function loadOwnerCards(){
@@ -3155,9 +3261,25 @@ function renderOwnerCards(){
           onclick="event.stopPropagation();openOwnerExpedientes('${String(x.nombre).replace(/'/g,"\'")}','custody')">
           Ver expedientes
         </button>
+      </div>
+
+      <div class="owner-user-options">
+        ${Number(x.en_prestamo||0)>0
+          ?`<button class="btn secondary small"
+              onclick="event.stopPropagation();openOwnerExpedientes('${String(x.nombre).replace(/'/g,"\'")}','loan')">
+              En préstamo (${Number(x.en_prestamo||0)})
+            </button>`
+          :''}
+
+        ${Number(x.reasignados||0)>0
+          ?`<button class="btn secondary small"
+              onclick="event.stopPropagation();openOwnerExpedientes('${String(x.nombre).replace(/'/g,"\'")}','reassigned')">
+              Reasignados (${Number(x.reasignados||0)})
+            </button>`
+          :''}
 
         ${Number(x.devoluciones_pendientes_aceptacion||0)>0
-          ?`<button class="btn small"
+          ?`<button class="btn secondary small"
               onclick="event.stopPropagation();openOwnerExpedientes('${String(x.nombre).replace(/'/g,"\'")}','pending')">
               Por aceptar (${Number(x.devoluciones_pendientes_aceptacion||0)})
             </button>`
@@ -3166,7 +3288,14 @@ function renderOwnerCards(){
         ${Number(x.devoluciones_realizadas||0)>0
           ?`<button class="btn secondary small"
               onclick="event.stopPropagation();openOwnerExpedientes('${String(x.nombre).replace(/'/g,"\'")}','returns')">
-              Devoluciones (${Number(x.devoluciones_realizadas||0)})
+              Devueltos (${Number(x.devoluciones_realizadas||0)})
+            </button>`
+          :''}
+
+        ${Number(x.alertas_30||0)>0
+          ?`<button class="btn secondary small"
+              onclick="event.stopPropagation();openOwnerExpedientes('${String(x.nombre).replace(/'/g,"\'")}','alert')">
+              Alertas +30 (${Number(x.alertas_30||0)})
             </button>`
           :''}
       </div>
@@ -3185,7 +3314,7 @@ async function openOwnerExpedientes(nombre,tipo='custody'){
 
   renderOwnerCards();
 
-  el('ownerSelectedContext')?.scrollIntoView({
+  el('ownerDetailFilters')?.scrollIntoView({
     behavior:'smooth',
     block:'start'
   });
@@ -3363,52 +3492,19 @@ async function loadOwnerUserKpis(name){
 function renderKpis(){
   updateOwnerPanelVisibility();
 
-  const special=selectedOwnerIsUser();
-
-  if(ownerCardsMode() && !special){
+  // ADMINISTRADOR / ARCHIVO usan el selector "Estado del expediente"
+  // en lugar de una segunda fila de tarjetas de estado.
+  if(hasFullAccess() && !isLimitedUser()){
+    if(el('fullAccessKpis'))el('fullAccessKpis').classList.add('hidden');
     return;
   }
-  const box=el('fullAccessKpis');
-
-  if(box){
-    box.classList.toggle('owner-user-kpis',special);
-  }
-
-  setVisible('kpiReassignedCard',special);
-  setVisible('kpiReturnedHistoryCard',special);
-
-  if(special){
-    el('kTotalLabel').textContent='Total en custodia del usuario';
-    el('kLoanLabel').textContent='En préstamo';
-    el('kPendingLabel').textContent='Pendientes de aceptar devolución';
-
-    el('kTotal').textContent='…';
-    el('kLoan').textContent='…';
-    el('kReassigned').textContent='…';
-    el('kPending').textContent='…';
-    el('kReturnedHistory').textContent='…';
-    el('kAlert').textContent='…';
-    setOwnerKpiStatesLoading();
-
-    loadOwnerUserKpis(selectedOwner);
-    updateKpiQuickUI();
-    return;
-  }
-
-  el('kTotalLabel').textContent='Total registros';
-  el('kLoanLabel').textContent='En préstamo';
-  el('kPendingLabel').textContent='Pendientes de devolución';
-  clearOwnerKpiStateSummaries();
 
   const s=summaryFor(selectedOwner);
-  el('kTotal').textContent=s.total;
-  el('kPending').textContent=s.pendientes;
-  el('kLoan').textContent=s.en_prestamo;
-  el('kAlert').textContent=s.alertas;
-
-  updateKpiQuickUI();
+  if(el('kTotal'))el('kTotal').textContent=s.total;
+  if(el('kPending'))el('kPending').textContent=s.pendientes;
+  if(el('kLoan'))el('kLoan').textContent=s.en_prestamo;
+  if(el('kAlert'))el('kAlert').textContent=s.alertas;
 }
-
 function renderSidebar(){
   const activos=catalogo.filter(x=>x.activo!==false);
   const abogados=abogadoNames();
@@ -3707,9 +3803,37 @@ function updateKpiQuickUI(){
   if(el(id))el(id).classList.add('quick-active');
 }
 
+async function changeOwnerStateFilter(value){
+  page=0;
+
+  if(isLimitedUser()){
+    const valid=[
+      'TODOS','PRESTAMO','REASIGNADOS_POR_MI',
+      'REASIGNADOS_A_MI','DEVUELTOS','ALERTAS_30'
+    ];
+    userPanelMode=valid.includes(value)?value:'TODOS';
+    updateUserPersonalKpiUI();
+    await loadPanel();
+    return;
+  }
+
+  if(!selectedOwnerIsUser())return;
+
+  const valid=['custody','loan','reassigned','pending','returns','alert'];
+  panelQuickFilter=valid.includes(value)?value:'custody';
+
+  if(el('ownerStateFilter')){
+    el('ownerStateFilter').value=panelQuickFilter;
+  }
+
+  await loadPanel();
+}
 async function showKpiExpedientes(tipo){
   if(selectedOwnerIsUser()){
     panelQuickFilter=tipo==='total'?'custody':tipo;
+    if(el('ownerStateFilter')){
+      el('ownerStateFilter').value=panelQuickFilter||'custody';
+    }
   }else{
     panelQuickFilter=tipo==='total'?'':tipo;
   }
@@ -3727,6 +3851,7 @@ async function clearPanelFilters(){
   page=0;
 
   if(el('searchInput'))el('searchInput').value='';
+  if(el('ownerStateFilter'))el('ownerStateFilter').value='custody';
 
   if(isLimitedUser()){
     userPanelMode='TODOS';
@@ -3944,13 +4069,16 @@ async function setOwner(v){
     abogadoNames().includes(selectedOwner)
   )?'custody':'';
 
+  if(el('selectedOwnerDisplay'))el('selectedOwnerDisplay').value=selectedOwner;
+  if(el('ownerStateFilter'))el('ownerStateFilter').value=selectedOwner?'custody':'custody';
+
   // El buscador cambia de "usuario" a "expediente".
   if(wasCardsMode && selectedOwner && el('searchInput')){
     el('searchInput').value='';
   }
 
   page=0;
-  el('ownerSelect').value=selectedOwner;
+  if(el('ownerSelect'))el('ownerSelect').value=selectedOwner;
 
   switchTab('panel',document.querySelector('[data-tab="panel"]'));
   renderSidebar();
