@@ -542,6 +542,33 @@
   .owner-cards-grid{grid-template-columns:1fr}
 }
 
+
+.owner-user-card.selected-user-card{
+  border-color:#173f6b;
+  box-shadow:0 0 0 2px #173f6b inset
+}
+.owner-user-card{
+  cursor:pointer
+}
+.owner-user-card:focus-visible{
+  outline:2px solid #173f6b;
+  outline-offset:2px
+}
+.owner-user-card .owner-user-actions{
+  pointer-events:none
+}
+.owner-user-card .owner-user-actions button{
+  pointer-events:auto
+}
+.owner-detail-separator{
+  margin:12px 0 10px;
+  padding-top:10px;
+  border-top:1px solid var(--line);
+  font-size:12px;
+  font-weight:800;
+  color:var(--navy)
+}
+
 </style>
 </head>
 <body>
@@ -600,7 +627,7 @@
           <div>
             <strong>Expedientes por usuario / abogado</strong>
             <div class="note" style="margin-top:3px">
-              Cada tarjeta resume los expedientes vinculados a ese usuario.
+              Seleccione un usuario para ver debajo el detalle de sus expedientes.
             </div>
           </div>
           <span class="note" id="ownerCardsCount">0 usuarios</span>
@@ -2936,43 +2963,45 @@ async function loadUserPersonalSummary(){
 function ownerCardsMode(){
   return !!(
     hasFullAccess() &&
-    !isLimitedUser() &&
-    !selectedOwner
+    !isLimitedUser()
   );
 }
 
 function updateOwnerPanelVisibility(){
-  const cardsMode=ownerCardsMode();
+  const cardsAvailable=ownerCardsMode();
   const individualUser=selectedOwnerIsUser();
+
+  if(el('ownerCardsPanel')){
+    el('ownerCardsPanel').classList.toggle('hidden-by-role',!cardsAvailable);
+    el('ownerCardsPanel').classList.toggle('hidden',!cardsAvailable);
+  }
 
   if(el('ownerSelectedContext')){
     el('ownerSelectedContext').classList.toggle('hidden',!individualUser);
   }
+
   if(el('ownerSelectedContextName')){
     el('ownerSelectedContextName').textContent=
       individualUser ? selectedOwner : '—';
   }
 
-  if(el('ownerCardsPanel')){
-    el('ownerCardsPanel').classList.toggle('hidden-by-role',!cardsMode);
-    el('ownerCardsPanel').classList.toggle('hidden',!cardsMode);
-  }
-
+  // Las tarjetas de estados solo aparecen al seleccionar un usuario.
   if(el('fullAccessKpis')){
-    el('fullAccessKpis').classList.toggle('hidden',cardsMode);
+    el('fullAccessKpis').classList.toggle('hidden',!individualUser);
   }
 
+  // La tabla de expedientes también solo aparece al seleccionar usuario.
   if(el('panelDetailWrap')){
-    el('panelDetailWrap').classList.toggle('hidden',cardsMode);
+    el('panelDetailWrap').classList.toggle('hidden',!individualUser);
   }
 
   if(el('searchInput')){
-    el('searchInput').placeholder=cardsMode
-      ?'Buscar usuario / abogado...'
-      :'Expediente, extensión, R.D., cargo, observación...';
+    el('searchInput').placeholder=
+      individualUser
+        ?'Expediente, extensión, R.D., cargo, observación...'
+        :'Buscar usuario / abogado...';
   }
 }
-
 async function loadOwnerCards(){
   if(!ownerCardsMode()){
     updateOwnerPanelVisibility();
@@ -3036,9 +3065,6 @@ async function loadOwnerCards(){
     })
   );
 
-  // Si durante la carga ya se eligió a un usuario, no repintar el resumen.
-  if(!ownerCardsMode())return;
-
   ownerCardsRows=results.sort((a,b)=>
     Number(b.total_custodia||0)-Number(a.total_custodia||0) ||
     a.nombre.localeCompare(b.nombre,'es')
@@ -3068,7 +3094,11 @@ function renderOwnerCards(){
   }
 
   grid.innerHTML=rows.map(x=>`
-    <div class="owner-user-card">
+    <div class="owner-user-card ${selectedOwner===x.nombre?'selected-user-card':''}"
+         role="button"
+         tabindex="0"
+         onclick="openOwnerExpedientes('${String(x.nombre).replace(/'/g,"\\'")}','custody')"
+         onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openOwnerExpedientes('${String(x.nombre).replace(/'/g,"\\'")}','custody')}">
       <div class="owner-user-name">${esc(x.nombre)}</div>
 
       <div class="owner-user-total">${Number(x.total_custodia||0)}</div>
@@ -3107,20 +3137,20 @@ function renderOwnerCards(){
 
       <div class="owner-user-actions">
         <button class="btn secondary small"
-          onclick="openOwnerExpedientes('${String(x.nombre).replace(/'/g,"\\'")}','custody')">
+          onclick="event.stopPropagation();openOwnerExpedientes('${String(x.nombre).replace(/'/g,"\\'")}','custody')">
           Ver expedientes
         </button>
 
         ${Number(x.devoluciones_pendientes_aceptacion||0)>0
           ?`<button class="btn small"
-              onclick="openOwnerExpedientes('${String(x.nombre).replace(/'/g,"\\'")}','pending')">
+              onclick="event.stopPropagation();openOwnerExpedientes('${String(x.nombre).replace(/'/g,"\\'")}','pending')">
               Por aceptar (${Number(x.devoluciones_pendientes_aceptacion||0)})
             </button>`
           :''}
 
         ${Number(x.devoluciones_realizadas||0)>0
           ?`<button class="btn secondary small"
-              onclick="openOwnerExpedientes('${String(x.nombre).replace(/'/g,"\\'")}','returns')">
+              onclick="event.stopPropagation();openOwnerExpedientes('${String(x.nombre).replace(/'/g,"\\'")}','returns')">
               Devoluciones (${Number(x.devoluciones_realizadas||0)})
             </button>`
           :''}
@@ -3130,8 +3160,6 @@ function renderOwnerCards(){
 }
 
 async function openOwnerExpedientes(nombre,tipo='custody'){
-  // En la vista de tarjetas el buscador filtra nombres.
-  // Al entrar al detalle debe quedar vacío para no filtrar expedientes.
   if(el('searchInput'))el('searchInput').value='';
 
   await setOwner(nombre);
@@ -3140,7 +3168,9 @@ async function openOwnerExpedientes(nombre,tipo='custody'){
     await showKpiExpedientes(tipo);
   }
 
-  el('fullAccessKpis')?.scrollIntoView({
+  renderOwnerCards();
+
+  el('ownerSelectedContext')?.scrollIntoView({
     behavior:'smooth',
     block:'start'
   });
@@ -3318,11 +3348,11 @@ async function loadOwnerUserKpis(name){
 function renderKpis(){
   updateOwnerPanelVisibility();
 
-  if(ownerCardsMode()){
+  const special=selectedOwnerIsUser();
+
+  if(ownerCardsMode() && !special){
     return;
   }
-
-  const special=selectedOwnerIsUser();
   const box=el('fullAccessKpis');
 
   if(box){
@@ -3708,11 +3738,13 @@ async function loadPanel(){
   const from=page*PAGE_SIZE,to=from+PAGE_SIZE-1;
 
   // ADMINISTRADOR / ARCHIVO:
-  // en TODOS se muestra una tarjeta por cada usuario / abogado.
+  // las tarjetas de usuarios permanecen visibles siempre.
   if(ownerCardsMode()){
     updateOwnerPanelVisibility();
     await loadOwnerCards();
-    return;
+
+    // Si no hay usuario seleccionado, todavía no hay detalle que mostrar.
+    if(!selectedOwnerIsUser())return;
   }
 
   updateOwnerPanelVisibility();
@@ -3872,8 +3904,11 @@ function debouncePanel(){
   clearTimeout(panelTimer);
   page=0;
   panelTimer=setTimeout(()=>{
-    if(ownerCardsMode())renderOwnerCards();
-    else loadPanel();
+    if(ownerCardsMode() && !selectedOwnerIsUser()){
+      renderOwnerCards();
+    }else{
+      loadPanel();
+    }
   },300)
 }
 async function setOwner(v){
@@ -3908,6 +3943,7 @@ async function setOwner(v){
   renderKpis();
   updateKpiQuickUI();
   await loadPanel();
+  if(ownerCardsMode())renderOwnerCards();
 }
 async function changePage(d){const next=page+d;if(next<0)return;if(next*PAGE_SIZE>=panelCount&&d>0)return;page=next;await loadPanel()}
 
