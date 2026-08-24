@@ -5242,7 +5242,7 @@ function renderRequests(){
     <thead><tr>
       <th>Solicitud</th>
       <th>Solicitante</th>
-      ${showOrigin?'<th>Origen</th><th>Registrado por</th>':''}
+      ${showOrigin?'<th>Registrado por</th>':''}
       <th>Asunto</th>
       <th>Modalidad</th>
       <th>Estado</th>
@@ -5262,8 +5262,7 @@ function renderRequests(){
         <td><b>${esc(r.numero)}</b></td>
         <td>${esc(r.solicitante)}</td>
         ${showOrigin
-          ?`<td>${requestOriginPill(r.origen_registro)}</td>
-            <td><b>${esc(r.registrado_por||'—')}</b></td>`
+          ?`<td><b>${esc(r.registrado_por||'—')}</b></td>`
           :''}
         <td>${esc(r.asunto)}</td>
         <td><b>${esc(r.modalidad||'PRÉSTAMO')}</b></td>
