@@ -432,6 +432,7 @@
       <div class="card kpi" id="kpiTotalCard">
         <div class="label" id="kTotalLabel">Total registros</div>
         <div class="value" id="kTotal">0</div>
+        <div class="note" style="margin-top:4px">Expedientes que actualmente permanecen con el usuario</div>
         <div class="kpi-state-info" id="kTotalStates"></div>
         <button class="kpi-view" onclick="showKpiExpedientes('total')">Visualizar expedientes</button>
       </div>
@@ -446,6 +447,7 @@
       <div class="card kpi hidden" id="kpiReassignedCard">
         <div class="label">Reasignados al usuario</div>
         <div class="value" id="kReassigned">0</div>
+        <div class="note" style="margin-top:4px">Reasignados que aún permanecen con el usuario</div>
         <div class="kpi-state-info" id="kReassignedStates"></div>
         <button class="kpi-view" onclick="showKpiExpedientes('reassigned')">Visualizar expedientes</button>
       </div>
@@ -2820,7 +2822,7 @@ function renderOwnerCards(){
       <div class="owner-user-name">${esc(x.nombre)}</div>
 
       <div class="owner-user-total">${Number(x.total_entregados||0)}</div>
-      <div class="owner-user-caption">expedientes entregados al usuario</div>
+      <div class="owner-user-caption">expedientes actualmente en custodia</div>
 
       <div class="owner-user-stats">
         <div class="owner-user-stat">
@@ -2850,7 +2852,7 @@ function renderOwnerCards(){
 
       <div class="owner-user-actions">
         <button class="btn secondary small"
-          onclick="openOwnerExpedientes('${String(x.nombre).replace(/'/g,"\\'")}','delivered')">
+          onclick="openOwnerExpedientes('${String(x.nombre).replace(/'/g,"\\'")}','custody')">
           Ver expedientes
         </button>
 
@@ -2865,14 +2867,14 @@ function renderOwnerCards(){
   `).join('');
 }
 
-async function openOwnerExpedientes(nombre,tipo='delivered'){
+async function openOwnerExpedientes(nombre,tipo='custody'){
   // En la vista de tarjetas el buscador filtra nombres.
   // Al entrar al detalle debe quedar vacío para no filtrar expedientes.
   if(el('searchInput'))el('searchInput').value='';
 
   await setOwner(nombre);
 
-  if(tipo && tipo!=='delivered'){
+  if(tipo && tipo!=='custody'){
     await showKpiExpedientes(tipo);
   }
 
@@ -2980,7 +2982,7 @@ function clearOwnerKpiStateSummaries(){
 
 async function loadOwnerUserKpiStates(name,requestedName){
   const config=[
-    ['ENTREGADOS','kTotalStates'],
+    ['CUSTODIA','kTotalStates'],
     ['PRESTAMO','kLoanStates'],
     ['REASIGNADOS','kReassignedStates'],
     ['PENDIENTES','kPendingStates'],
@@ -3106,7 +3108,7 @@ function renderKpis(){
   setVisible('kpiReassignedCard',special);
 
   if(special){
-    el('kTotalLabel').textContent='Total entregados al usuario';
+    el('kTotalLabel').textContent='Total en custodia del usuario';
     el('kLoanLabel').textContent='En préstamo';
     el('kPendingLabel').textContent='Pendientes de devolución';
 
@@ -3399,7 +3401,7 @@ async function showUserCard(tipo){
 }
 
 function panelQuickLabel(){
-  return panelQuickFilter==='delivered'?'Total entregados al usuario':
+  return panelQuickFilter==='custody'?'Total en custodia del usuario':
     panelQuickFilter==='pending'?'Pendientes de devolución':
     panelQuickFilter==='loan'?'En préstamo':
     panelQuickFilter==='reassigned'?'Reasignados al usuario':
@@ -3410,7 +3412,7 @@ function panelQuickLabel(){
 function updateKpiQuickUI(){
   const map={
     total:'kpiTotalCard',
-    delivered:'kpiTotalCard',
+    custody:'kpiTotalCard',
     pending:'kpiPendingCard',
     loan:'kpiLoanCard',
     reassigned:'kpiReassignedCard',
@@ -3424,7 +3426,7 @@ function updateKpiQuickUI(){
   let key=panelQuickFilter||'total';
 
   if(selectedOwnerIsUser() && !panelQuickFilter){
-    key='delivered';
+    key='custody';
   }
 
   const id=map[key]||'kpiTotalCard';
@@ -3433,7 +3435,7 @@ function updateKpiQuickUI(){
 
 async function showKpiExpedientes(tipo){
   if(selectedOwnerIsUser()){
-    panelQuickFilter=tipo==='total'?'delivered':tipo;
+    panelQuickFilter=tipo==='total'?'custody':tipo;
   }else{
     panelQuickFilter=tipo==='total'?'':tipo;
   }
@@ -3526,14 +3528,14 @@ async function loadPanel(){
   // el simple valor de expedientes.estado.
   if(selectedOwnerIsUser()){
     const tipoMap={
-      delivered:'ENTREGADOS',
+      custody:'CUSTODIA',
       loan:'PRESTAMO',
       reassigned:'REASIGNADOS',
       pending:'PENDIENTES',
       alert:'ALERTAS'
     };
 
-    const tipo=tipoMap[panelQuickFilter||'delivered']||'ENTREGADOS';
+    const tipo=tipoMap[panelQuickFilter||'custody']||'CUSTODIA';
     const search=cleanSearch(el('searchInput')?.value||'');
 
     const {data,error}=await sb.rpc(
@@ -3561,7 +3563,7 @@ async function loadPanel(){
     const baseTitle=
       `Expedientes de ${selectedOwner} · USUARIO / ABOGADO`;
 
-    const quickLabel=panelQuickLabel()||'Total entregados al usuario';
+    const quickLabel=panelQuickLabel()||'Total en custodia del usuario';
 
     el('panelTitle').textContent=`${baseTitle} · ${quickLabel}`;
     el('pageInfo').textContent=`${page+1} · ${panelCount} registros`;
@@ -3654,7 +3656,7 @@ async function setOwner(v){
     selectedOwner &&
     !isLimitedUser() &&
     abogadoNames().includes(selectedOwner)
-  )?'delivered':'';
+  )?'custody':'';
 
   // El buscador cambia de "usuario" a "expediente".
   if(wasCardsMode && selectedOwner && el('searchInput')){
