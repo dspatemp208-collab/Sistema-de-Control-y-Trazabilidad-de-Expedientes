@@ -327,6 +327,37 @@
   .owner-cards-grid{grid-template-columns:1fr}
 }
 
+
+.kpi-state-info{
+  margin-top:7px;
+  min-height:34px;
+  font-size:10px;
+  line-height:1.45;
+  color:var(--muted)
+}
+.kpi-state-info .state-summary-title{
+  font-weight:800;
+  color:#41556f;
+  margin-right:3px
+}
+.kpi-state-chip{
+  display:inline-flex;
+  align-items:center;
+  gap:3px;
+  margin:2px 4px 2px 0;
+  padding:2px 6px;
+  border:1px solid #dce5ef;
+  border-radius:999px;
+  background:#f7f9fc;
+  color:#263c58;
+  font-weight:700;
+  white-space:nowrap
+}
+.kpi-state-chip b{
+  color:#0f2747;
+  font-size:10px
+}
+
 </style>
 </head>
 <body>
@@ -401,30 +432,35 @@
       <div class="card kpi" id="kpiTotalCard">
         <div class="label" id="kTotalLabel">Total registros</div>
         <div class="value" id="kTotal">0</div>
+        <div class="kpi-state-info" id="kTotalStates"></div>
         <button class="kpi-view" onclick="showKpiExpedientes('total')">Visualizar expedientes</button>
       </div>
 
       <div class="card kpi warn" id="kpiLoanCard">
         <div class="label" id="kLoanLabel">En préstamo</div>
         <div class="value" id="kLoan">0</div>
+        <div class="kpi-state-info" id="kLoanStates"></div>
         <button class="kpi-view" onclick="showKpiExpedientes('loan')">Visualizar expedientes</button>
       </div>
 
       <div class="card kpi hidden" id="kpiReassignedCard">
         <div class="label">Reasignados al usuario</div>
         <div class="value" id="kReassigned">0</div>
+        <div class="kpi-state-info" id="kReassignedStates"></div>
         <button class="kpi-view" onclick="showKpiExpedientes('reassigned')">Visualizar expedientes</button>
       </div>
 
       <div class="card kpi" id="kpiPendingCard">
         <div class="label" id="kPendingLabel">Pendientes de devolución</div>
         <div class="value" id="kPending">0</div>
+        <div class="kpi-state-info" id="kPendingStates"></div>
         <button class="kpi-view" onclick="showKpiExpedientes('pending')">Visualizar expedientes</button>
       </div>
 
       <div class="card kpi danger" id="kpiAlertCard">
         <div class="label">Alertas &gt; 30 días</div>
         <div class="value" id="kAlert">0</div>
+        <div class="kpi-state-info" id="kAlertStates"></div>
         <button class="kpi-view" onclick="showKpiExpedientes('alert')">Visualizar expedientes</button>
       </div>
     </div>
@@ -2878,6 +2914,132 @@ function selectedOwnerIsUser(){
   );
 }
 
+
+function stateSummaryOrder(state){
+  const order={
+    'EN PRÉSTAMO':1,
+    'REASIGNADO':2,
+    'DEVOLUCIÓN SOLICITADA':3,
+    'DEVUELTO AL ARCHIVO':4,
+    'PENDIENTE DE VERIFICACIÓN':5,
+    'EN TRÁMITE':6
+  };
+  return order[state]||50;
+}
+
+function summarizeOperationalStates(rows){
+  const counts=new Map();
+
+  (rows||[]).forEach(r=>{
+    const state=(operationalStatus(r)||'SIN ESTADO').trim()||'SIN ESTADO';
+    counts.set(state,(counts.get(state)||0)+1);
+  });
+
+  return [...counts.entries()]
+    .sort((a,b)=>
+      stateSummaryOrder(a[0])-stateSummaryOrder(b[0]) ||
+      b[1]-a[1] ||
+      a[0].localeCompare(b[0],'es')
+    );
+}
+
+function renderKpiStateSummary(id,rows){
+  const box=el(id);
+  if(!box)return;
+
+  const list=summarizeOperationalStates(rows);
+
+  if(!list.length){
+    box.innerHTML='<span class="state-summary-title">Estados:</span> sin expedientes';
+    return;
+  }
+
+  box.innerHTML=
+    '<span class="state-summary-title">Estados:</span> '+
+    list.map(([state,count])=>
+      `<span class="kpi-state-chip">${esc(state)} <b>${count}</b></span>`
+    ).join('');
+}
+
+function setOwnerKpiStatesLoading(){
+  ['kTotalStates','kLoanStates','kReassignedStates','kPendingStates','kAlertStates']
+    .forEach(id=>{
+      if(el(id)){
+        el(id).innerHTML=
+          '<span class="state-summary-title">Estados:</span> cargando...';
+      }
+    });
+}
+
+function clearOwnerKpiStateSummaries(){
+  ['kTotalStates','kLoanStates','kReassignedStates','kPendingStates','kAlertStates']
+    .forEach(id=>{
+      if(el(id))el(id).innerHTML='';
+    });
+}
+
+async function loadOwnerUserKpiStates(name,requestedName){
+  const config=[
+    ['ENTREGADOS','kTotalStates'],
+    ['PRESTAMO','kLoanStates'],
+    ['REASIGNADOS','kReassignedStates'],
+    ['PENDIENTES','kPendingStates'],
+    ['ALERTAS','kAlertStates']
+  ];
+
+  const responses=await Promise.all(
+    config.map(async ([tipo,id])=>{
+      const {data,error}=await sb.rpc(
+        'listar_expedientes_por_usuario_admin',
+        {
+          p_nombre:name,
+          p_tipo:tipo,
+          p_busqueda:null
+        }
+      );
+
+      return {
+        tipo,
+        id,
+        rows:data||[],
+        error
+      };
+    })
+  );
+
+  // El usuario seleccionado pudo cambiar mientras cargaban las consultas.
+  if(selectedOwner!==requestedName)return;
+
+  // Obtener el último movimiento una sola vez para todos los expedientes.
+  const unique=new Map();
+
+  responses.forEach(r=>{
+    if(r.error)return;
+    (r.rows||[]).forEach(x=>{
+      if(x?.id&&!unique.has(x.id))unique.set(x.id,x);
+    });
+  });
+
+  const enriched=await attachLatestMovementToRecords([...unique.values()]);
+  const enrichedMap=new Map(enriched.map(x=>[x.id,x]));
+
+  if(selectedOwner!==requestedName)return;
+
+  responses.forEach(r=>{
+    if(r.error){
+      console.warn(`${r.tipo}:`,r.error.message);
+      if(el(r.id)){
+        el(r.id).innerHTML=
+          '<span class="state-summary-title">Estados:</span> no disponible';
+      }
+      return;
+    }
+
+    const rows=(r.rows||[]).map(x=>enrichedMap.get(x.id)||x);
+    renderKpiStateSummary(r.id,rows);
+  });
+}
+
 async function loadOwnerUserKpis(name){
   if(!name||!sb||!session)return;
 
@@ -2898,6 +3060,10 @@ async function loadOwnerUserKpis(name){
     if(el('kReassigned'))el('kReassigned').textContent='—';
     if(el('kPending'))el('kPending').textContent='—';
     if(el('kAlert'))el('kAlert').textContent='—';
+    ['kTotalStates','kLoanStates','kReassignedStates','kPendingStates','kAlertStates']
+      .forEach(id=>{
+        if(el(id))el(id).innerHTML='<span class="state-summary-title">Estados:</span> no disponible';
+      });
     return;
   }
 
@@ -2916,6 +3082,9 @@ async function loadOwnerUserKpis(name){
   el('kReassigned').textContent=ownerUserKpiSummary.reasignados;
   el('kPending').textContent=ownerUserKpiSummary.pendientes_devolucion;
   el('kAlert').textContent=ownerUserKpiSummary.alertas_30;
+
+  setOwnerKpiStatesLoading();
+  loadOwnerUserKpiStates(name,requested);
 
   updateKpiQuickUI();
 }
@@ -2946,6 +3115,7 @@ function renderKpis(){
     el('kReassigned').textContent='…';
     el('kPending').textContent='…';
     el('kAlert').textContent='…';
+    setOwnerKpiStatesLoading();
 
     loadOwnerUserKpis(selectedOwner);
     updateKpiQuickUI();
@@ -2955,6 +3125,7 @@ function renderKpis(){
   el('kTotalLabel').textContent='Total registros';
   el('kLoanLabel').textContent='En préstamo';
   el('kPendingLabel').textContent='Pendientes de devolución';
+  clearOwnerKpiStateSummaries();
 
   const s=summaryFor(selectedOwner);
   el('kTotal').textContent=s.total;
