@@ -3235,17 +3235,221 @@ function openAddItemsToExistingRequest(){
 }
 
 
-function openRequestSourceFromNew(mode){
-  // La selección masiva/manual se administra en el mismo módulo de búsqueda.
-  // Al terminar, "Continuar solicitud" vuelve a abrir Nueva solicitud
-  // con todos los expedientes agregados.
-  const m=String(mode||'BUSCAR').toUpperCase();
 
-  if(el('newRequestModal')){
-    el('newRequestModal').classList.remove('show');
+async function openNewRequestModal(rowsOverride=null,preserveHeader=false){
+  if(!sb||!session){
+    alert('Debe iniciar sesión.');
+    return;
   }
 
+  let rows=Array.isArray(rowsOverride)?rowsOverride:[];
+  let ids=[];
+
+  // Si viene desde "Solicitar seleccionados", cargar esos expedientes.
+  if(!rows.length && !preserveHeader){
+    ids=[...selectedIds];
+
+    if(ids.length){
+      const {data,error}=await sb
+        .from('expedientes')
+        .select('*')
+        .in('id',ids);
+
+      if(error){
+        alert(error.message);
+        return;
+      }
+
+      rows=(data||[]).map(x=>({...x,_nuevo:false}));
+    }
+  }
+
+  // IMPORTANTE:
+  // Si no hay expedientes seleccionados, IGUAL se abre Nueva solicitud.
+  // El usuario podrá agregarlos después por Manual / Buscar / Excel.
+
+  const activos=catalogo.filter(x=>x.activo!==false&&x.tipo==='PERSONAL');
+
+  // Guardar valores ya escritos si estamos regresando desde búsqueda/Excel.
+  const headerDraft=preserveHeader
+    ?(window.__newRequestHeaderDraft||{})
+    :{};
+
+  if(isLimitedUser()){
+    if(!currentProfile.nombre_personal){
+      alert('Su cuenta no tiene personal asociado.');
+      return;
+    }
+
+    el('rqSolicitante').innerHTML=
+      `<option value="${esc(currentProfile.nombre_personal)}">${esc(currentProfile.nombre_personal)}</option>`;
+    el('rqSolicitante').value=currentProfile.nombre_personal;
+    el('rqSolicitante').disabled=true;
+  }else{
+    el('rqSolicitante').disabled=false;
+
+    // Reconstruir siempre el selector para evitar que quede vacío.
+    el('rqSolicitante').innerHTML=
+      activos.map(x=>`<option value="${esc(x.nombre)}">${esc(x.nombre)}</option>`).join('');
+
+    const preferred=
+      headerDraft.solicitante ||
+      (selectedOwner && activos.some(x=>x.nombre===selectedOwner)?selectedOwner:'') ||
+      currentProfile?.nombre_personal ||
+      activos[0]?.nombre ||
+      '';
+
+    if(preferred){
+      // Si el nombre no está en catálogo, incluirlo temporalmente.
+      if(![...el('rqSolicitante').options].some(o=>o.value===preferred)){
+        el('rqSolicitante').insertAdjacentHTML(
+          'afterbegin',
+          `<option value="${esc(preferred)}">${esc(preferred)}</option>`
+        );
+      }
+      el('rqSolicitante').value=preferred;
+    }
+  }
+
+  if(preserveHeader){
+    el('rqAsunto').value=headerDraft.asunto||'';
+    el('rqModalidad').value=headerDraft.modalidad||'PRÉSTAMO';
+    el('rqObservacion').value=headerDraft.observacion||'';
+  }else{
+    el('rqAsunto').value='';
+    el('rqModalidad').value='PRÉSTAMO';
+    el('rqObservacion').value='';
+    window.__newRequestHeaderDraft=null;
+  }
+
+  el('rqSaveStatus').textContent='';
+
+  const nuevos=rows.filter(x=>x._nuevo||x.nuevo).length;
+  const existentes=rows.length-nuevos;
+
+  el('rqSelectedCount').textContent=
+    `${rows.length} expediente${rows.length===1?'':'s'} · `+
+    `${existentes} existente${existentes===1?'':'s'} · `+
+    `${nuevos} nuevo${nuevos===1?'':'s'}`;
+
+  if(!rows.length){
+    el('rqSelectedTable').innerHTML=
+      `<div class="empty" style="padding:18px">
+        Aún no ha agregado expedientes.<br>
+        Utilice <b>Agregar manualmente</b>, <b>Buscar en la base</b> o <b>Cargar Excel</b>.
+      </div>`;
+  }else{
+    el('rqSelectedTable').innerHTML=`<table>
+      <thead>
+        <tr>
+          <th>N°</th>
+          <th>Expediente</th>
+          <th>Ext.</th>
+          <th>R.D.</th>
+          <th>Tipo</th>
+          <th>Estado</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows.map((r,i)=>`<tr>
+          <td>${i+1}</td>
+          <td><b>${esc(expBase(r.expediente))}</b></td>
+          <td>${r.extension?esc(r.extension):'—'}</td>
+          <td>${esc(r.rd||'')}</td>
+          <td>${(r._nuevo||r.nuevo)?'NUEVO':'EXISTENTE'}</td>
+          <td>${esc(r.estado||((r._nuevo||r.nuevo)?'PENDIENTE DE VERIFICACIÓN':''))}</td>
+          <td>
+            <button class="btn secondary small"
+              type="button"
+              onclick="removeNewRequestItem(${i})">
+              Quitar
+            </button>
+          </td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
+  }
+
+  const normalized=rows.map(r=>({
+    id:r.id||null,
+    expediente:r.expediente,
+    extension:r.extension||null,
+    rd:r.rd||null,
+    ultimo_folio:r.ultimo_folio||null,
+    observacion:r.observacion||null,
+    nuevo:!!(r._nuevo||r.nuevo)
+  }));
+
+  el('newRequestModal').dataset.items=JSON.stringify(normalized);
+  el('newRequestModal').dataset.ids='';
+  el('newRequestModal').dataset.newExp='';
+  el('newRequestModal').classList.add('show');
+}
+
+function removeNewRequestItem(index){
+  let items=[];
+  try{
+    items=JSON.parse(el('newRequestModal').dataset.items||'[]');
+  }catch(_){
+    items=[];
+  }
+
+  if(index<0 || index>=items.length)return;
+
+  items.splice(index,1);
+
+  // Guardar cabecera para no perder lo escrito.
+  window.__newRequestHeaderDraft={
+    solicitante:el('rqSolicitante')?.value||'',
+    asunto:el('rqAsunto')?.value||'',
+    modalidad:el('rqModalidad')?.value||'PRÉSTAMO',
+    observacion:el('rqObservacion')?.value||''
+  };
+
+  openNewRequestModal(
+    items.map(x=>({...x,_nuevo:!!x.nuevo})),
+    true
+  );
+}
+
+function openRequestSourceFromNew(mode){
+  const m=String(mode||'BUSCAR').toUpperCase();
+
+  // Guardar Solicitante / Asunto / Modalidad / Observación.
+  window.__newRequestHeaderDraft={
+    solicitante:el('rqSolicitante')?.value||'',
+    asunto:el('rqAsunto')?.value||'',
+    modalidad:el('rqModalidad')?.value||'PRÉSTAMO',
+    observacion:el('rqObservacion')?.value||''
+  };
+
+  // Conservar los expedientes ya agregados a la solicitud.
+  let existingItems=[];
+  try{
+    existingItems=JSON.parse(el('newRequestModal')?.dataset.items||'[]');
+  }catch(_){
+    existingItems=[];
+  }
+
+  el('newRequestModal')?.classList.remove('show');
+
   openRequestSearchModal();
+
+  // Restaurar los elementos actuales dentro del borrador de búsqueda.
+  requestDraftItems=existingItems.map(x=>({
+    id:x.id||null,
+    expediente:x.expediente,
+    extension:x.extension||null,
+    rd:x.rd||null,
+    ultimo_folio:x.ultimo_folio||null,
+    observacion:x.observacion||null,
+    estado:x.estado||null,
+    _nuevo:!!x.nuevo
+  }));
+
+  renderRequestDraft();
+  updateRequestLookupSelection();
 
   if(el('requestSearchModalTitle')){
     el('requestSearchModalTitle').textContent=
@@ -3281,6 +3485,7 @@ function openRequestSourceFromNew(mode){
     el('requestLookupStatus').textContent=
       'Busque uno o varios expedientes existentes y agréguelos a la solicitud.';
   }
+
   setTimeout(()=>el('requestLookupInput')?.focus(),80);
 }
 
@@ -3317,18 +3522,19 @@ function openRequestSearchModal(){
 
 
 function returnToNewRequestFromSearch(){
+  const items=requestDraftItems.map(x=>({
+    id:x.id||null,
+    expediente:x.expediente,
+    extension:x.extension||null,
+    rd:x.rd||null,
+    ultimo_folio:x.ultimo_folio||null,
+    observacion:x.observacion||null,
+    estado:x.estado||null,
+    _nuevo:!!x._nuevo
+  }));
+
   closeRequestSearchModal();
-
-  // Si hay elementos en el borrador, continuar normalmente para que
-  // se transfieran a Nueva solicitud. Si no hay ninguno, solo reabrir.
-  if(requestDraftItems.length){
-    continueRequestFromSearch();
-    return;
-  }
-
-  if(typeof openNewRequestModal==='function'){
-    openNewRequestModal();
-  }
+  openNewRequestModal(items,true);
 }
 
 function closeRequestSearchModal(){
@@ -3943,7 +4149,7 @@ async function continueRequestFromSearch(){
   }));
 
   closeRequestSearchModal();
-  await openNewRequestModal(itemsCopy);
+  await openNewRequestModal(itemsCopy,true);
 }
 
 
