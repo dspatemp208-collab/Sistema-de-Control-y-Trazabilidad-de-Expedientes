@@ -203,6 +203,21 @@
 @media(max-width:900px){.user-request-kpis{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:520px){.user-request-kpis{grid-template-columns:1fr}}
 
+
+.req-origin{
+  display:inline-flex;align-items:center;justify-content:center;
+  padding:3px 7px;border-radius:999px;font-size:10px;font-weight:800;
+  white-space:nowrap;border:1px solid #d8e1ec
+}
+.req-origin.admin{background:#e8f0fb;color:#173f6b;border-color:#b9cce3}
+.req-origin.user{background:#f2f6fa;color:#334155}
+.req-origin.archive{background:#eef8f1;color:#166534;border-color:#c9e8d0}
+.req-origin.unknown{background:#fff7ed;color:#9a3412;border-color:#fed7aa}
+.req-origin-summary{
+  margin-top:8px;padding-top:8px;border-top:1px solid #e5eaf1;
+  font-size:11px;display:flex;gap:6px;flex-wrap:wrap
+}
+
 </style>
 </head>
 <body>
@@ -502,6 +517,16 @@
           <option>CERRADA POR ARCHIVO</option>
         </select>
       </div>
+      <div class="field hidden-by-role" id="requestOriginField">
+        <label>Origen del registro</label>
+        <select id="requestOriginFilter" onchange="loadRequests()">
+          <option value="">TODOS</option>
+          <option value="ADMINISTRADOR">ADMINISTRADOR</option>
+          <option value="USUARIO">USUARIO</option>
+          <option value="ARCHIVO">ARCHIVO</option>
+          <option value="SIN IDENTIFICAR">SIN IDENTIFICAR</option>
+        </select>
+      </div>
       <div style="display:flex;align-items:flex-end">
         <button class="btn" onclick="openNewRequestModal()">+ Nueva solicitud</button>
       </div>
@@ -691,6 +716,8 @@
       <div class="mini">Expedientes<b id="rqDTotal">0</b></div>
       <div class="mini">Cargo<b id="rqDCargo">—</b></div>
       <div class="mini">Solicitante<b id="rqDSolicitante" style="font-size:12px">—</b></div>
+      <div class="mini" id="rqDOrigenBox">Origen<b id="rqDOrigen">—</b></div>
+      <div class="mini" id="rqDRegistradoPorBox">Registrado por<b id="rqDRegistradoPor" style="font-size:12px">—</b></div>
     </div>
 
     <div class="req-detail-controls">
@@ -1199,34 +1226,170 @@ function requestAttentionText(r){
   return '—';
 }
 
+function requestOriginValue(v){
+  const x=String(v||'').trim().toUpperCase();
+  if(x==='ADMINISTRADOR')return 'ADMINISTRADOR';
+  if(x==='ARCHIVO')return 'ARCHIVO';
+  if(x==='USUARIO')return 'USUARIO';
+  return 'SIN IDENTIFICAR';
+}
+
+function requestOriginPill(v){
+  const x=requestOriginValue(v);
+  const cls=x==='ADMINISTRADOR'?'admin':
+    x==='ARCHIVO'?'archive':
+    x==='USUARIO'?'user':'unknown';
+  return `<span class="req-origin ${cls}">${esc(x)}</span>`;
+}
+
+async function requestOriginMetaByIds(ids){
+  const clean=[...new Set((ids||[]).filter(Boolean))];
+  const out=new Map();
+  if(!clean.length||!sb||!session)return out;
+
+  const {data,error}=await sb
+    .from('solicitudes_prestamo')
+    .select('id,fecha_atencion,hora_atencion,modalidad,origen_registro,registrado_por_usuario_id,created_by')
+    .in('id',clean);
+
+  if(error){
+    console.warn('metadatos solicitud:',error.message);
+    return out;
+  }
+
+  const rows=data||[];
+  const profileIds=[...new Set(
+    rows.flatMap(x=>[x.registrado_por_usuario_id,x.created_by]).filter(Boolean)
+  )];
+
+  const profiles=new Map();
+
+  if(profileIds.length){
+    const {data:pdata,error:perr}=await sb
+      .from('perfiles_usuario')
+      .select('id,email,nombre_personal,rol')
+      .in('id',profileIds);
+
+    if(!perr){
+      (pdata||[]).forEach(p=>profiles.set(p.id,p));
+    }
+  }
+
+  rows.forEach(x=>{
+    const pid=x.registrado_por_usuario_id||x.created_by||null;
+    const p=pid?profiles.get(pid):null;
+
+    const registradoPor=
+      p?.nombre_personal ||
+      p?.email ||
+      (pid===session.user.id
+        ?(currentProfile?.nombre_personal||currentProfile?.email||session.user.email||'Cuenta actual')
+        :'—');
+
+    const origen=requestOriginValue(
+      x.origen_registro ||
+      p?.rol ||
+      (pid===session.user.id?currentProfile?.rol:'')
+    );
+
+    out.set(x.id,{
+      ...x,
+      origen_registro:origen,
+      registrado_por:registradoPor
+    });
+  });
+
+  return out;
+}
+
+async function enrichRowsWithRequestOrigin(rows,idKey='id'){
+  if(!Array.isArray(rows)||!rows.length)return rows||[];
+
+  const ids=rows.map(x=>x?.[idKey]).filter(Boolean);
+  const meta=await requestOriginMetaByIds(ids);
+
+  return rows.map(r=>{
+    const m=meta.get(r?.[idKey]);
+    return m ? {
+      ...r,
+      origen_registro:m.origen_registro,
+      registrado_por:m.registrado_por,
+      registrado_por_usuario_id:m.registrado_por_usuario_id||m.created_by||null
+    } : {
+      ...r,
+      origen_registro:requestOriginValue(r.origen_registro),
+      registrado_por:r.registrado_por||'—'
+    };
+  });
+}
+
 async function enrichRequestAttentionTimes(rows){
   if(!sb||!session||!Array.isArray(rows)||!rows.length)return rows||[];
 
   const ids=rows.map(x=>x.id).filter(Boolean);
   if(!ids.length)return rows;
 
-  const {data,error}=await sb
-    .from('solicitudes_prestamo')
-    .select('id,fecha_atencion,hora_atencion,modalidad')
-    .in('id',ids);
-
-  if(error){
-    console.warn('hora_atencion:',error.message);
-    return rows;
-  }
-
-  const map=new Map((data||[]).map(x=>[x.id,x]));
+  const meta=await requestOriginMetaByIds(ids);
 
   return rows.map(r=>{
-    const a=map.get(r.id);
+    const a=meta.get(r.id);
     return a ? {
       ...r,
       fecha_atencion:a.fecha_atencion ?? r.fecha_atencion ?? null,
       hora_atencion:a.hora_atencion ?? null,
-      modalidad:a.modalidad ?? r.modalidad ?? 'PRÉSTAMO'
-    } : r;
+      modalidad:a.modalidad ?? r.modalidad ?? 'PRÉSTAMO',
+      origen_registro:a.origen_registro,
+      registrado_por:a.registrado_por,
+      registrado_por_usuario_id:a.registrado_por_usuario_id||a.created_by||null
+    } : {
+      ...r,
+      origen_registro:requestOriginValue(r.origen_registro),
+      registrado_por:r.registrado_por||'—'
+    };
   });
 }
+
+async function enrichCargosWithRequestOrigin(rows){
+  if(!Array.isArray(rows)||!rows.length||!isAdmin())return rows||[];
+
+  const nums=[...new Set(rows.map(x=>(x.numero||'').trim()).filter(Boolean))];
+  if(!nums.length)return rows;
+
+  const {data:links,error}=await sb
+    .from('solicitud_expedientes')
+    .select('solicitud_id,cargo_numero')
+    .in('cargo_numero',nums);
+
+  if(error){
+    console.warn('origen cargos:',error.message);
+    return rows;
+  }
+
+  const requestIds=[...new Set((links||[]).map(x=>x.solicitud_id).filter(Boolean))];
+  const meta=await requestOriginMetaByIds(requestIds);
+
+  const byCargo=new Map();
+
+  (links||[]).forEach(x=>{
+    if(!x.cargo_numero||!x.solicitud_id)return;
+    if(!byCargo.has(x.cargo_numero))byCargo.set(x.cargo_numero,[]);
+    const m=meta.get(x.solicitud_id);
+    if(m)byCargo.get(x.cargo_numero).push(m);
+  });
+
+  return rows.map(c=>{
+    const metas=byCargo.get(c.numero)||[];
+    const origins=[...new Set(metas.map(m=>m.origen_registro).filter(Boolean))];
+    const registrants=[...new Set(metas.map(m=>m.registrado_por).filter(x=>x&&x!=='—'))];
+
+    return {
+      ...c,
+      origen_solicitud:origins.length===1?origins[0]:(origins.length>1?'VARIOS':'—'),
+      registrado_por_solicitud:registrants.length===1?registrants[0]:(registrants.length>1?'VARIOS':'—')
+    };
+  });
+}
+
 
 function rowDays(r){return businessDays(r.fecha_entrega,r.fecha_devolucion)}
 function rowAlert(r){
@@ -1349,6 +1512,9 @@ function applyRoleUI(){
   setVisible('userPersonalKpis',limited);
   setVisible('fullRequestKpis',!limited);
   setVisible('userRequestKpis',limited);
+  setVisible('requestOriginField',admin);
+  setVisible('rqDOrigenBox',admin);
+  setVisible('rqDRegistradoPorBox',admin);
 
   // El buscador para solicitar es útil sobre todo para abogados.
   setVisible('searchRequestBtn',true);
@@ -3386,7 +3552,7 @@ async function loadReturnRequests(){
     return;
   }
 
-  returnRequestRows=data||[];
+  returnRequestRows=await enrichRowsWithRequestOrigin(data||[],'solicitud_id');
 
   const solicitudCount=new Set(
     returnRequestRows.map(x=>x.solicitud_id).filter(Boolean)
@@ -3443,6 +3609,8 @@ function renderReturnRequests(){
         <th>Ext.</th>
         <th>Solicitud</th>
         <th>Solicitante</th>
+        <th>Origen</th>
+        <th>Registrado por</th>
         <th>Responsable actual</th>
         <th>Cargo</th>
         <th>F. solicitud devolución</th>
@@ -3459,6 +3627,8 @@ function renderReturnRequests(){
           <td>${esc(x.extension||'—')}</td>
           <td><b>${esc(x.solicitud_numero||'—')}</b></td>
           <td>${esc(x.solicitante||'—')}</td>
+          <td>${requestOriginPill(x.origen_registro)}</td>
+          <td><b>${esc(x.registrado_por||'—')}</b></td>
           <td><b>${esc(x.responsable_actual||'—')}</b></td>
           <td>${esc(x.cargo_numero||'—')}</td>
           <td>${fmtDate(x.fecha_solicitud_devolucion)}</td>
@@ -3502,13 +3672,49 @@ async function manageReturnRequest(solicitudId,expedienteId){
 async function loadRequestsByLawyer(){
   if(!hasFullAccess())return;
 
-  const {data,error}=await sb.rpc('resumen_solicitudes_por_abogado');
+  const {data,error}=await sb.rpc('listar_solicitudes_prestamo',{
+    p_busqueda:null,
+    p_estado:null
+  });
+
   if(error){
     if(el('lawyerRequestsGrid'))el('lawyerRequestsGrid').innerHTML=`<div class="empty">${esc(error.message)}</div>`;
     return;
   }
 
-  requestsByLawyerRows=data||[];
+  const rows=await enrichRequestAttentionTimes(data||[]);
+  const map=new Map();
+
+  rows.forEach(r=>{
+    const name=(r.solicitante||'SIN SOLICITANTE').trim()||'SIN SOLICITANTE';
+    if(!map.has(name)){
+      map.set(name,{
+        solicitante:name,total:0,solicitado:0,aceptado:0,
+        en_prestamo:0,por_recibir:0,devuelto:0,
+        origen_admin:0,origen_usuario:0,origen_archivo:0,origen_otro:0
+      });
+    }
+
+    const x=map.get(name);
+    x.total++;
+
+    const st=r.estado_atencion||r.estado||'';
+    if(st==='REGISTRADA')x.solicitado++;
+    if(st==='REGISTRADA POR ARCHIVO')x.aceptado++;
+    if(st==='ENTREGA PARCIAL'||st==='ENTREGA TOTAL')x.en_prestamo++;
+    if(st==='CERRADA POR ARCHIVO')x.devuelto++;
+    x.por_recibir+=Number(r.devoluciones_pendientes||0);
+
+    const o=requestOriginValue(r.origen_registro);
+    if(o==='ADMINISTRADOR')x.origen_admin++;
+    else if(o==='USUARIO')x.origen_usuario++;
+    else if(o==='ARCHIVO')x.origen_archivo++;
+    else x.origen_otro++;
+  });
+
+  requestsByLawyerRows=[...map.values()]
+    .sort((a,b)=>b.total-a.total||a.solicitante.localeCompare(b.solicitante,'es'));
+
   renderRequestsByLawyer();
 }
 
@@ -3529,6 +3735,12 @@ function renderRequestsByLawyer(){
       <div class="lawyer-total">${Number(x.total||0)}</div>
       <div class="note">solicitudes registradas</div>
 
+      ${isAdmin()?`<div class="req-origin-summary">
+        <span>${requestOriginPill('ADMINISTRADOR')} <b>${Number(x.origen_admin||0)}</b></span>
+        <span>${requestOriginPill('USUARIO')} <b>${Number(x.origen_usuario||0)}</b></span>
+        ${Number(x.origen_archivo||0)>0?`<span>${requestOriginPill('ARCHIVO')} <b>${Number(x.origen_archivo||0)}</b></span>`:''}
+      </div>`:''}
+
       <div class="lawyer-stats">
         <div>SOLICITADO<b>${Number(x.solicitado||0)}</b></div>
         <div>PEND. CARGO<b>${Number(x.aceptado||0)}</b></div>
@@ -3539,17 +3751,20 @@ function renderRequestsByLawyer(){
 
       <div class="lawyer-actions">
         <button class="btn secondary small" onclick="openLawyerRequests('${x.solicitante.replace(/'/g,"\\'")}')">Ver solicitudes</button>
-        ${Number(x.solicitado||0)>0?`<button class="btn small" onclick="openLawyerRequests('${x.solicitante.replace(/'/g,"\\'")}','SOLICITADO')">Pendientes (${Number(x.solicitado||0)})</button>`:''}
-        ${Number(x.por_recibir||0)>0?`<button class="btn secondary small" onclick="openLawyerRequests('${x.solicitante.replace(/'/g,"\\'")}','DEVOLUCIÓN SOLICITADA')">Por recibir (${Number(x.por_recibir||0)})</button>`:''}
+        ${isAdmin()&&Number(x.origen_admin||0)>0?`<button class="btn secondary small" onclick="openLawyerRequests('${x.solicitante.replace(/'/g,"\\'")}','','ADMINISTRADOR')">Del administrador (${Number(x.origen_admin||0)})</button>`:''}
+        ${isAdmin()&&Number(x.origen_usuario||0)>0?`<button class="btn secondary small" onclick="openLawyerRequests('${x.solicitante.replace(/'/g,"\\'")}','','USUARIO')">Del usuario (${Number(x.origen_usuario||0)})</button>`:''}
+        ${Number(x.solicitado||0)>0?`<button class="btn small" onclick="openLawyerRequests('${x.solicitante.replace(/'/g,"\\'")}','REGISTRADA')">Pendientes (${Number(x.solicitado||0)})</button>`:''}
+        ${Number(x.por_recibir||0)>0?`<button class="btn secondary small" onclick="openLawyerRequests('${x.solicitante.replace(/'/g,"\\'")}','PENDIENTE DE CIERRE')">Por recibir (${Number(x.por_recibir||0)})</button>`:''}
       </div>
     </div>
   `).join('');
 }
 
-async function openLawyerRequests(nombre,estado=''){
+async function openLawyerRequests(nombre,estado='',origen=''){
   switchTab('requests',document.querySelector('[data-tab="requests"]'));
   el('requestSearch').value=nombre;
   el('requestStateFilter').value=estado;
+  if(isAdmin()&&el('requestOriginFilter'))el('requestOriginFilter').value=origen;
   await loadRequests();
 }
 
@@ -3591,6 +3806,7 @@ async function loadRequests(){
 
   const search=cleanSearch(el('requestSearch')?.value||'');
   const state=el('requestStateFilter')?.value||'';
+  const origin=isAdmin()?(el('requestOriginFilter')?.value||''):'';
 
   // Primera consulta: siempre sin filtro de estado.
   // Sirve para mantener las cantidades correctas de todas las tarjetas.
@@ -3606,7 +3822,13 @@ async function loadRequests(){
     return;
   }
 
-  const allRequestRows=await enrichRequestAttentionTimes(allData||[]);
+  let allRequestRows=await enrichRequestAttentionTimes(allData||[]);
+
+  if(origin){
+    allRequestRows=allRequestRows.filter(
+      x=>requestOriginValue(x.origen_registro)===origin
+    );
+  }
 
   const counts={
     'REGISTRADA':0,
@@ -3659,6 +3881,12 @@ async function loadRequests(){
     }
 
     requestRows=await enrichRequestAttentionTimes(data||[]);
+
+    if(origin){
+      requestRows=requestRows.filter(
+        x=>requestOriginValue(x.origen_registro)===origin
+      );
+    }
   }else{
     requestRows=allRequestRows;
   }
@@ -3710,10 +3938,13 @@ function renderRequests(){
     return;
   }
 
+  const showOrigin=isAdmin();
+
   el('requestsTable').innerHTML=`<table>
     <thead><tr>
       <th>Solicitud</th>
       <th>Solicitante</th>
+      ${showOrigin?'<th>Origen</th><th>Registrado por</th>':''}
       <th>Asunto</th>
       <th>Modalidad</th>
       <th>Estado</th>
@@ -3731,6 +3962,10 @@ function renderRequests(){
       ${requestRows.map(r=>`<tr>
         <td><b>${esc(r.numero)}</b></td>
         <td>${esc(r.solicitante)}</td>
+        ${showOrigin
+          ?`<td>${requestOriginPill(r.origen_registro)}</td>
+            <td><b>${esc(r.registrado_por||'—')}</b></td>`
+          :''}
         <td>${esc(r.asunto)}</td>
         <td><b>${esc(r.modalidad||'PRÉSTAMO')}</b></td>
         <td>${attentionStatePill(r.estado_atencion||r.estado)}</td>
@@ -3744,7 +3979,7 @@ function renderRequests(){
         <td><b>${r.hora_atencion?fmtTime(r.hora_atencion):'—'}</b></td>
         <td>
           <button class="btn secondary small" onclick="openRequestDetail('${r.id}')">
-            ${isLimitedUser()?'Ver':(r.estado_atencion==='CERRADA POR ARCHIVO'?'Ver':'Gestionar')}
+            Gestionar
           </button>
         </td>
       </tr>`).join('')}
@@ -3752,161 +3987,6 @@ function renderRequests(){
   </table>`;
 }
 
-async function openNewRequestModal(rowsOverride=null){
-  if(!sb||!session){alert('Debe iniciar sesión.');return}
-
-  let rows=Array.isArray(rowsOverride)?rowsOverride:[];
-  let ids=[];
-
-  if(!rows.length){
-    ids=[...selectedIds];
-
-    if(ids.length){
-      const {data,error}=await sb.from('expedientes').select('*').in('id',ids);
-      if(error){alert(error.message);return}
-      rows=(data||[]).map(x=>({...x,_nuevo:false}));
-    }
-  }
-
-  if(!rows.length){
-    openRequestSearchModal();
-    return;
-  }
-
-  const activos=catalogo.filter(x=>x.activo!==false&&x.tipo==='PERSONAL');
-
-  if(isLimitedUser()){
-    if(!currentProfile.nombre_personal){
-      alert('Su cuenta no tiene personal asociado.');
-      return;
-    }
-
-    el('rqSolicitante').innerHTML=`<option>${esc(currentProfile.nombre_personal)}</option>`;
-    el('rqSolicitante').value=currentProfile.nombre_personal;
-    el('rqSolicitante').disabled=true;
-  }else{
-    el('rqSolicitante').disabled=false;
-
-    if(selectedOwner && activos.some(x=>x.nombre===selectedOwner)){
-      el('rqSolicitante').value=selectedOwner;
-    }else if(!el('rqSolicitante').value && activos.length){
-      el('rqSolicitante').value=activos[0].nombre;
-    }
-  }
-
-  el('rqAsunto').value='';
-  el('rqModalidad').value='PRÉSTAMO';
-  el('rqObservacion').value='';
-  el('rqSaveStatus').textContent='';
-
-  const nuevos=rows.filter(x=>x._nuevo).length;
-  const existentes=rows.length-nuevos;
-
-  el('rqSelectedCount').textContent=
-    `${rows.length} expediente${rows.length===1?'':'s'} · `+
-    `${existentes} existente${existentes===1?'':'s'} · `+
-    `${nuevos} nuevo${nuevos===1?'':'s'}`;
-
-  el('rqSelectedTable').innerHTML=`<table>
-    <thead><tr><th>N°</th><th>Expediente</th><th>Ext.</th><th>R.D.</th><th>Tipo</th><th>Estado</th></tr></thead>
-    <tbody>${rows.map((r,i)=>`<tr>
-      <td>${i+1}</td>
-      <td><b>${esc(expBase(r.expediente))}</b></td>
-      <td>${r.extension?esc(r.extension):'—'}</td>
-      <td>${esc(r.rd||'')}</td>
-      <td>${r._nuevo?'NUEVO':'EXISTENTE'}</td>
-      <td>${esc(r.estado||(r._nuevo?'PENDIENTE DE VERIFICACIÓN':''))}</td>
-    </tr>`).join('')}</tbody>
-  </table>`;
-
-  el('newRequestModal').dataset.items=JSON.stringify(rows.map(r=>({
-    id:r.id||null,
-    expediente:r.expediente,
-    extension:r.extension||null,
-    rd:r.rd||null,
-    ultimo_folio:r.ultimo_folio||null,
-    observacion:r.observacion||null,
-    nuevo:!!r._nuevo
-  })));
-
-  el('newRequestModal').dataset.ids='';
-  el('newRequestModal').dataset.newExp='';
-  el('newRequestModal').classList.add('show');
-}
-function closeNewRequestModal(){
-  el('newRequestModal').classList.remove('show');
-}
-
-async function saveNewRequest(){
-  const solicitante=el('rqSolicitante').value.trim();
-  const asunto=el('rqAsunto').value.trim();
-  const modalidad=el('rqModalidad').value.trim();
-  const observacion=el('rqObservacion').value.trim();
-
-  let items=[];
-  try{items=JSON.parse(el('newRequestModal').dataset.items||'[]')}catch(_){}
-
-  if(!solicitante){
-    el('rqSaveStatus').textContent='Seleccione el solicitante.';
-    return;
-  }
-
-  if(!asunto){
-    el('rqSaveStatus').textContent='Seleccione el asunto.';
-    el('rqAsunto').focus();
-    return;
-  }
-
-  if(!validarAsuntoActivo(asunto,'rqSaveStatus','rqAsunto'))return;
-
-  if(!['COPIA DIGITAL','PRÉSTAMO','LECTURA EN SALA'].includes(modalidad)){
-    el('rqSaveStatus').textContent='Seleccione una modalidad válida.';
-    el('rqModalidad').focus();
-    return;
-  }
-
-  if(!items.length){
-    el('rqSaveStatus').textContent='No hay expedientes en la solicitud.';
-    return;
-  }
-
-  const btn=el('rqSaveBtn');
-  btn.disabled=true;
-  btn.textContent='Enviando...';
-  el('rqSaveStatus').textContent=
-    `Registrando una solicitud con ${items.length} expediente(s)...`;
-
-  try{
-    const {data,error}=await sb.rpc('crear_solicitud_multiple_mixta_con_modalidad',{
-      p_solicitante:solicitante,
-      p_asunto:asunto,
-      p_observacion:observacion||null,
-      p_modalidad:modalidad,
-      p_items:items
-    });
-
-    if(error)throw error;
-
-    selectedIds.clear();
-    updateSelectionUI();
-    closeNewRequestModal();
-
-    showToast(
-      `Solicitud ${data?.numero||''} registrada · `+
-      `${data?.total||items.length} expediente(s) · ${modalidad}`
-    );
-
-    await loadRequests();
-    if(hasFullAccess())await loadRequestsByLawyer();
-
-    switchTab('requests',document.querySelector('[data-tab="requests"]'));
-  }catch(err){
-    el('rqSaveStatus').textContent=err?.message||String(err);
-  }finally{
-    btn.disabled=false;
-    btn.textContent='Enviar solicitud';
-  }
-}
 async function openRequestDetail(id){
   currentRequestId=id;
 
@@ -3961,6 +4041,8 @@ async function openRequestDetail(id){
   el('rqDTotal').textContent=Number(r.total_expedientes||requestDetailRows.length);
   el('rqDCargo').textContent=r.cargo_numero||'—';
   el('rqDSolicitante').textContent=r.solicitante||'—';
+  if(el('rqDOrigen'))el('rqDOrigen').innerHTML=requestOriginPill(r.origen_registro);
+  if(el('rqDRegistradoPor'))el('rqDRegistradoPor').textContent=r.registrado_por||'—';
   el('rqDAtiende').value=r.atiende||'';
 
   // Valor de retorno por defecto: primera ubicación que contenga ARCHIVO.
@@ -4541,6 +4623,10 @@ async function loadCargos(){
     }
   }
 
+  if(isAdmin()){
+    cargosRows=await enrichCargosWithRequestOrigin(cargosRows);
+  }
+
   // Si el cargo seleccionado desapareció del resultado del filtro,
   // limpiar la selección.
   if(selectedCargoNumero &&
@@ -4593,6 +4679,7 @@ function renderCargos(){
         <th>Expedientes</th>
         <th>Asunto</th>
         <th>Solicitante</th>
+        ${isAdmin()?'<th>Origen solicitud</th><th>Registrado por</th>':''}
         <th>Atiende</th>
         <th>Fecha</th>
         <th>Observación</th>
@@ -4616,6 +4703,12 @@ function renderCargos(){
           <td><b>${Number(c.total_expedientes||0)}</b></td>
           <td>${esc(c.asunto||'—')}</td>
           <td>${esc(c.solicitante||'')}</td>
+          ${isAdmin()
+            ?`<td>${c.origen_solicitud==='VARIOS'
+                ?'<span class="req-origin unknown">VARIOS</span>'
+                :requestOriginPill(c.origen_solicitud)}</td>
+              <td><b>${esc(c.registrado_por_solicitud||'—')}</b></td>`
+            :''}
           <td>${esc(c.atiende_requerimiento||'—')}</td>
           <td>${fmtDate(c.fecha)}</td>
           <td>${esc(c.observacion||'')}</td>
