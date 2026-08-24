@@ -468,6 +468,80 @@
   #fullAccessKpis.owner-user-kpis .kpi.user-status-card{min-height:160px}
 }
 
+
+
+/* ===== Tarjetas compactas en vista TODOS LOS USUARIOS ===== */
+.owner-cards-grid{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(210px,1fr));
+  gap:10px
+}
+.owner-user-card{
+  border:1px solid var(--line);
+  border-radius:10px;
+  padding:12px 14px;
+  background:#fff
+}
+.owner-user-name{
+  font-size:13px;
+  margin-bottom:6px
+}
+.owner-user-total{
+  font-size:22px;
+  line-height:1;
+  margin-bottom:2px
+}
+.owner-user-caption{
+  margin-top:2px;
+  font-size:10px;
+  color:var(--muted)
+}
+.owner-user-stats{
+  display:grid;
+  grid-template-columns:repeat(2,1fr);
+  gap:5px 10px;
+  margin-top:10px;
+  padding-top:8px;
+  border-top:1px solid var(--line)
+}
+.owner-user-stat span{
+  font-size:8px;
+  letter-spacing:.1px
+}
+.owner-user-stat b{
+  margin-top:1px;
+  font-size:14px;
+  line-height:1.1
+}
+.owner-user-actions{
+  gap:6px;
+  margin-top:10px
+}
+.owner-user-actions .btn,
+.owner-user-actions .btn.small{
+  padding:5px 9px;
+  font-size:11px;
+  min-height:auto
+}
+.owner-cards-head{
+  margin-bottom:10px
+}
+.owner-cards-head strong{
+  font-size:13px
+}
+.owner-cards-head .note{
+  font-size:10px
+}
+@media(max-width:1400px){
+  .owner-cards-grid{grid-template-columns:repeat(3,minmax(210px,1fr))}
+}
+@media(max-width:980px){
+  .owner-cards-grid{grid-template-columns:repeat(2,minmax(210px,1fr))}
+}
+@media(max-width:720px){
+  .owner-cards-grid{grid-template-columns:1fr}
+}
+
 </style>
 </head>
 <body>
