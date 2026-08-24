@@ -1297,6 +1297,19 @@ function requestAttentionText(r){
   return '—';
 }
 
+function requestDeliveryText(r){
+  if(!r)return '—';
+
+  const dates=Array.isArray(r.fechas_entrega_prestamo)
+    ?r.fechas_entrega_prestamo.filter(Boolean)
+    :[];
+
+  if(!dates.length)return '—';
+  if(dates.length===1)return fmtDate(dates[0]);
+
+  return `VARIAS (${dates.length})`;
+}
+
 function requestOriginValue(v){
   const x=String(v||'').trim().toUpperCase();
   if(x==='ADMINISTRADOR')return 'ADMINISTRADOR';
@@ -1402,20 +1415,45 @@ async function enrichRequestAttentionTimes(rows){
 
   const meta=await requestOriginMetaByIds(ids);
 
+  // La aceptación de Archivo vive en solicitudes_prestamo.fecha_atencion.
+  // La entrega física vive por expediente en solicitud_expedientes.fecha_entrega.
+  const deliveryMap=new Map();
+
+  const {data:deliveryData,error:deliveryError}=await sb
+    .from('solicitud_expedientes')
+    .select('solicitud_id,fecha_entrega')
+    .in('solicitud_id',ids)
+    .not('fecha_entrega','is',null);
+
+  if(deliveryError){
+    console.warn('fechas de entrega préstamo:',deliveryError.message);
+  }else{
+    (deliveryData||[]).forEach(x=>{
+      if(!x.solicitud_id||!x.fecha_entrega)return;
+      if(!deliveryMap.has(x.solicitud_id)){
+        deliveryMap.set(x.solicitud_id,new Set());
+      }
+      deliveryMap.get(x.solicitud_id).add(x.fecha_entrega);
+    });
+  }
+
   return rows.map(r=>{
     const a=meta.get(r.id);
-    return a ? {
+    const fechas=[...(deliveryMap.get(r.id)||new Set())].sort();
+
+    return {
       ...r,
-      fecha_atencion:a.fecha_atencion ?? r.fecha_atencion ?? null,
-      hora_atencion:a.hora_atencion ?? null,
-      modalidad:a.modalidad ?? r.modalidad ?? 'PRÉSTAMO',
-      origen_registro:a.origen_registro,
-      registrado_por:a.registrado_por,
-      registrado_por_usuario_id:a.registrado_por_usuario_id||a.created_by||null
-    } : {
-      ...r,
-      origen_registro:requestOriginValue(r.origen_registro),
-      registrado_por:r.registrado_por||'—'
+      fecha_atencion:a?.fecha_atencion ?? r.fecha_atencion ?? null,
+      hora_atencion:a?.hora_atencion ?? r.hora_atencion ?? null,
+      modalidad:a?.modalidad ?? r.modalidad ?? 'PRÉSTAMO',
+      origen_registro:a?.origen_registro ?? requestOriginValue(r.origen_registro),
+      registrado_por:a?.registrado_por ?? r.registrado_por ?? '—',
+      registrado_por_usuario_id:
+        a?.registrado_por_usuario_id||a?.created_by||
+        r.registrado_por_usuario_id||null,
+      fechas_entrega_prestamo:fechas,
+      fecha_primera_entrega_prestamo:fechas[0]||null,
+      fecha_ultima_entrega_prestamo:fechas.length?fechas[fechas.length-1]:null
     };
   });
 }
@@ -3208,7 +3246,7 @@ async function loadStateDetail(estado){
           <th>Solicitante</th>
           <th>Estado solicitud</th>
           <th>F. solicitud</th>
-          <th>F. atención</th>
+          <th>F. aceptación Archivo</th>
           <th>Observación</th>
           <th></th>
         </tr>
@@ -4966,8 +5004,9 @@ function renderRequests(){
       <th>Cargo</th>
       <th>Atiende</th>
       <th>F. solicitud</th>
-      <th>F. atención</th>
-      <th>Hora atención</th>
+      <th>F. aceptación Archivo</th>
+      <th>Hora aceptación</th>
+      <th>F. entrega préstamo</th>
       <th></th>
     </tr></thead>
     <tbody>
@@ -4989,6 +5028,7 @@ function renderRequests(){
         <td>${fmtDate(r.fecha_solicitud)}</td>
         <td>${r.fecha_atencion?fmtDate(r.fecha_atencion):'—'}</td>
         <td><b>${r.hora_atencion?fmtTime(r.hora_atencion):'—'}</b></td>
+        <td><b>${requestDeliveryText(r)}</b></td>
         <td>
           <button class="btn secondary small" onclick="openRequestDetail('${r.id}')">
             Gestionar
@@ -5047,7 +5087,10 @@ async function openRequestDetail(id){
     ` · Modalidad: ${r.modalidad||'PRÉSTAMO'}`+
     ` · Fecha solicitud: ${fmtDate(r.fecha_solicitud)}`+
     `${r.fecha_atencion||r.hora_atencion
-      ?` · Atención: ${requestAttentionText(r)}`
+      ?` · Aceptación Archivo: ${requestAttentionText(r)}`
+      :''}`+
+    `${r.fechas_entrega_prestamo?.length
+      ?` · Entrega préstamo: ${requestDeliveryText(r)}`
       :''}`;
   el('rqDState').innerHTML=reqStatePill(r.estado||'');
   el('rqDTotal').textContent=Number(r.total_expedientes||requestDetailRows.length);
@@ -5138,7 +5181,7 @@ function renderRequestDetailItems(){
     <thead><tr>
       <th><input type="checkbox" ${selectableRows.length?'':'disabled'} ${allChecked?'checked':''} onchange="toggleAllRequestItems(this.checked)"></th>
       <th>Expediente</th><th>Ext.</th><th>Estado solicitud</th><th>Estado físico</th>
-      <th>Responsable actual</th><th>Cargo</th><th>F. entrega</th><th>F. sol. devolución</th><th>F. devolución</th>
+      <th>Responsable actual</th><th>Cargo</th><th>F. entrega préstamo</th><th>F. sol. devolución</th><th>F. devolución</th>
     </tr></thead>
     <tbody>${data.map(x=>{
       const selectable=requestItemSelectable(x);
@@ -5207,7 +5250,7 @@ function renderRequestActions(){
         <button class="btn secondary" onclick="openAddItemsToExistingRequest()">+ Agregar expedientes</button>
         <span class="note">Solicitud registrada. Archivo debe aceptarla y verificarla. Todavía no existe cargo.</span>`;
     }else if(r.estado==='ACEPTADO'){
-      actions='<span class="note">Solicitud aceptada por Archivo. Los expedientes están pendientes de ser atendidos con un cargo.</span>';
+      actions='<span class="note">Solicitud aceptada por Archivo. La fecha de aceptación ya quedó registrada; la fecha de entrega en préstamo se registrará recién cuando se atienda cada expediente con un cargo.</span>';
     }
 
     if(hasMyLoan){
@@ -5234,7 +5277,7 @@ function renderRequestActions(){
     actions=`
       <button class="btn secondary" onclick="openAddItemsToExistingRequest()">+ Agregar expedientes</button>
       <button class="btn" onclick="acceptRequestWithoutCargo()">Aceptar / verificar solicitud</button>
-      <span class="note">Aceptar la solicitud NO genera cargo ni cambia todavía el estado físico del expediente.</span>`;
+      <span class="note">Aceptar la solicitud registra la fecha/hora de aceptación de Archivo. NO registra todavía la fecha de entrega en préstamo, no genera cargo y no cambia el estado físico.</span>`;
   }
 
   if(r.estado==='ACEPTADO'){
@@ -5290,7 +5333,7 @@ async function acceptRequestWithoutCargo(){
     return;
   }
 
-  showToast('Solicitud aceptada · hora de atención registrada automáticamente');
+  showToast('Solicitud aceptada · fecha y hora de aceptación de Archivo registradas');
 
   await Promise.all([
     loadSummary(),loadPanel(),loadAll(),loadStates(),
@@ -5332,7 +5375,7 @@ async function assignNewCargoToAccepted(){
 
   if(!confirm(`¿Generar un cargo nuevo para ${accepted.length} expediente(s) seleccionado(s)?`))return;
 
-  el('rqActionStatus').textContent='Generando cargo y registrando entrega...';
+  el('rqActionStatus').textContent='Generando cargo y registrando fecha de entrega en préstamo...';
 
   const {data,error}=await sb.rpc('atender_expedientes_cargo_nuevo',{
     p_solicitud_id:currentRequestId,
@@ -5383,7 +5426,7 @@ async function assignExistingCargoToAccepted(){
 
   if(!confirm(`¿Atender ${accepted.length} expediente(s) con el Cargo N.° ${cargo}?`))return;
 
-  el('rqActionStatus').textContent='Vinculando expedientes al cargo existente...';
+  el('rqActionStatus').textContent='Vinculando al cargo y registrando fecha de entrega en préstamo...';
 
   const {data,error}=await sb.rpc('atender_expedientes_cargo_existente',{
     p_solicitud_id:currentRequestId,
