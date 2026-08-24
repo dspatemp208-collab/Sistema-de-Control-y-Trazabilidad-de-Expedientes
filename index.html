@@ -26,7 +26,7 @@
 .table-wrap{overflow:auto}.table-head{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid var(--line);gap:10px}.table-head strong{color:var(--navy)}table{border-collapse:collapse;width:100%;font-size:12px}th{position:sticky;top:0;background:var(--navy);color:white;text-align:left;padding:9px 8px;white-space:nowrap}td{padding:8px;border-bottom:1px solid #edf1f5;vertical-align:top}tr:hover td{background:#f8fbff}
 .pill{display:inline-block;padding:3px 7px;border-radius:999px;font-weight:700;font-size:10px;background:#e8eef6}.pill.loan{background:var(--warn)}.pill.returned{background:var(--ok)}.pill.alert{background:var(--danger);color:#8a1414}.empty{padding:30px;text-align:center;color:var(--muted)}
 .summary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:10px}.summary-card{padding:12px 14px;display:flex;justify-content:space-between;align-items:center;cursor:pointer}.summary-card h3{margin:0;font-size:13px}.summary-card small{display:block;color:var(--muted);margin-top:3px}.summary-num{font-size:22px;font-weight:800;color:var(--navy)}
-.modal{display:none;position:fixed;inset:0;background:rgba(15,23,42,.60);z-index:30;align-items:center;justify-content:center;padding:18px}.modal.show{display:flex}.modal-box{background:white;border-radius:14px;max-width:1050px;width:100%;max-height:92vh;overflow:auto;padding:18px;box-shadow:0 24px 80px rgba(0,0,0,.25)}.modal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.modal-head h2{margin:0;color:var(--navy)}.form-grid{display:grid;grid-template-columns:repeat(4,minmax(160px,1fr));gap:10px}.span2{grid-column:span 2}.span4{grid-column:span 4}.modal-foot{display:flex;justify-content:flex-end;gap:8px;margin-top:14px;border-top:1px solid var(--line);padding-top:13px}
+.modal{display:none;position:fixed;inset:0;background:rgba(15,23,42,.60);z-index:30;align-items:center;justify-content:center;padding:18px}.modal.show{display:flex}.modal-box{background:white;border-radius:14px;max-width:1050px;width:100%;max-height:92vh;overflow:auto;padding:18px;box-shadow:0 24px 80px rgba(0,0,0,.25)}.modal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.modal-head h2{margin:0;color:var(--navy)}.form-grid{display:grid;grid-template-columns:repeat(5,minmax(150px,1fr));gap:10px}.span2{grid-column:span 2}.span4{grid-column:span 4}.modal-foot{display:flex;justify-content:flex-end;gap:8px;margin-top:14px;border-top:1px solid var(--line);padding-top:13px}
 .note{font-size:12px;color:var(--muted);padding:10px 12px;background:#f8fafc;border:1px solid var(--line);border-radius:8px}.hidden{display:none!important}.toast{position:fixed;right:22px;bottom:22px;z-index:60;background:var(--navy);color:#fff;padding:11px 15px;border-radius:9px;box-shadow:0 8px 24px rgba(23,54,93,.22);font-size:12px;font-weight:700;opacity:0;transform:translateY(8px);pointer-events:none;transition:.18s}.toast.show{opacity:1;transform:translateY(0)}
 .statusbar{font-size:12px;color:var(--muted);padding:8px 12px;margin-bottom:12px;background:#fff;border:1px solid var(--line);border-radius:8px}.pager{display:flex;align-items:center;gap:7px}.pager span{font-size:12px;color:var(--muted)}
 .history-summary{display:grid;grid-template-columns:repeat(4,minmax(130px,1fr));gap:10px;margin-bottom:14px}.history-summary .mini{background:#f8fafc;border:1px solid var(--line);border-radius:9px;padding:10px 12px}.history-summary .mini span{display:block;font-size:10px;text-transform:uppercase;font-weight:800;color:var(--muted);margin-bottom:4px}.history-summary .mini b{color:var(--navy);font-size:14px}
@@ -449,6 +449,13 @@
     </div>
 
     <div class="user-request-kpis hidden-by-role" id="userRequestKpis">
+      <div class="card kpi req-card-click" id="userRqTotalSolicitudes"
+           onclick="selectMyRequestCard('')">
+        <div class="label">Total de solicitudes</div>
+        <div class="value" id="uRqTotalSolicitudes">0</div>
+        <button class="kpi-view" type="button">Ver solicitudes</button>
+      </div>
+
       <div class="card kpi req-card-click" id="userRqRegistradas"
            onclick="selectMyRequestCard('REGISTRADA')">
         <div class="label">Registradas</div>
@@ -3552,6 +3559,7 @@ function updateMyRequestCards(){
 
   const state=el('requestStateFilter')?.value||'';
   const map={
+    '':'userRqTotalSolicitudes',
     'REGISTRADA':'userRqRegistradas',
     'REGISTRADA POR ARCHIVO':'userRqArchivo',
     'ENTREGA PARCIAL':'userRqParcial',
@@ -3630,6 +3638,7 @@ async function loadRequests(){
   }
 
   // Tarjetas exclusivas del USUARIO
+  if(el('uRqTotalSolicitudes'))el('uRqTotalSolicitudes').textContent=allRequestRows.length;
   if(el('uRqRegistradas'))el('uRqRegistradas').textContent=counts['REGISTRADA'];
   if(el('uRqArchivo'))el('uRqArchivo').textContent=counts['REGISTRADA POR ARCHIVO'];
   if(el('uRqParcial'))el('uRqParcial').textContent=counts['ENTREGA PARCIAL'];
