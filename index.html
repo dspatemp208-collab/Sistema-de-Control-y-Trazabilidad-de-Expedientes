@@ -569,6 +569,21 @@
   color:var(--navy)
 }
 
+
+/* Expedientes por usuario con el mismo formato de Solicitudes por abogado */
+.owner-cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px;margin-bottom:14px}
+.owner-user-card{border:1px solid var(--line);border-radius:10px;padding:14px;background:#fff;box-shadow:none}
+.owner-user-card:hover{box-shadow:none}
+.owner-user-name{font-size:13px;color:var(--navy);margin:0 0 8px;font-weight:800}
+.owner-user-total{font-size:27px;font-weight:900;color:var(--navy);margin:4px 0 8px;line-height:1}
+.owner-user-caption{font-size:12px;color:var(--muted);margin:0 0 10px}
+.owner-user-stats{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;font-size:11px;color:var(--muted);margin-top:0;padding-top:0;border-top:none}
+.owner-user-stat span{display:block;font-size:11px;text-transform:none;color:var(--muted)}
+.owner-user-stat b{display:block;font-size:17px;color:var(--text);margin-top:2px}
+.owner-user-actions{margin-top:10px;display:flex;gap:6px;flex-wrap:wrap}
+.owner-user-summary-box{margin:8px 0 10px;padding:9px 11px;border:1px solid var(--line);border-radius:8px;background:#fbfcfe;font-size:12px;color:var(--muted)}
+.owner-user-card.selected-user-card{border-color:#173f6b;box-shadow:0 0 0 2px #173f6b inset}
+
 </style>
 </head>
 <body>
@@ -3097,36 +3112,36 @@ function renderOwnerCards(){
     <div class="owner-user-card ${selectedOwner===x.nombre?'selected-user-card':''}"
          role="button"
          tabindex="0"
-         onclick="openOwnerExpedientes('${String(x.nombre).replace(/'/g,"\\'")}','custody')"
-         onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openOwnerExpedientes('${String(x.nombre).replace(/'/g,"\\'")}','custody')}">
+         onclick="openOwnerExpedientes('${String(x.nombre).replace(/'/g,"\'")}','custody')"
+         onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openOwnerExpedientes('${String(x.nombre).replace(/'/g,"\'")}','custody')}">
       <div class="owner-user-name">${esc(x.nombre)}</div>
 
       <div class="owner-user-total">${Number(x.total_custodia||0)}</div>
-      <div class="owner-user-caption">expedientes actualmente en custodia</div>
+      <div class="owner-user-summary-box">expedientes actualmente en custodia</div>
 
       <div class="owner-user-stats">
         <div class="owner-user-stat">
-          <span>En préstamo</span>
+          <span>EN PRÉSTAMO</span>
           <b>${Number(x.en_prestamo||0)}</b>
         </div>
 
         <div class="owner-user-stat">
-          <span>Reasignados</span>
+          <span>REASIGNADOS</span>
           <b>${Number(x.reasignados||0)}</b>
         </div>
 
         <div class="owner-user-stat">
-          <span>Pend. aceptar devolución</span>
+          <span>PEND. ACEPTAR DEVOLUCIÓN</span>
           <b>${Number(x.devoluciones_pendientes_aceptacion||0)}</b>
         </div>
 
         <div class="owner-user-stat">
-          <span>Devoluciones realizadas</span>
+          <span>DEVOLUCIONES REALIZADAS</span>
           <b>${Number(x.devoluciones_realizadas||0)}</b>
         </div>
 
         <div class="owner-user-stat">
-          <span>Alertas &gt; 30 días</span>
+          <span>ALERTAS &gt; 30 DÍAS</span>
           <b>${Number(x.alertas_30||0)}</b>
         </div>
       </div>
@@ -3137,20 +3152,20 @@ function renderOwnerCards(){
 
       <div class="owner-user-actions">
         <button class="btn secondary small"
-          onclick="event.stopPropagation();openOwnerExpedientes('${String(x.nombre).replace(/'/g,"\\'")}','custody')">
+          onclick="event.stopPropagation();openOwnerExpedientes('${String(x.nombre).replace(/'/g,"\'")}','custody')">
           Ver expedientes
         </button>
 
         ${Number(x.devoluciones_pendientes_aceptacion||0)>0
           ?`<button class="btn small"
-              onclick="event.stopPropagation();openOwnerExpedientes('${String(x.nombre).replace(/'/g,"\\'")}','pending')">
+              onclick="event.stopPropagation();openOwnerExpedientes('${String(x.nombre).replace(/'/g,"\'")}','pending')">
               Por aceptar (${Number(x.devoluciones_pendientes_aceptacion||0)})
             </button>`
           :''}
 
         ${Number(x.devoluciones_realizadas||0)>0
           ?`<button class="btn secondary small"
-              onclick="event.stopPropagation();openOwnerExpedientes('${String(x.nombre).replace(/'/g,"\\'")}','returns')">
+              onclick="event.stopPropagation();openOwnerExpedientes('${String(x.nombre).replace(/'/g,"\'")}','returns')">
               Devoluciones (${Number(x.devoluciones_realizadas||0)})
             </button>`
           :''}
