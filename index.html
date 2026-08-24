@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Sistema de Control y Trazabilidad de Expedientes</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
 :root{--navy:#17365d;--blue:#1f4e78;--sky:#d9eaf7;--bg:#f4f7fb;--line:#d7e0ea;--text:#1f2937;--muted:#64748b;--ok:#e2f0d9;--warn:#fff2cc;--danger:#f4cccc;--white:#fff;--shadow:0 8px 24px rgba(23,54,93,.08)}
 *{box-sizing:border-box}body{margin:0;font-family:Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--text)}
@@ -217,6 +218,29 @@
   margin-top:8px;padding-top:8px;border-top:1px solid #e5eaf1;
   font-size:11px;display:flex;gap:6px;flex-wrap:wrap
 }
+
+
+.excel-import-box{
+  margin-top:10px;padding:12px;border:1px solid var(--line);
+  border-radius:10px;background:#fbfdff
+}
+.excel-import-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.excel-import-summary{
+  display:grid;grid-template-columns:repeat(5,minmax(110px,1fr));
+  gap:8px;margin-top:10px
+}
+.excel-stat{
+  border:1px solid var(--line);border-radius:8px;padding:9px 10px;background:#fff
+}
+.excel-stat span{
+  display:block;font-size:9px;text-transform:uppercase;font-weight:800;color:var(--muted)
+}
+.excel-stat b{display:block;font-size:20px;color:var(--navy);margin-top:2px}
+.excel-stat.warn b{color:#a15c00}.excel-stat.danger b{color:#a61b1b}
+.excel-result-table{max-height:260px;overflow:auto;border:1px solid var(--line);border-radius:8px;margin-top:10px}
+.excel-result-table table{font-size:11px}
+.excel-result-table th{position:sticky;top:0}
+@media(max-width:760px){.excel-import-summary{grid-template-columns:repeat(2,1fr)}}
 
 </style>
 </head>
@@ -812,9 +836,20 @@
         <label>Número de expediente</label>
         <input id="requestLookupInput" placeholder="Ej.: 0012-2025" onkeydown="if(event.key==='Enter'){event.preventDefault();searchRequestCandidates()}">
       </div>
-      <div style="display:flex;align-items:flex-end">
+      <div style="display:flex;align-items:flex-end;gap:8px;flex-wrap:wrap">
         <button class="btn" onclick="searchRequestCandidates()">Buscar</button>
+        <button class="btn secondary" type="button" onclick="el('requestExcelFile').click()">📊 Cargar Excel</button>
+        <input id="requestExcelFile" type="file" accept=".xlsx,.xls,.csv" class="hidden" onchange="importRequestExcel(this.files[0]);this.value=''">
       </div>
+    </div>
+
+    <div class="excel-import-box">
+      <div class="excel-import-actions">
+        <strong>Solicitud masiva desde Excel</strong>
+        <span class="note">Detecta expedientes del archivo y los compara con la base de datos.</span>
+      </div>
+      <div id="requestExcelSummary" class="hidden"></div>
+      <div id="requestExcelResults"></div>
     </div>
 
     <div id="requestLookupStatus" class="note" style="margin-top:8px">
@@ -1179,7 +1214,7 @@ const MASTER=[["MARCELA ALONZO", "PERSONAL"], ["ABRAHAN DAMAS", "PERSONAL"], ["A
 const ASUNTOS_PREDETERMINADOS=["ACCESO A LA INFORMACIÓN", "ANALISIS Y EVALUACIÓN DEL MEMORANDO DE CONCLUSIÓN DEL PROCESO CONTENCIOSO ADMINISTRATIVO, REMITIDO POR LA PROCURADURÍA PÚBLICA (PP)", "ANEXADO DE CÉDULAS DE NOTIFICACIÓN", "ANEXADO DE DOCUMENTOS", "ATENCIÓN A LA DIRECCIÓN DE EXTRACCIÓN PARA CONSUMO HUMANO DIRECTO E INDIRECTO (DECHDI)", "ATENCIÓN A LA DIRECCIÓN DE VIGILANCIA Y CONTROL (DVC) - RD ARCHIVAMIENTO", "ATENCIÓN A LA OFICINA DE CONTROL INTERNO (OCI)", "ATENCIÓN A LA OFICINA GENERAL DE ADMINISTRACIÓN (OGA)", "ATENCIÓN A LA PROCURADURÍA PÚBLICA", "ATENCIÓN AL MINISTERIO PÚBLICO (FISCALÍA)", "ATENCIÓN DE ESCRITOS", "ATENCIÓN DE ESCRITOS REMITIDOS POR EL CONSEJO DE APELACIÓN DE SANCIONES CALIDAD DE PRÉSTAMO (CONAS)", "ATENCIÓN DE QUEJAS", "CADUCIDAD", "COMUNICACIÓN DE LAS SANCIONES A LA DIRECCIÓN GENERAL DE PESCA PARA CONSUMO HUMANO DIRECTO E INDIRECTO (DGPCHDI)", "DESLINDE DE RESPONSABILIDAD", "ELEVACIÓN DEL EXPEDIENTE AL CONSEJO DE APELACIÓN DE SANCIONES (CONAS)", "ENMIENDA", "EVALUACIÓN DE OFICIO", "EVALUACIÓN DE PAGOS POR CONCEPTO DE DECOMISOS", "EVALUACIÓN DEL EXPEDIENTE QUE RETORNA DEL CONSEJO DE APELACIÓN DE SANCIONES (CONAS)", "INTERES PARTICULAR", "LECTURA EN SALA (USUARIOS INTERNOS)", "LECTURA EXPEDIENTE (USUARIOS EXTERNOS)", "NULIDAD DE OFICIO", "PERDIDA DE BENEFICIO", "PETICIÓN ADMINISTRATIVA", "RECOMENDACIÓN DE INICIO", "RECONSIDERACIÓN", "REINCIDENCIAS DEL PAS", "REVISIÓN", "REVISIÓN DEL PROCEDIMIENTO DE EJECUCIÓN COACTIVA (PEC) - OEC", "SECRETARIA TÉCNICA DE LOS ORGANOS INSTRUCTORES (STOI)", "SOLICITUD DE BENEFICIOS", "TRAMITACIÓN DEL PAS (IFIS)", "USO DE LA PALABRA O AUDIENCIA"];
 const STATUSES=['CUSTODIA','EN PRÉSTAMO','DEVUELTO','REASIGNADO','EN TRÁMITE'];
 const PAGE_SIZE=200;
-let sb=null, session=null, currentProfile=null, userProfiles=[], abogadoProfiles=[], reassignmentProfiles=[], returnRequestRows=[], notificationRows=[], notificationUnread=0, notificationsLoaded=false, summaryRows=[], panelRows=[], allRows=[], historyRows=[], cargosRows=[], selectedCargoNumero='', stateRows=[], stateDetailRows=[], requestRows=[], requestDetailRows=[], requestMovementRows=[], requestSearchRows=[], requestsByLawyerRows=[];
+let sb=null, session=null, currentProfile=null, userProfiles=[], abogadoProfiles=[], reassignmentProfiles=[], returnRequestRows=[], notificationRows=[], notificationUnread=0, notificationsLoaded=false, requestExcelRows=[], requestExcelMissing=[], requestExcelDuplicates=0, summaryRows=[], panelRows=[], allRows=[], historyRows=[], cargosRows=[], selectedCargoNumero='', stateRows=[], stateDetailRows=[], requestRows=[], requestDetailRows=[], requestMovementRows=[], requestSearchRows=[], requestsByLawyerRows=[];
 let catalogo=MASTER.map(([nombre,tipo],i)=>({id:'fallback-'+i,nombre,tipo,activo:true}));
 let asuntosCatalogo=ASUNTOS_PREDETERMINADOS.map((nombre,i)=>({id:'fallback-asunto-'+i,nombre,activo:true}));
 let selectedIds=new Set(), cargoRows=[];
@@ -3179,6 +3214,11 @@ function openRequestSearchModal(){
   requestSearchRows=[];
   requestSearchSelectedIds.clear();
   requestDraftItems=[];
+  requestExcelRows=[];
+  requestExcelMissing=[];
+  requestExcelDuplicates=0;
+  if(el('requestExcelSummary')){el('requestExcelSummary').classList.add('hidden');el('requestExcelSummary').innerHTML='';}
+  if(el('requestExcelResults'))el('requestExcelResults').innerHTML='';
   el('requestLookupInput').value='';
   el('requestLookupStatus').textContent='Escriba al menos 4 caracteres del número de expediente.';
   el('requestLookupResults').innerHTML='<div class="empty">Sin búsqueda.</div>';
@@ -3193,6 +3233,327 @@ function closeRequestSearchModal(){
   el('requestSearchModal').classList.remove('show');
 }
 
+
+
+function excelHeaderNorm(v){
+  return String(v??'')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .toUpperCase().trim().replace(/\s+/g,' ');
+}
+
+function excelExpedienteFromValue(v){
+  const s=String(v??'').trim().toUpperCase();
+  if(!s)return '';
+
+  // Ej.: 78-2025 / 0078-2025 / EXP. 0078-2025 / 0078/2025
+  const m=s.match(/(?:EXP(?:EDIENTE)?\.?\s*(?:N[°ºO.]*)?\s*)?(\d{1,6})\s*[-\/]\s*((?:19|20)\d{2})/i);
+  if(!m)return '';
+
+  return String(m[1]).padStart(4,'0')+'-'+m[2];
+}
+
+function detectExpedientesFromWorkbook(workbook){
+  const detected=[];
+  let duplicates=0;
+  const seen=new Map();
+
+  for(const sheetName of workbook.SheetNames){
+    const ws=workbook.Sheets[sheetName];
+    const rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:false,defval:''});
+    if(!rows.length)continue;
+
+    // Buscar encabezados en las primeras 15 filas.
+    let headerRow=-1, expCol=-1, yearCol=-1;
+
+    for(let r=0;r<Math.min(rows.length,15);r++){
+      const hdr=(rows[r]||[]).map(excelHeaderNorm);
+      const e=hdr.findIndex(x=>
+        x==='EXPEDIENTE' ||
+        x.includes('NRO EXPEDIENTE') ||
+        x.includes('NUMERO EXPEDIENTE') ||
+        x.includes('N° EXPEDIENTE') ||
+        x.includes('N EXPEDIENTE')
+      );
+      if(e>=0){
+        headerRow=r;
+        expCol=e;
+        yearCol=hdr.findIndex(x=>x==='AÑO'||x==='ANO'||x.includes('AÑO EXP')||x.includes('ANO EXP'));
+        break;
+      }
+    }
+
+    const add=(exp,rowNum,sourceValue)=>{
+      if(!exp)return;
+      if(seen.has(exp)){
+        duplicates++;
+        return;
+      }
+      seen.set(exp,true);
+      detected.push({
+        expediente:exp,
+        hoja:sheetName,
+        fila:rowNum+1,
+        origen:String(sourceValue??'')
+      });
+    };
+
+    if(expCol>=0){
+      for(let r=headerRow+1;r<rows.length;r++){
+        const row=rows[r]||[];
+        const rawExp=row[expCol];
+        let exp=excelExpedienteFromValue(rawExp);
+
+        // Si número y año están en columnas separadas.
+        if(!exp && yearCol>=0){
+          const num=String(rawExp??'').trim().replace(/\D/g,'');
+          const year=String(row[yearCol]??'').trim().match(/(?:19|20)\d{2}/)?.[0]||'';
+          if(num && year){
+            exp=String(parseInt(num,10)).padStart(4,'0')+'-'+year;
+          }
+        }
+        add(exp,r,rawExp);
+      }
+    }else{
+      // Sin cabecera reconocible: escaneo conservador de celdas.
+      rows.forEach((row,r)=>{
+        (row||[]).forEach(cell=>{
+          const s=String(cell??'').trim();
+          if(!s)return;
+          const exp=excelExpedienteFromValue(s);
+          // Solo aceptar si la celda parece contener realmente un expediente.
+          if(exp && (
+            /^\s*(?:EXP(?:EDIENTE)?\.?\s*(?:N[°ºO.]*)?\s*)?\d{1,6}\s*[-\/]\s*(?:19|20)\d{2}/i.test(s)
+          )){
+            add(exp,r,cell);
+          }
+        });
+      });
+    }
+  }
+
+  return {detected,duplicates};
+}
+
+async function importRequestExcel(file){
+  if(!file)return;
+
+  if(typeof XLSX==='undefined'){
+    el('requestLookupStatus').textContent='No se pudo cargar el lector de Excel. Recargue la página e intente nuevamente.';
+    return;
+  }
+
+  const name=(file.name||'').toLowerCase();
+  if(!/\.(xlsx|xls|csv)$/.test(name)){
+    el('requestLookupStatus').textContent='Seleccione un archivo XLSX, XLS o CSV.';
+    return;
+  }
+
+  el('requestLookupStatus').textContent='Leyendo Excel y comparando expedientes...';
+  el('requestExcelResults').innerHTML='<div class="empty">Procesando archivo...</div>';
+
+  try{
+    const buffer=await file.arrayBuffer();
+    const wb=XLSX.read(buffer,{type:'array'});
+    const {detected,duplicates}=detectExpedientesFromWorkbook(wb);
+
+    requestExcelDuplicates=duplicates;
+
+    if(!detected.length){
+      requestExcelRows=[];
+      requestExcelMissing=[];
+      renderRequestExcelResults();
+      el('requestLookupStatus').textContent='No se detectaron números de expediente en el archivo.';
+      return;
+    }
+
+    const expedientes=detected.map(x=>x.expediente);
+
+    const {data,error}=await sb.rpc('buscar_expedientes_lote_para_solicitud',{
+      p_expedientes:expedientes
+    });
+
+    if(error)throw error;
+
+    const sourceMap=new Map(detected.map(x=>[x.expediente,x]));
+    requestExcelRows=(data||[]).map(x=>({
+      ...x,
+      ...(sourceMap.get(x.expediente_buscado)||{})
+    }));
+
+    requestExcelMissing=requestExcelRows
+      .filter(x=>!x.encontrado)
+      .map(x=>x.expediente_buscado);
+
+    // Agregar automáticamente los existentes, únicos y disponibles.
+    let added=0;
+    let already=0;
+
+    requestExcelRows.forEach(x=>{
+      if(!x.encontrado || Number(x.coincidencias)!==1 || !x.disponible || !x.id)return;
+
+      const item={
+        id:x.id,
+        expediente:x.expediente,
+        extension:x.extension||null,
+        rd:x.rd||null,
+        estado:x.estado||null,
+        disponible:true,
+        _nuevo:false
+      };
+
+      const key=requestDraftKey(item);
+      if(requestDraftItems.some(d=>requestDraftKey(d)===key)){
+        already++;
+        return;
+      }
+
+      requestDraftItems.push(item);
+      added++;
+    });
+
+    renderRequestDraft();
+    updateRequestLookupSelection();
+    renderRequestExcelResults();
+
+    el('requestLookupStatus').textContent=
+      `${detected.length} expediente(s) detectado(s) · ${added} existente(s) agregado(s) automáticamente`+
+      (already?` · ${already} ya estaba(n) agregado(s)`:'')+
+      (requestExcelMissing.length?` · ${requestExcelMissing.length} no encontrado(s)`:'')+
+      '.';
+
+  }catch(err){
+    console.error(err);
+    el('requestLookupStatus').textContent=err?.message||'No se pudo procesar el Excel.';
+    el('requestExcelResults').innerHTML='<div class="empty">No se pudo procesar el archivo.</div>';
+  }
+}
+
+function requestExcelStatus(x){
+  if(!x.encontrado)return '<span class="pill alert">NO ENCONTRADO</span>';
+  if(Number(x.coincidencias)>1)return '<span class="pill alert">VARIAS COINCIDENCIAS</span>';
+  if(!x.disponible)return `<span class="pill alert">${esc(x.motivo||'NO DISPONIBLE')}</span>`;
+  return '<span class="pill returned">ENCONTRADO</span>';
+}
+
+function renderRequestExcelResults(){
+  const box=el('requestExcelSummary');
+  const results=el('requestExcelResults');
+  if(!box||!results)return;
+
+  const total=requestExcelRows.length;
+  const found=requestExcelRows.filter(x=>x.encontrado&&Number(x.coincidencias)===1).length;
+  const available=requestExcelRows.filter(x=>x.encontrado&&Number(x.coincidencias)===1&&x.disponible).length;
+  const missing=requestExcelRows.filter(x=>!x.encontrado).length;
+  const unavailable=requestExcelRows.filter(x=>x.encontrado&&(!x.disponible||Number(x.coincidencias)>1)).length;
+
+  box.classList.remove('hidden');
+  box.innerHTML=`<div class="excel-import-summary">
+    <div class="excel-stat"><span>Detectados</span><b>${total}</b></div>
+    <div class="excel-stat"><span>Encontrados</span><b>${found}</b></div>
+    <div class="excel-stat"><span>Agregables</span><b>${available}</b></div>
+    <div class="excel-stat danger"><span>No encontrados</span><b>${missing}</b></div>
+    <div class="excel-stat warn"><span>Duplicados Excel</span><b>${requestExcelDuplicates}</b></div>
+  </div>`;
+
+  if(!total){
+    results.innerHTML='<div class="empty">No se detectaron expedientes.</div>';
+    return;
+  }
+
+  results.innerHTML=`<div class="excel-result-table"><table>
+    <thead>
+      <tr>
+        <th>Expediente detectado</th>
+        <th>Hoja</th>
+        <th>Fila</th>
+        <th>Resultado</th>
+        <th>Ext.</th>
+        <th>R.D.</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      ${requestExcelRows.map((x,i)=>`<tr>
+        <td><b>${esc(x.expediente_buscado||x.expediente||'')}</b></td>
+        <td>${esc(x.hoja||'—')}</td>
+        <td>${esc(x.fila||'—')}</td>
+        <td>${requestExcelStatus(x)}</td>
+        <td>${esc(x.extension||'—')}</td>
+        <td>${esc(x.rd||'—')}</td>
+        <td>
+          ${!x.encontrado
+            ?`<button class="btn secondary small" onclick="addMissingExcelExpediente(${i})">Agregar como nuevo</button>`
+            :Number(x.coincidencias)>1
+              ?`<button class="btn secondary small" onclick="searchExcelAmbiguous(${i})">Revisar</button>`
+              :''}
+        </td>
+      </tr>`).join('')}
+    </tbody>
+  </table></div>
+  ${missing?`<div style="margin-top:8px">
+    <button class="btn secondary small" onclick="addAllMissingExcelExpedientes()">+ Agregar todos los no encontrados como nuevos</button>
+  </div>`:''}`;
+}
+
+function addMissingExcelExpediente(index){
+  const x=requestExcelRows[index];
+  if(!x || x.encontrado)return;
+
+  const item={
+    id:null,
+    expediente:x.expediente_buscado,
+    extension:null,
+    rd:null,
+    ultimo_folio:null,
+    observacion:'Registrado desde carga masiva de Excel',
+    estado:'PENDIENTE DE VERIFICACIÓN',
+    _nuevo:true
+  };
+
+  const key=requestDraftKey(item);
+  if(!requestDraftItems.some(d=>requestDraftKey(d)===key)){
+    requestDraftItems.push(item);
+  }
+
+  renderRequestDraft();
+  updateRequestLookupSelection();
+  showToast(`${x.expediente_buscado} agregado como nuevo`);
+}
+
+function addAllMissingExcelExpedientes(){
+  let added=0;
+
+  requestExcelRows.filter(x=>!x.encontrado).forEach(x=>{
+    const item={
+      id:null,
+      expediente:x.expediente_buscado,
+      extension:null,
+      rd:null,
+      ultimo_folio:null,
+      observacion:'Registrado desde carga masiva de Excel',
+      estado:'PENDIENTE DE VERIFICACIÓN',
+      _nuevo:true
+    };
+    const key=requestDraftKey(item);
+
+    if(!requestDraftItems.some(d=>requestDraftKey(d)===key)){
+      requestDraftItems.push(item);
+      added++;
+    }
+  });
+
+  renderRequestDraft();
+  updateRequestLookupSelection();
+  showToast(`${added} expediente(s) no encontrado(s) agregado(s) como nuevos`);
+}
+
+function searchExcelAmbiguous(index){
+  const x=requestExcelRows[index];
+  if(!x)return;
+  el('requestLookupInput').value=x.expediente_buscado;
+  searchRequestCandidates();
+  el('requestLookupResults')?.scrollIntoView({behavior:'smooth',block:'start'});
+}
 
 function normalizeRequestExpediente(value){
   const raw=(value||'').trim().toUpperCase().replace(/\s+/g,'');
