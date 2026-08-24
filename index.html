@@ -261,7 +261,7 @@
       <button class="btn secondary" id="requestBtn" onclick="openNewRequestModal()" disabled>📥 Solicitar seleccionados</button>
       <button class="btn secondary" id="searchRequestBtn" onclick="openRequestSearchModal()">🔎 Buscar para solicitar</button>
       <span class="sel-count" id="selectedCount">0 seleccionados</span>
-      <button class="btn secondary" id="importCsvBtn" onclick="document.getElementById('csvFile').click()">Importar CSV</button>
+      <button class="btn secondary" id="importCsvBtn" onclick="document.getElementById('csvFile').click()">Importar registro CSV</button>
       <input class="hidden" id="csvFile" type="file" accept=".csv,text/csv" onchange="importCSV(event)">
       <button class="btn secondary" id="exportCsvBtn" onclick="exportCSV(this)">Exportar registro</button>
       <button class="btn secondary" id="peopleBtn" onclick="openPeopleModal()">👥 Administrar personal</button>
@@ -709,6 +709,39 @@
       </div>
     </div>
 
+    <div class="card" style="margin-top:12px;padding:12px">
+      <div class="table-head" style="padding:0;margin-bottom:8px">
+        <div>
+          <strong>Agregar expedientes a esta solicitud</strong>
+          <div class="note" style="margin-top:3px">
+            Puede combinar ingreso manual, búsqueda en la base y carga masiva desde Excel.
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn secondary" type="button"
+                onclick="openRequestSourceFromNew('MANUAL')">
+          ➕ Agregar manualmente
+        </button>
+
+        <button class="btn secondary" type="button"
+                onclick="openRequestSourceFromNew('BUSCAR')">
+          🔎 Buscar en la base
+        </button>
+
+        <button class="btn" type="button"
+                onclick="openRequestSourceFromNew('EXCEL')">
+          📊 Cargar Excel
+        </button>
+      </div>
+
+      <div class="note" style="margin-top:8px">
+        <b>Importante:</b> el botón superior “Importar registro CSV” es para cargar
+        registros al sistema. Para una solicitud masiva utilice “Cargar Excel” aquí.
+      </div>
+    </div>
+
     <div class="card table-wrap" style="margin-top:12px">
       <div class="table-head"><strong>Expedientes solicitados</strong><span id="rqSelectedCount">0</span></div>
       <div id="rqSelectedTable"></div>
@@ -825,10 +858,13 @@
   <div class="modal-box">
     <div class="modal-head">
       <div>
-        <h2>Buscar expediente para solicitar</h2>
-        <div class="note">Puede agregar varios expedientes a una misma solicitud. Busque y agregue uno por uno; también puede combinar expedientes existentes y nuevos.</div>
+        <h2 id="requestSearchModalTitle">Agregar expedientes a la solicitud</h2>
+        <div class="note">Puede buscar expedientes existentes, registrar uno nuevo manualmente o cargar varios desde Excel.</div>
       </div>
-      <button class="btn secondary small" onclick="closeRequestSearchModal()">Cerrar</button>
+      <div style="display:flex;gap:6px">
+        <button class="btn secondary small" onclick="returnToNewRequestFromSearch()">← Volver a Nueva solicitud</button>
+        <button class="btn secondary small" onclick="closeRequestSearchModal()">Cerrar</button>
+      </div>
     </div>
 
     <div class="form-grid">
@@ -3198,6 +3234,56 @@ function openAddItemsToExistingRequest(){
   setTimeout(()=>el('requestLookupInput').focus(),50);
 }
 
+
+function openRequestSourceFromNew(mode){
+  // La selección masiva/manual se administra en el mismo módulo de búsqueda.
+  // Al terminar, "Continuar solicitud" vuelve a abrir Nueva solicitud
+  // con todos los expedientes agregados.
+  const m=String(mode||'BUSCAR').toUpperCase();
+
+  if(el('newRequestModal')){
+    el('newRequestModal').classList.remove('show');
+  }
+
+  openRequestSearchModal();
+
+  if(el('requestSearchModalTitle')){
+    el('requestSearchModalTitle').textContent=
+      m==='EXCEL'
+        ?'Cargar Excel para la solicitud'
+        :m==='MANUAL'
+          ?'Agregar expediente manualmente'
+          :'Buscar expedientes para la solicitud';
+  }
+
+  if(m==='MANUAL'){
+    if(el('requestLookupStatus')){
+      el('requestLookupStatus').textContent=
+        'Escriba el número del expediente. Si no existe en la base, podrá registrarlo como nuevo.';
+    }
+    setTimeout(()=>el('requestLookupInput')?.focus(),80);
+    return;
+  }
+
+  if(m==='EXCEL'){
+    if(el('requestLookupStatus')){
+      el('requestLookupStatus').textContent=
+        'Seleccione un archivo XLSX, XLS o CSV. Se detectarán y compararán los expedientes antes de continuar.';
+    }
+    setTimeout(()=>{
+      const input=el('requestExcelFile');
+      if(input)input.click();
+    },120);
+    return;
+  }
+
+  if(el('requestLookupStatus')){
+    el('requestLookupStatus').textContent=
+      'Busque uno o varios expedientes existentes y agréguelos a la solicitud.';
+  }
+  setTimeout(()=>el('requestLookupInput')?.focus(),80);
+}
+
 function openRequestSearchModal(){
   addToExistingRequestId='';
   if(el('requestLookupContinueBtn'))el('requestLookupContinueBtn').textContent='Continuar solicitud';
@@ -3227,6 +3313,22 @@ function openRequestSearchModal(){
   renderRequestDraft();
   el('requestSearchModal').classList.add('show');
   setTimeout(()=>el('requestLookupInput').focus(),50);
+}
+
+
+function returnToNewRequestFromSearch(){
+  closeRequestSearchModal();
+
+  // Si hay elementos en el borrador, continuar normalmente para que
+  // se transfieran a Nueva solicitud. Si no hay ninguno, solo reabrir.
+  if(requestDraftItems.length){
+    continueRequestFromSearch();
+    return;
+  }
+
+  if(typeof openNewRequestModal==='function'){
+    openNewRequestModal();
+  }
 }
 
 function closeRequestSearchModal(){
@@ -3362,7 +3464,8 @@ async function importRequestExcel(file){
       requestExcelRows=[];
       requestExcelMissing=[];
       renderRequestExcelResults();
-      el('requestLookupStatus').textContent='No se detectaron números de expediente en el archivo.';
+      el('requestLookupStatus').textContent=
+        'No se detectaron números de expediente. Verifique que el Excel tenga una columna EXPEDIENTE (ej. 0078-2025) o columnas EXPEDIENTE + AÑO.';
       return;
     }
 
