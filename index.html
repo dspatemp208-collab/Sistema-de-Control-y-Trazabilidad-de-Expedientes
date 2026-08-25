@@ -1974,7 +1974,30 @@ function norm(v){return String(v??'').trim().toUpperCase()}
 function esc(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
 function expBase(v){let s=String(v??'').trim().replace(/\s+/g,'');const m=s.match(/^(\d+)[-\/]([12]\d{3})$/);if(m){let n=m[1];if(n.length<4)n=n.padStart(4,'0');return n+'-'+m[2]}return s.replace('/','-')}
 function expKey(r){return r.extension?expBase(r.expediente)+'-'+r.extension:expBase(r.expediente)}
-function fmtDate(v){if(!v)return '';const s=String(v).slice(0,10);return s.slice(8,10)+'/'+s.slice(5,7)+'/'+s.slice(0,4)}
+function fmtDate(v){
+  if(!v)return '';
+  const s=String(v).trim();
+  if(!s)return '';
+
+  // Fechas simples de PostgreSQL (YYYY-MM-DD) se muestran sin convertir zona horaria.
+  if(/^\d{4}-\d{2}-\d{2}$/.test(s)){
+    return s.slice(8,10)+'/'+s.slice(5,7)+'/'+s.slice(0,4);
+  }
+
+  // Timestamps de Supabase se convierten a la hora local del navegador.
+  const d=new Date(s);
+  if(!isNaN(d.getTime())){
+    return new Intl.DateTimeFormat('es-PE',{
+      day:'2-digit',month:'2-digit',year:'numeric'
+    }).format(d);
+  }
+
+  const x=s.slice(0,10);
+  if(/^\d{4}-\d{2}-\d{2}$/.test(x)){
+    return x.slice(8,10)+'/'+x.slice(5,7)+'/'+x.slice(0,4);
+  }
+  return s;
+}
 function businessDays(start,end){
   if(!start)return 0;
   let a=new Date(String(start).slice(0,10)+'T00:00:00');
@@ -2024,7 +2047,16 @@ function fmtTime(v){
   const m=s.match(/^(\d{1,2}):(\d{2})/);
   if(m)return `${String(m[1]).padStart(2,'0')}:${m[2]}`;
 
-  return s;
+  // Timestamp ISO de Supabase: convertir a hora local y ocultar
+  // segundos, milisegundos, T y zona técnica.
+  const d=new Date(s);
+  if(!isNaN(d.getTime())){
+    return new Intl.DateTimeFormat('es-PE',{
+      hour:'2-digit',minute:'2-digit',hour12:false
+    }).format(d);
+  }
+
+  return '—';
 }
 
 function requestAttentionText(r){
@@ -4610,7 +4642,35 @@ async function loadStateDetail(estado){
       return;
     }
 
-    const rows=sortRequestsDesc(data||[],'solicitud_numero');
+    let rows=sortRequestsDesc(data||[],'solicitud_numero');
+
+    // Completar con los datos vigentes del Registro maestro.
+    // Así Extensión, R.D. y Último folio reflejan siempre el valor actual.
+    const verifyIds=rows.map(x=>x.expediente_id).filter(Boolean);
+
+    if(verifyIds.length){
+      const {data:masterRows,error:masterError}=await sb
+        .from('expedientes')
+        .select('id,extension,rd,ultimo_folio')
+        .in('id',verifyIds);
+
+      if(!masterError){
+        const masterMap=new Map((masterRows||[]).map(x=>[x.id,x]));
+
+        rows=rows.map(x=>{
+          const m=masterMap.get(x.expediente_id)||{};
+          return {
+            ...x,
+            extension:m.extension??x.extension,
+            rd:m.rd??x.rd,
+            ultimo_folio:m.ultimo_folio??x.ultimo_folio
+          };
+        });
+      }else{
+        console.warn('Datos maestros pendientes de verificación:',masterError.message);
+      }
+    }
+
     pendingVerifyRows=rows;
     stateDetailCount=rows.length;
     el('stateDetailCount').textContent=`${rows.length} expedientes`;
@@ -4621,12 +4681,19 @@ async function loadStateDetail(estado){
       return;
     }
 
-    el('stateDetailTable').innerHTML=`<table>
+    el('stateDetailTable').innerHTML=`
+      <div class="note" style="margin:8px 10px 10px">
+        Use <b>Preparar entrega</b> para completar o corregir
+        <b>Extensión, R.D. y Último folio</b> y, cuando corresponda,
+        generar e imprimir el cargo desde la misma opción.
+      </div>
+      <table>
       <thead>
         <tr>
           <th>Expediente</th>
           <th>Extensión</th>
           <th>R.D.</th>
+          <th>Último folio</th>
           <th>Solicitud</th>
           <th>Solicitante</th>
           <th>Estado solicitud</th>
@@ -4641,6 +4708,7 @@ async function loadStateDetail(estado){
           <td><b>${esc(x.expediente||'—')}</b></td>
           <td>${esc(x.extension||'—')}</td>
           <td>${esc(x.rd||'—')}</td>
+          <td>${esc(x.ultimo_folio||'—')}</td>
           <td><b>${esc(x.solicitud_numero||'—')}</b></td>
           <td>${esc(x.solicitante||'—')}</td>
           <td><span class="pill pending">${esc(x.estado_item||'ACEPTADO')}</span></td>
@@ -4654,8 +4722,8 @@ async function loadStateDetail(estado){
                 Historial
               </button>
               <button class="btn small"
-                onclick="manageExpedienteFromPanel('${x.expediente_id}')">
-                Gestionar
+                onclick="openEditRequest('${x.solicitud_id}')">
+                Preparar entrega
               </button>
             </div>
           </td>
@@ -7318,7 +7386,7 @@ function renderRequestMovements(){
   }
 
   el('rqMovements').innerHTML=`<table>
-    <thead><tr><th>Fecha</th><th>Expediente</th><th>Acción</th><th>Desde</th><th>Hacia</th><th>Estado</th><th>Cargo</th><th>Observación</th></tr></thead>
+    <thead><tr><th>Fecha / hora</th><th>Expediente</th><th>Acción</th><th>Desde</th><th>Hacia</th><th>Estado</th><th>Cargo</th><th>Observación</th></tr></thead>
     <tbody>${requestMovementRows.map(m=>`<tr>
       <td>${fmtDate(m.created_at)}<br><span class="note">${fmtTime(m.created_at)}</span></td>
       <td>${esc(m.expediente||'')}</td>
@@ -8282,7 +8350,7 @@ function recordTable(data,withOwner=false,source='panel'){
 
 function renderHistory(){
   if(!historyRows.length){el('historyTable').innerHTML='<div class="empty">No hay movimientos para mostrar.</div>';return}
-  el('historyTable').innerHTML=`<table><thead><tr><th>Fecha</th><th>Expediente</th><th>Extensión</th><th>Acción</th><th>Desde</th><th>Hacia</th><th>Cargo</th><th>Detalle</th></tr></thead><tbody>${historyRows.map(h=>`<tr><td>${fmtDate(h.created_at)}</td><td><b>${esc(h.expediente)}</b></td><td>${h.extension?esc(h.extension):'—'}</td><td>${esc(h.accion)}</td><td>${esc(h.desde)}</td><td>${esc(h.hacia)}</td><td>${esc(h.cargo)}</td><td>${esc(h.detalle)}</td></tr>`).join('')}</tbody></table>`
+  el('historyTable').innerHTML=`<table><thead><tr><th>Fecha / hora</th><th>Expediente</th><th>Extensión</th><th>Acción</th><th>Desde</th><th>Hacia</th><th>Cargo</th><th>Detalle</th></tr></thead><tbody>${historyRows.map(h=>`<tr><td>${fmtDate(h.created_at)}<br><span class="note">${fmtTime(h.created_at)}</span></td><td><b>${esc(h.expediente)}</b></td><td>${h.extension?esc(h.extension):'—'}</td><td>${esc(h.accion)}</td><td>${esc(h.desde)}</td><td>${esc(h.hacia)}</td><td>${esc(h.cargo)}</td><td>${esc(h.detalle)}</td></tr>`).join('')}</tbody></table>`
 }
 function switchTab(name,btn){['panel','summary','states','requests','requestsByLawyer','all','cargos','history'].forEach(x=>el('tab-'+x).classList.toggle('hidden',x!==name));document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));if(btn)btn.classList.add('active')}
 
