@@ -1450,9 +1450,9 @@
       <div class="prepare-delivery-grid">
         <div class="field">
           <label>Atiende el requerimiento *</label>
-          <input id="rqPrepareAtiende"
-                 list="listaAtiendeRequerimiento"
-                 placeholder="Seleccione quién atiende">
+          <select id="rqPrepareAtiende">
+            <option value="">— Seleccione personal de Archivo —</option>
+          </select>
         </div>
 
         <div class="field">
@@ -1509,7 +1509,9 @@
     <div class="req-detail-controls">
       <div class="field">
         <label>Atiende el requerimiento</label>
-        <input id="rqDAtiende" list="listaAtiendeRequerimiento" placeholder="Seleccione quién atiende">
+        <select id="rqDAtiende">
+          <option value="">— Seleccione personal de Archivo —</option>
+        </select>
       </div>
       <div class="field">
         <label>Nuevo responsable (reasignación)</label>
@@ -1814,7 +1816,9 @@
         </div>
         <div class="field span2">
           <label>Atiende el requerimiento *</label>
-          <input id="fAtiende" list="listaAtiendeRequerimiento" placeholder="Seleccione quién atiende">
+          <select id="fAtiende">
+          <option value="">— Seleccione personal de Archivo —</option>
+        </select>
         </div>
         <div class="field span2"><label>Expediente acumulado / vinculado</label><input id="fAcumulado"></div>
         <div class="field span4"><label>Observación</label><textarea id="fObservacion"></textarea></div>
@@ -1860,7 +1864,9 @@
 
           <div class="field span2">
             <label>Atiende el requerimiento *</label>
-            <input id="bAtiende" list="listaAtiendeRequerimiento" placeholder="Seleccione quién atiende">
+            <select id="bAtiende">
+              <option value="">— Seleccione personal de Archivo —</option>
+            </select>
           </div>
 
           <div class="field span4">
@@ -1910,7 +1916,9 @@
       <div class="field span4"><label>Asunto *</label><input id="cAsunto" list="listaAsuntosCargo" placeholder="Seleccione o escriba el asunto"></div>
       <div class="field span2">
         <label>Atiende el requerimiento *</label>
-        <input id="cAtiende" list="listaAtiendeRequerimiento" placeholder="Seleccione quién atiende">
+        <select id="cAtiende">
+          <option value="">— Seleccione personal de Archivo —</option>
+        </select>
       </div>
       <div class="field span4"><label>Observación general</label><textarea id="cObservacion" placeholder="Observación del cargo, de corresponder"></textarea></div>
     </div>
@@ -2512,6 +2520,7 @@ async function afterLogin(){
   ]);
   await loadReassignmentProfiles();
   fillSelects();
+  renderArchiveStaffSelects();
   renderAsuntosDatalist();
   applyRoleUI();
   updateSelectionUI();
@@ -2771,6 +2780,67 @@ function reassignmentNames(){
   return reassignmentProfiles
     .map(x=>(x.nombre_personal||'').trim())
     .filter(Boolean);
+}
+
+
+function archiveStaffNames(){
+  // Fuente principal: cuentas activas con perfil ARCHIVO en Usuarios y permisos.
+  let names=(reassignmentProfiles||[])
+    .filter(x=>norm(x.rol||'')==='ARCHIVO')
+    .map(x=>(x.nombre_personal||'').trim())
+    .filter(Boolean);
+
+  names=[...new Set(names)].sort((a,b)=>a.localeCompare(b,'es'));
+
+  // Fallback de compatibilidad: si todavía no hay cuentas ARCHIVO asociadas,
+  // usar el catálogo histórico que ya tenía el sistema.
+  if(!names.length){
+    names=['ARMANDO GARCIA','JAIME GRADOS','JHUVER RIMAC','ALAN VILA'];
+  }
+
+  return names;
+}
+
+function fillArchiveStaffSelect(id){
+  const s=el(id);
+  if(!s)return;
+
+  const current=String(s.value||'').trim();
+  const names=archiveStaffNames();
+  const options=[...names];
+
+  // Si se abre un registro/cargo antiguo cuyo responsable ya no está activo,
+  // conservarlo como opción histórica para no borrar el dato al visualizarlo.
+  if(current && !options.some(x=>norm(x)===norm(current))){
+    options.unshift(current);
+  }
+
+  s.innerHTML=
+    '<option value="">— Seleccione personal de Archivo —</option>'+
+    options.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');
+
+  if(current)s.value=current;
+}
+
+function renderArchiveStaffSelects(){
+  ['rqPrepareAtiende','rqDAtiende','fAtiende','bAtiende','cAtiende']
+    .forEach(fillArchiveStaffSelect);
+}
+
+
+function setArchiveStaffValue(id,value){
+  const s=el(id);
+  if(!s)return;
+  fillArchiveStaffSelect(id);
+
+  const v=String(value||'').trim();
+  if(v && ![...s.options].some(o=>norm(o.value)===norm(v))){
+    const opt=document.createElement('option');
+    opt.value=v;
+    opt.textContent=v+' (histórico)';
+    s.appendChild(opt);
+  }
+  s.value=v;
 }
 
 async function loadAbogadoProfiles(){
@@ -3302,6 +3372,7 @@ async function saveUserProfile(id){
   ]);
   await loadReassignmentProfiles();
   fillSelects();
+  renderArchiveStaffSelects();
   renderSidebar();
 
   if(id===session.user.id){
@@ -5619,8 +5690,19 @@ function updatePrepareDeliveryUI(){
     return;
   }
 
+  fillArchiveStaffSelect('rqPrepareAtiende');
   if(el('rqPrepareAtiende') && !el('rqPrepareAtiende').value){
-    el('rqPrepareAtiende').value=window.__editingRequestAtiende||'';
+    const currentAtiende=window.__editingRequestAtiende||'';
+    if(currentAtiende){
+      const s=el('rqPrepareAtiende');
+      if(![...s.options].some(o=>norm(o.value)===norm(currentAtiende))){
+        const opt=document.createElement('option');
+        opt.value=currentAtiende;
+        opt.textContent=currentAtiende+' (histórico)';
+        s.appendChild(opt);
+      }
+      s.value=currentAtiende;
+    }
   }
 
   if(state==='SOLICITADO'){
@@ -7484,7 +7566,7 @@ async function openRequestDetail(id){
   el('rqDSolicitante').textContent=r.solicitante||'—';
   if(el('rqDOrigen'))el('rqDOrigen').innerHTML=requestOriginPill(r.origen_registro);
   if(el('rqDRegistradoPor'))el('rqDRegistradoPor').textContent=r.registrado_por||'—';
-  el('rqDAtiende').value=r.atiende||'';
+  setArchiveStaffValue('rqDAtiende',r.atiende||'');
 
   // Valor de retorno por defecto: primera ubicación que contenga ARCHIVO.
   const retornoOpts=[...el('rqDRetorno').options].map(o=>o.value);
@@ -8644,7 +8726,7 @@ async function loadCargoHeaderByNumber(){
   if(data.fecha)el('cFecha').value=data.fecha;
   el('cAsunto').value=(data.asunto||'').trim();
   el('cAsunto').dataset.originalAsunto=(data.asunto||'').trim();
-  el('cAtiende').value=(data.atiende_requerimiento||'').trim();
+  setArchiveStaffValue('cAtiende',(data.atiende_requerimiento||'').trim());
   if(data.observacion)el('cObservacion').value=data.observacion;
 
   if(solicitante){
@@ -8742,7 +8824,7 @@ async function openCargoModal(){
   el('cFecha').value=new Date().toISOString().slice(0,10);
   el('cAsunto').value='';
   el('cAsunto').dataset.originalAsunto='';
-  el('cAtiende').value='';
+  setArchiveStaffValue('cAtiende','');
   el('cObservacion').value='';
   el('cargoStatus').textContent='';
 
@@ -9058,7 +9140,7 @@ function openRecordModal(){
   el('fCargo').readOnly=true;
   el('fAsunto').value='';
   el('fAsunto').readOnly=false;
-  el('fAtiende').value='';
+  setArchiveStaffValue('fAtiende','');
   el('fAtiende').readOnly=false;
   el('saveStatus').textContent='';
 
@@ -9071,7 +9153,7 @@ function openRecordModal(){
   el('bSolicitud').value='';
   el('bEntrega').value='';
   el('bAsunto').value='';
-  el('bAtiende').value='';
+  setArchiveStaffValue('bAtiende','');
   el('bObservacion').value='';
   batchCargoHeader=null;
 
@@ -9134,7 +9216,7 @@ async function editRecord(id,directManagement=false){
   // El número de un cargo existente nunca se modifica desde el expediente.
   el('fCargo').readOnly=true;
   el('fAsunto').value='';
-  el('fAtiende').value='';
+  setArchiveStaffValue('fAtiende','');
 
   if(r.cargo){
     const {data:cargo}=await sb
@@ -9145,7 +9227,7 @@ async function editRecord(id,directManagement=false){
 
     if(cargo){
       el('fAsunto').value=cargo.asunto||'';
-      el('fAtiende').value=cargo.atiende_requerimiento||'';
+      setArchiveStaffValue('fAtiende',cargo.atiende_requerimiento||'');
     }
   }
 
