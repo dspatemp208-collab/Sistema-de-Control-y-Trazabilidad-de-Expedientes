@@ -1435,7 +1435,7 @@
       </div>
     </div>
 
-    <div class="card" style="margin-top:12px;padding:12px">
+    <div class="card" id="rqAddItemsPanel" style="margin-top:12px;padding:12px">
       <div class="table-head" style="padding:0;margin-bottom:8px">
         <div>
           <strong>Agregar expedientes a esta solicitud</strong>
@@ -1469,7 +1469,7 @@
     </div>
 
     <div class="card table-wrap" style="margin-top:12px">
-      <div class="table-head"><strong>Expedientes solicitados</strong><span id="rqSelectedCount">0</span></div>
+      <div class="table-head"><strong id="rqSelectedTitle">Expedientes solicitados</strong><span id="rqSelectedCount">0</span></div>
       <div id="rqSelectedTable"></div>
     </div>
 
@@ -5187,6 +5187,7 @@ function closeNewRequestModal(){
   window.__editingRequestId=null;
   window.__editingRequestNumero=null;
   window.__editingRequestState=null;
+  window.__editingRequestAttentionState=null;
   window.__editingRequestModalidad=null;
   window.__editingRequestAtiende=null;
   window.__editCargoSelectedKeys=null;
@@ -5194,6 +5195,10 @@ function closeNewRequestModal(){
   if(el('rqPrepareAtiende'))el('rqPrepareAtiende').value='';
   if(el('rqPrepareCargoObs'))el('rqPrepareCargoObs').value='';
   el('rqPrepareDeliveryPanel')?.classList.add('hidden');
+  el('rqAddItemsPanel')?.classList.remove('hidden');
+  if(el('rqSelectedTitle'))el('rqSelectedTitle').textContent='Expedientes solicitados';
+  if(el('rqSaveBtn'))el('rqSaveBtn').classList.remove('hidden');
+  ['rqAsunto','rqModalidad','rqObservacion'].forEach(id=>{if(el(id))el(id).disabled=false;});
   el('rqAcceptFromEditBtn')?.classList.add('hidden');
   el('rqSavePrintCargoBtn')?.classList.add('hidden');
 
@@ -5388,6 +5393,12 @@ async function openNewRequestModal(rowsOverride=null,preserveHeader=false){
 
   const editMode=!!window.__editingRequestId;
 
+  // Restablecer controles; el modo ENTREGA PARCIAL los ajustará después.
+  el('rqAddItemsPanel')?.classList.remove('hidden');
+  if(el('rqSelectedTitle'))el('rqSelectedTitle').textContent='Expedientes solicitados';
+  if(el('rqSaveBtn'))el('rqSaveBtn').classList.remove('hidden');
+  ['rqAsunto','rqModalidad','rqObservacion'].forEach(id=>{if(el(id))el(id).disabled=false;});
+
   if(el('newRequestModal')){
     el('newRequestModal').dataset.editId=
       editMode ? window.__editingRequestId : '';
@@ -5512,9 +5523,12 @@ async function openNewRequestModal(rowsOverride=null,preserveHeader=false){
   }else{
     const editMode=!!window.__editingRequestId;
 
+    const partialContinue=
+      editMode && norm(window.__editingRequestState||'')==='ENTREGA PARCIAL';
+
     const cargoMode=
       editMode &&
-      norm(window.__editingRequestState||'')==='ACEPTADO' &&
+      ['ACEPTADO','ENTREGA PARCIAL'].includes(norm(window.__editingRequestState||'')) &&
       (el('rqModalidad')?.value||window.__editingRequestModalidad)==='PRÉSTAMO';
 
     el('rqSelectedTable').innerHTML=`<table>
@@ -5582,11 +5596,13 @@ async function openNewRequestModal(rowsOverride=null,preserveHeader=false){
           <td>${(r._nuevo||r.nuevo)?'NUEVO':'EXISTENTE'}</td>
           <td>${esc(r.estado||((r._nuevo||r.nuevo)?'PENDIENTE DE VERIFICACIÓN':''))}</td>
           <td>
-            <button class="btn secondary small"
-              type="button"
-              onclick="removeNewRequestItem(${i})">
-              Quitar
-            </button>
+            ${partialContinue
+              ?'<span class="note" style="padding:4px 6px">Pendiente</span>'
+              :`<button class="btn secondary small"
+                  type="button"
+                  onclick="removeNewRequestItem(${i})">
+                  Quitar
+                </button>`}
           </td>
         </tr>`).join('')}
       </tbody>
@@ -5769,6 +5785,21 @@ async function saveCurrentEditSilently(){
   const p=buildCurrentRequestPayload();
   if(!p)return null;
 
+  const partialContinue=
+    norm(window.__editingRequestState||'')==='ENTREGA PARCIAL';
+
+  if(partialContinue){
+    const {data,error}=await sb.rpc(
+      'actualizar_datos_pendientes_solicitud',
+      {
+        p_solicitud_id:editId,
+        p_items:p.cleanItems
+      }
+    );
+    if(error)throw error;
+    return {data,payload:p};
+  }
+
   const {data,error}=await sb.rpc(
     'editar_solicitud_antes_cargo',
     {
@@ -5834,6 +5865,14 @@ function updatePrepareDeliveryUI(){
     if(note){
       note.textContent=
         'Complete Extensión, R.D. y Último folio; marque los expedientes que formarán el cargo y genere la impresión.';
+    }
+  }else if(state==='ENTREGA PARCIAL' && modalidad==='PRÉSTAMO'){
+    if(title)title.textContent='Continuar atención · preparar expedientes pendientes';
+    acceptBtn?.classList.add('hidden');
+    printBtn?.classList.remove('hidden');
+    if(note){
+      note.textContent=
+        'Complete o corrija Extensión, R.D. y Último folio de los expedientes que aún están pendientes; seleccione los que atenderá ahora y genere el siguiente cargo.';
     }
   }else if(state==='ACEPTADO'){
     if(title)title.textContent='Solicitud aceptada · responsable de atención asignado';
@@ -7026,7 +7065,7 @@ function requestWorkflowAction(r){
   if(st==='REGISTRADA')return `<button class="btn small" onclick="openRequestDetail('${r.id}')">Revisar / aceptar</button>`;
   if(st==='REGISTRADA POR ARCHIVO')return `<button class="btn small" onclick="openEditRequest('${r.id}')">Atender solicitud</button>`;
   if(st==='CARGO PENDIENTE DE ENTREGA')return `<button class="btn small" onclick="openRequestDetail('${r.id}')">Regularizar cargo</button>`;
-  if(st==='ENTREGA PARCIAL')return `<button class="btn small" onclick="openRequestDetail('${r.id}')">Continuar atención</button>`;
+  if(st==='ENTREGA PARCIAL')return `<button class="btn small" onclick="openEditRequest('${r.id}')">Continuar atención</button>`;
   if(st==='ENTREGA TOTAL')return `<button class="btn secondary small" onclick="openRequestDetail('${r.id}')">Ver entrega</button>`;
   if(st==='PENDIENTE DE CIERRE')return `<button class="btn small" onclick="openRequestDetail('${r.id}')">Recibir devolución</button>`;
   if(st==='CERRADA POR ARCHIVO')return `<button class="btn secondary small" onclick="openRequestDetail('${r.id}')">Ver historial</button>`;
@@ -7393,7 +7432,10 @@ async function openEditRequest(id){
     return;
   }
 
-  if(!canEditRequestBeforeCargo(header)){
+  const attentionState=norm(header.estado_atencion||header.estado||'');
+  const partialContinue=attentionState==='ENTREGA PARCIAL';
+
+  if(!canEditRequestBeforeCargo(header) && !partialContinue){
     alert(
       'Esta solicitud ya no puede editarse porque tiene cargo, '+
       'expedientes entregados o el ciclo de atención ya avanzó.'
@@ -7413,7 +7455,8 @@ async function openEditRequest(id){
 
   window.__editingRequestId=id;
   window.__editingRequestNumero=header.numero||'';
-  window.__editingRequestState=header.estado||'';
+  window.__editingRequestState=partialContinue?'ENTREGA PARCIAL':(header.estado||'');
+  window.__editingRequestAttentionState=attentionState;
   window.__editingRequestModalidad=header.modalidad||'PRÉSTAMO';
   window.__editingRequestAtiende=header.atiende||'';
 
@@ -7424,7 +7467,7 @@ async function openEditRequest(id){
     observacion:header.observacion||''
   };
 
-  const rows=(items||[]).map(x=>({
+  const allRows=(items||[]).map(x=>({
     id:x.expediente_id,
     expediente:x.expediente,
     extension:x.extension||null,
@@ -7438,15 +7481,45 @@ async function openEditRequest(id){
     nuevo:false
   }));
 
+  // En ENTREGA PARCIAL se trabaja únicamente con los expedientes
+  // que todavía permanecen PENDIENTES POR ATENDER.
+  const rows=partialContinue
+    ?allRows.filter(x=>norm(x.estado_item||'')==='ACEPTADO')
+    :allRows;
+
+  if(partialContinue && !rows.length){
+    alert('Esta solicitud ya no tiene expedientes pendientes por atender.');
+    return;
+  }
+
   window.__editCargoSelectedKeys=new Set();
 
-  // Si la solicitud ya está aceptada, todos los expedientes se proponen
-  // inicialmente para el cargo; el usuario puede desmarcar los que no correspondan.
-  if(norm(header.estado||'')==='ACEPTADO'){
+  // En la primera atención y en la continuación parcial, los expedientes
+  // pendientes se proponen para el cargo; Archivo puede desmarcar los que
+  // todavía no tenga disponibles.
+  if(norm(header.estado||'')==='ACEPTADO' || partialContinue){
     rows.forEach(r=>setCargoItemSelected(r,true));
   }
 
   await openNewRequestModal(rows,true);
+
+  if(partialContinue){
+    if(el('rqModalTitle')){
+      el('rqModalTitle').textContent=`Continuar atención ${header.numero||''}`;
+    }
+    if(el('rqModalNote')){
+      el('rqModalNote').textContent=
+        'La solicitud tuvo una entrega parcial. Complete los datos de los expedientes que aún faltan y genere un nuevo cargo con los que atenderá en esta oportunidad.';
+    }
+    if(el('rqSelectedTitle')){
+      el('rqSelectedTitle').textContent='Expedientes pendientes por atender';
+    }
+    el('rqAddItemsPanel')?.classList.add('hidden');
+    if(el('rqSaveBtn'))el('rqSaveBtn').classList.add('hidden');
+    ['rqSolicitante','rqAsunto','rqModalidad','rqObservacion'].forEach(id=>{
+      if(el(id))el(id).disabled=true;
+    });
+  }
 }
 
 
