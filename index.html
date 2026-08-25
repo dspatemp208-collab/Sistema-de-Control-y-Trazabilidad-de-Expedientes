@@ -2028,7 +2028,7 @@ const MASTER=[["MARCELA ALONZO", "PERSONAL"], ["ABRAHAN DAMAS", "PERSONAL"], ["A
 const ASUNTOS_PREDETERMINADOS=["ACCESO A LA INFORMACIÓN", "ANALISIS Y EVALUACIÓN DEL MEMORANDO DE CONCLUSIÓN DEL PROCESO CONTENCIOSO ADMINISTRATIVO, REMITIDO POR LA PROCURADURÍA PÚBLICA (PP)", "ANEXADO DE CÉDULAS DE NOTIFICACIÓN", "ANEXADO DE DOCUMENTOS", "ATENCIÓN A LA DIRECCIÓN DE EXTRACCIÓN PARA CONSUMO HUMANO DIRECTO E INDIRECTO (DECHDI)", "ATENCIÓN A LA DIRECCIÓN DE VIGILANCIA Y CONTROL (DVC) - RD ARCHIVAMIENTO", "ATENCIÓN A LA OFICINA DE CONTROL INTERNO (OCI)", "ATENCIÓN A LA OFICINA GENERAL DE ADMINISTRACIÓN (OGA)", "ATENCIÓN A LA PROCURADURÍA PÚBLICA", "ATENCIÓN AL MINISTERIO PÚBLICO (FISCALÍA)", "ATENCIÓN DE ESCRITOS", "ATENCIÓN DE ESCRITOS REMITIDOS POR EL CONSEJO DE APELACIÓN DE SANCIONES CALIDAD DE PRÉSTAMO (CONAS)", "ATENCIÓN DE QUEJAS", "CADUCIDAD", "COMUNICACIÓN DE LAS SANCIONES A LA DIRECCIÓN GENERAL DE PESCA PARA CONSUMO HUMANO DIRECTO E INDIRECTO (DGPCHDI)", "DESLINDE DE RESPONSABILIDAD", "ELEVACIÓN DEL EXPEDIENTE AL CONSEJO DE APELACIÓN DE SANCIONES (CONAS)", "ENMIENDA", "EVALUACIÓN DE OFICIO", "EVALUACIÓN DE PAGOS POR CONCEPTO DE DECOMISOS", "EVALUACIÓN DEL EXPEDIENTE QUE RETORNA DEL CONSEJO DE APELACIÓN DE SANCIONES (CONAS)", "INTERES PARTICULAR", "LECTURA EN SALA (USUARIOS INTERNOS)", "LECTURA EXPEDIENTE (USUARIOS EXTERNOS)", "NULIDAD DE OFICIO", "PERDIDA DE BENEFICIO", "PETICIÓN ADMINISTRATIVA", "RECOMENDACIÓN DE INICIO", "RECONSIDERACIÓN", "REINCIDENCIAS DEL PAS", "REVISIÓN", "REVISIÓN DEL PROCEDIMIENTO DE EJECUCIÓN COACTIVA (PEC) - OEC", "SECRETARIA TÉCNICA DE LOS ORGANOS INSTRUCTORES (STOI)", "SOLICITUD DE BENEFICIOS", "TRAMITACIÓN DEL PAS (IFIS)", "USO DE LA PALABRA O AUDIENCIA"];
 const STATUSES=['CUSTODIA','EN PRÉSTAMO','DEVUELTO','REASIGNADO','EN TRÁMITE'];
 const PAGE_SIZE=200;
-let sb=null, session=null, currentProfile=null, userProfiles=[], abogadoProfiles=[], reassignmentProfiles=[], returnRequestRows=[], pendingRegisterRows=[], pendingVerifyRows=[], notificationRows=[], notificationUnread=0, notificationsLoaded=false, requestExcelRows=[], requestExcelMissing=[], requestExcelDuplicates=0, summaryRows=[], panelRows=[], allRows=[], historyRows=[], cargosRows=[], selectedCargoNumero='', stateRows=[], stateDetailRows=[], requestRows=[], requestDetailRows=[], requestMovementRows=[], requestSearchRows=[], requestsByLawyerRows=[];
+let sb=null, session=null, currentProfile=null, userProfiles=[], abogadoProfiles=[], reassignmentProfiles=[], reassignmentProfilesLoadedAt=0, returnRequestRows=[], pendingRegisterRows=[], pendingVerifyRows=[], notificationRows=[], notificationUnread=0, notificationsLoaded=false, requestExcelRows=[], requestExcelMissing=[], requestExcelDuplicates=0, summaryRows=[], panelRows=[], allRows=[], historyRows=[], cargosRows=[], selectedCargoNumero='', stateRows=[], stateDetailRows=[], requestRows=[], requestDetailRows=[], requestMovementRows=[], requestSearchRows=[], requestsByLawyerRows=[];
 let catalogo=MASTER.map(([nombre,tipo],i)=>({id:'fallback-'+i,nombre,tipo,activo:true}));
 let asuntosCatalogo=ASUNTOS_PREDETERMINADOS.map((nombre,i)=>({id:'fallback-asunto-'+i,nombre,activo:true}));
 let selectedIds=new Set(), cargoRows=[];
@@ -2777,8 +2777,15 @@ function startNotificationPolling(){
   }
 }
 
-async function loadReassignmentProfiles(){
+async function loadReassignmentProfiles(force=false){
   if(!sb||!session)return;
+
+  // Evita consultar Supabase cada vez que se abre "Gestionar".
+  // La lista se renueva cada 5 minutos o cuando se fuerza la carga.
+  if(!force && reassignmentProfiles.length &&
+     (Date.now()-reassignmentProfilesLoadedAt)<300000){
+    return reassignmentProfiles;
+  }
 
   const {data,error}=await sb.rpc('listar_usuarios_reasignacion');
 
@@ -2804,7 +2811,8 @@ async function loadReassignmentProfiles(){
       return true;
     });
 
-    return;
+    reassignmentProfilesLoadedAt=Date.now();
+    return reassignmentProfiles;
   }
 
   const seen=new Set();
@@ -2818,6 +2826,9 @@ async function loadReassignmentProfiles(){
       return true;
     })
     .sort((a,b)=>(a.nombre_personal||'').localeCompare(b.nombre_personal||'','es'));
+
+  reassignmentProfilesLoadedAt=Date.now();
+  return reassignmentProfiles;
 }
 
 function reassignmentNames(){
@@ -4110,37 +4121,43 @@ async function openAdminDirectManagement(expedienteId){
   }
 }
 
-async function manageExpedienteFromPanel(expedienteId){
+async function manageExpedienteFromPanel(expedienteId,button=null){
   if(!sb||!session)return;
 
+  const originalText=button?.textContent||'Gestionar';
+  if(button){
+    button.disabled=true;
+    button.textContent='Abriendo...';
+  }
+
   try{
-    const {data:movs,error}=await sb
-      .from('movimientos_prestamo')
-      .select('solicitud_id,created_at')
-      .eq('expediente_id',expedienteId)
-      .not('solicitud_id','is',null)
-      .order('created_at',{ascending:false})
-      .limit(100);
+    // Relación directa expediente → solicitud.
+    // Es mucho más rápida que recorrer el historial de movimientos.
+    const {data:links,error:linkError}=await sb
+      .from('solicitud_expedientes')
+      .select('solicitud_id')
+      .eq('expediente_id',expedienteId);
 
-    if(error)throw error;
+    if(linkError)throw linkError;
 
-    const ids=[...new Set((movs||[]).map(x=>x.solicitud_id).filter(Boolean))];
+    const ids=[...new Set((links||[])
+      .map(x=>x.solicitud_id)
+      .filter(Boolean))];
 
-    // ADMINISTRADOR: si el expediente no nació de una solicitud,
-    // puede gestionarlo directamente sin quedar bloqueado.
     if(!ids.length){
       if(isAdmin()){
         await openAdminDirectManagement(expedienteId);
         return;
       }
 
-      alert('Este expediente no tiene una solicitud asociada para gestionar. El ADMINISTRADOR puede gestionarlo directamente.');
+      alert('Este expediente no tiene una solicitud asociada para gestionar.');
       return;
     }
 
+    // Traer únicamente las cabeceras relacionadas con este expediente.
     const {data:sols,error:solErr}=await sb
       .from('solicitudes_prestamo')
-      .select('id,numero,estado,created_at')
+      .select('*')
       .in('id',ids)
       .order('created_at',{ascending:false});
 
@@ -4148,11 +4165,11 @@ async function manageExpedienteFromPanel(expedienteId){
 
     const solicitudes=sols||[];
 
-    // Priorizar una solicitud todavía operativa.
+    // Priorizar la solicitud operativa más reciente.
+    const cerrados=new Set(['CERRADA POR ARCHIVO','CERRADA']);
     const activa=solicitudes.find(s=>
-      ['SOLICITADO','ACEPTADO','EN ATENCIÓN','EN PRÉSTAMO'].includes(s.estado)
+      !cerrados.has(String(s.estado||'').trim().toUpperCase())
     );
-
     const target=activa||solicitudes[0];
 
     if(!target){
@@ -4160,17 +4177,21 @@ async function manageExpedienteFromPanel(expedienteId){
         await openAdminDirectManagement(expedienteId);
         return;
       }
-
       alert('No se encontró la solicitud relacionada con este expediente.');
       return;
     }
 
-    await loadRequests();
+    // Guardar la cabecera en memoria para que openRequestDetail no tenga
+    // que recargar toda la bandeja de Solicitudes.
+    requestRows=[
+      target,
+      ...(requestRows||[]).filter(x=>x.id!==target.id)
+    ];
+
     await openRequestDetail(target.id);
 
     // Seleccionar automáticamente el expediente desde el cual se pulsó Gestionar.
     requestSelectedIds.clear();
-
     const item=requestDetailRows.find(x=>x.expediente_id===expedienteId);
 
     if(item && requestItemSelectable(item)){
@@ -4182,21 +4203,22 @@ async function manageExpedienteFromPanel(expedienteId){
 
     if(el('rqActionStatus')){
       el('rqActionStatus').textContent=
-        item
-          ? `Expediente ${item.expediente} seleccionado para gestión.`
-          : '';
+        item ? `Expediente ${item.expediente} seleccionado para gestión.` : '';
     }
 
   }catch(err){
     if(isAdmin()){
-      // Si por alguna inconsistencia histórica no puede resolver la solicitud,
-      // el administrador conserva una vía de gestión directa.
       try{
         await openAdminDirectManagement(expedienteId);
         return;
       }catch(_){}
     }
     alert(err?.message||String(err));
+  }finally{
+    if(button){
+      button.disabled=false;
+      button.textContent=originalText;
+    }
   }
 }
 
@@ -7648,21 +7670,23 @@ async function openRequestDetail(id){
   }
   currentRequest=requestRows.find(x=>x.id===id)||null;
 
-  const {data:items,error}=await sb.rpc('detalle_solicitud_prestamo',{
-    p_solicitud_id:id
-  });
-  if(error){alert(error.message);return}
+  // Detalle e historial se cargan en paralelo para reducir el tiempo de apertura.
+  const [detailResult,movementResult]=await Promise.all([
+    sb.rpc('detalle_solicitud_prestamo',{p_solicitud_id:id}),
+    sb.from('movimientos_prestamo')
+      .select('*')
+      .eq('solicitud_id',id)
+      .order('created_at',{ascending:false})
+      .limit(300)
+  ]);
 
-  requestDetailRows=items||[];
+  if(detailResult.error){
+    alert(detailResult.error.message);
+    return;
+  }
 
-  const {data:mov,error:movErr}=await sb
-    .from('movimientos_prestamo')
-    .select('*')
-    .eq('solicitud_id',id)
-    .order('created_at',{ascending:false})
-    .limit(300);
-
-  requestMovementRows=movErr?[]:(mov||[]);
+  requestDetailRows=detailResult.data||[];
+  requestMovementRows=movementResult.error?[]:(movementResult.data||[]);
 
   if(!currentRequest){
     const {data:list}=await sb.rpc('listar_solicitudes_prestamo',{p_busqueda:null,p_estado:null});
@@ -8854,7 +8878,7 @@ function recordTable(data,withOwner=false,source='panel'){
     <td>${esc(r.observacion)}</td>
     <td><div style="display:flex;gap:5px;white-space:nowrap">
       <button class="btn secondary small" onclick="showExpHistory('${r.id}')">Historial</button>
-      <button class="btn small" onclick="manageExpedienteFromPanel('${r.id}')">Gestionar</button>
+      <button class="btn small" onclick="manageExpedienteFromPanel('${r.id}',this)">Gestionar</button>
       ${hasFullAccess()?`<button class="btn secondary small" onclick="editRecord('${r.id}')">Editar</button>`:''}
     </div></td>
   </tr>`).join('');
