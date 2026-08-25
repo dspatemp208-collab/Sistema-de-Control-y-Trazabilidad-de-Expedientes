@@ -7165,7 +7165,6 @@ function renderRequests(){
       <th>Atendidos</th>
       <th>Por recibir</th>
       <th>Cargo</th>
-      <th>Aceptado por</th>
       <th>Atiende el requerimiento</th>
       <th>F. solicitud</th>
       <th>F. aceptación Archivo</th>
@@ -7187,7 +7186,6 @@ function renderRequests(){
         <td>${Number(r.atendidos||0)} / ${Number(r.total_expedientes||0)}</td>
         <td>${Number(r.devoluciones_pendientes||0)}</td>
         <td>${esc(r.cargo_numero||'—')}</td>
-        <td>${esc(r.aceptado_por||'—')}</td>
         <td><b>${esc(r.atiende||'—')}</b></td>
         <td>${fmtDate(r.fecha_solicitud)}</td>
         <td>${r.fecha_atencion?fmtDate(r.fecha_atencion):'—'}</td>
