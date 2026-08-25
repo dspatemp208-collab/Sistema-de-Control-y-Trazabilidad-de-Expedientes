@@ -405,6 +405,7 @@
 #fullAccessKpis.owner-user-kpis .kpi.card-custody::before{background:#234f7d}
 #fullAccessKpis.owner-user-kpis .kpi.card-loan::before{background:#b16b00}
 #fullAccessKpis.owner-user-kpis .kpi.card-reassigned::before{background:#7151a8}
+#fullAccessKpis.owner-user-kpis .kpi.card-pending-attention::before{background:#1f5d8f}
 #fullAccessKpis.owner-user-kpis .kpi.card-return-pending::before{background:#b54848}
 #fullAccessKpis.owner-user-kpis .kpi.card-returned::before{background:#3c7b5a}
 #fullAccessKpis.owner-user-kpis .kpi.card-alert::before{background:#a71919}
@@ -959,7 +960,7 @@
            role="button" tabindex="0"
            onclick="showKpiExpedientes('total')"
            onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();showKpiExpedientes('total')}">
-        <div class="label" id="kTotalLabel">Total en custodia del usuario</div>
+        <div class="label" id="kTotalLabel">Total en custodia</div>
         <div class="value" id="kTotal">0</div>
         <div class="user-card-caption">Expedientes que actualmente permanecen bajo responsabilidad del usuario.</div>
         <div class="user-card-breakdown" id="kTotalStates"></div>
@@ -980,11 +981,11 @@
         </div>
       </div>
 
-      <div class="card kpi user-status-card card-reassigned hidden" id="kpiReassignedCard"
+      <div class="card kpi user-status-card card-reassigned" id="kpiReassignedCard"
            role="button" tabindex="0"
            onclick="showKpiExpedientes('reassigned')"
            onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();showKpiExpedientes('reassigned')}">
-        <div class="label">Reasignados al usuario</div>
+        <div class="label">Reasignados</div>
         <div class="value" id="kReassigned">0</div>
         <div class="user-card-caption">Recibidos mediante reasignación y que todavía permanecen con el usuario.</div>
         <div class="user-card-footer">
@@ -992,19 +993,31 @@
         </div>
       </div>
 
+      <div class="card kpi user-status-card card-pending-attention" id="kpiPendingAttentionCard"
+           role="button" tabindex="0"
+           onclick="showKpiExpedientes('pending_attention')"
+           onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();showKpiExpedientes('pending_attention')}">
+        <div class="label">Pendientes por atender</div>
+        <div class="value" id="kPendingAttention">0</div>
+        <div class="user-card-caption">Expedientes de solicitudes ya aceptadas por Archivo que todavía no han sido atendidos.</div>
+        <div class="user-card-footer">
+          <button class="kpi-view" type="button" onclick="event.stopPropagation();showKpiExpedientes('pending_attention')">Ver expedientes →</button>
+        </div>
+      </div>
+
       <div class="card kpi user-status-card card-return-pending" id="kpiPendingCard"
            role="button" tabindex="0"
            onclick="showKpiExpedientes('pending')"
            onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();showKpiExpedientes('pending')}">
-        <div class="label" id="kPendingLabel">Pendientes de aceptar devolución</div>
+        <div class="label" id="kPendingLabel">Solicitudes de devolución</div>
         <div class="value" id="kPending">0</div>
-        <div class="user-card-caption">El usuario solicitó devolverlos; Archivo todavía no confirma la recepción física.</div>
+        <div class="user-card-caption">Expedientes cuya devolución fue solicitada y todavía está pendiente de recepción por Archivo.</div>
         <div class="user-card-footer">
           <button class="kpi-view" type="button" onclick="event.stopPropagation();showKpiExpedientes('pending')">Ver expedientes →</button>
         </div>
       </div>
 
-      <div class="card kpi user-status-card card-returned hidden" id="kpiReturnedHistoryCard"
+      <div class="card kpi user-status-card card-returned" id="kpiReturnedHistoryCard"
            role="button" tabindex="0"
            onclick="showKpiExpedientes('returns')"
            onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();showKpiExpedientes('returns')}">
@@ -1016,7 +1029,7 @@
         </div>
       </div>
 
-      <div class="card kpi user-status-card card-alert danger" id="kpiAlertCard"
+      <div class="card kpi user-status-card card-alert danger hidden" id="kpiAlertCard"
            role="button" tabindex="0"
            onclick="showKpiExpedientes('alert')"
            onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();showKpiExpedientes('alert')}">
@@ -1098,7 +1111,7 @@
         <input id="stateSearch" placeholder="Ej.: EN PRÉSTAMO, DEVUELTOS AL ARCHIVO..." oninput="renderStates()">
       </div>
       <div class="note">
-        Se muestran todos los estados configurados y cualquier otro estado existente en la base de datos.
+        Panel global: préstamos, devoluciones, reasignaciones y expedientes que requieren atención.
       </div>
       <div style="display:flex;align-items:flex-end">
         <button class="btn secondary" onclick="clearStateSelection()">Ver todos</button>
@@ -3562,7 +3575,8 @@ async function loadUserPersonalSummary(){
     reasignados_por_mi:Number(s.reasignados_por_mi||0),
     reasignados_a_mi:Number(s.reasignados_a_mi||0),
     devueltos:Number(s.devueltos||0),
-    alertas_30:Number(s.alertas_30||0)
+    alertas_30:Number(s.alertas_30||0),
+    pendientes_por_atender:Number((ownerCardsRows.find(x=>x.nombre===name)||{}).pendientes_por_atender||0)
   };
 
   if(el('uKAll'))el('uKAll').textContent=userPanelSummary.todos;
@@ -3617,9 +3631,11 @@ function updateOwnerPanelVisibility(){
     el('ownerSelectedContext').classList.add('hidden');
   }
 
-  // ADMIN/ARCHIVO ya no usan una segunda fila de tarjetas de estado.
+  // ADMIN/ARCHIVO: al seleccionar un usuario, mostrar tarjetas vinculadas
+  // con los mismos estados operativos del panel global.
   if(el('fullAccessKpis')){
-    el('fullAccessKpis').classList.add('hidden');
+    el('fullAccessKpis').classList.toggle('hidden',!individualUser);
+    el('fullAccessKpis').classList.toggle('owner-user-kpis',individualUser);
   }
 
   if(el('panelDetailWrap')){
@@ -3644,16 +3660,16 @@ function updateOwnerPanelVisibility(){
         <option value="ALERTAS_30">ALERTAS &gt; 30 DÍAS</option>`;
       el('ownerStateFilter').value=current;
     }else if(individualUser){
-      const current=['custody','loan','reassigned','pending','returns','alert'].includes(panelQuickFilter)
+      const current=['custody','loan','reassigned','pending_attention','pending','returns'].includes(panelQuickFilter)
         ?panelQuickFilter
         :'custody';
       el('ownerStateFilter').innerHTML=`
-        <option value="custody">TODOS EN CUSTODIA</option>
+        <option value="custody">TOTAL EN CUSTODIA</option>
         <option value="loan">EN PRÉSTAMO</option>
         <option value="reassigned">REASIGNADO</option>
-        <option value="pending">DEVOLUCIÓN SOLICITADA</option>
+        <option value="pending_attention">PENDIENTE POR ATENDER</option>
         <option value="returns">DEVUELTO AL ARCHIVO</option>
-        <option value="alert">ALERTAS &gt; 30 DÍAS</option>`;
+        <option value="pending">SOLICITUDES DE DEVOLUCIÓN</option>`;
       el('ownerStateFilter').value=current;
     }
   }
@@ -3690,11 +3706,7 @@ async function loadOwnerCards(){
   // No forman parte de la custodia física todavía.
   const pendingByUser=new Map();
   const {data:pendingAttentionData,error:pendingAttentionError}=await sb.rpc(
-    'listar_solicitudes_prestamo',
-    {
-      p_busqueda:null,
-      p_estado:'REGISTRADA POR ARCHIVO'
-    }
+    'listar_pendientes_verificacion_archivo'
   );
 
   if(pendingAttentionError){
@@ -3703,14 +3715,9 @@ async function loadOwnerCards(){
     (pendingAttentionData||[]).forEach(r=>{
       const solicitante=String(r.solicitante||'').trim();
       if(!solicitante)return;
-
-      const total=Number(r.total_expedientes||0);
-      const atendidos=Number(r.atendidos||0);
-      const pendientes=Math.max(0,total-atendidos);
-
       pendingByUser.set(
         solicitante,
-        Number(pendingByUser.get(solicitante)||0)+pendientes
+        Number(pendingByUser.get(solicitante)||0)+1
       );
     });
   }
@@ -3757,6 +3764,7 @@ async function loadOwnerCards(){
     a.nombre.localeCompare(b.nombre,'es')
   );
 
+  syncSelectedOwnerKpisFromCards();
   renderOwnerCards();
 }
 
@@ -3808,19 +3816,15 @@ function renderOwnerCards(){
         </div>
 
         <div class="owner-user-stat">
-          <span>PEND. ACEPTAR DEVOLUCIÓN</span>
+          <span>SOLICITUDES DE DEVOLUCIÓN</span>
           <b>${Number(x.devoluciones_pendientes_aceptacion||0)}</b>
         </div>
 
         <div class="owner-user-stat">
-          <span>DEVOLUCIONES REALIZADAS</span>
+          <span>DEVUELTOS AL ARCHIVO</span>
           <b>${Number(x.devoluciones_realizadas||0)}</b>
         </div>
 
-        <div class="owner-user-stat">
-          <span>ALERTAS &gt; 30 DÍAS</span>
-          <b>${Number(x.alertas_30||0)}</b>
-        </div>
       </div>
 
       ${x.error
@@ -3837,7 +3841,7 @@ function renderOwnerCards(){
       <div class="owner-user-options">
         ${Number(x.pendientes_por_atender||0)>0
           ?`<button class="btn small"
-              onclick="event.stopPropagation();openLawyerRequests('${String(x.nombre).replace(/'/g,"\'")}','REGISTRADA POR ARCHIVO')">
+              onclick="event.stopPropagation();openLawyerRequests('${String(x.nombre).replace(/'/g,"\'")}','PENDIENTES_POR_ATENDER_ITEMS')">
               Por atender (${Number(x.pendientes_por_atender||0)})
             </button>`
           :''}
@@ -3859,7 +3863,7 @@ function renderOwnerCards(){
         ${Number(x.devoluciones_pendientes_aceptacion||0)>0
           ?`<button class="btn secondary small"
               onclick="event.stopPropagation();openOwnerExpedientes('${String(x.nombre).replace(/'/g,"\'")}','pending')">
-              Por aceptar (${Number(x.devoluciones_pendientes_aceptacion||0)})
+              Solicitudes devolución (${Number(x.devoluciones_pendientes_aceptacion||0)})
             </button>`
           :''}
 
@@ -3870,15 +3874,21 @@ function renderOwnerCards(){
             </button>`
           :''}
 
-        ${Number(x.alertas_30||0)>0
-          ?`<button class="btn secondary small"
-              onclick="event.stopPropagation();openOwnerExpedientes('${String(x.nombre).replace(/'/g,"\'")}','alert')">
-              Alertas +30 (${Number(x.alertas_30||0)})
-            </button>`
-          :''}
       </div>
     </div>
   `).join('');
+}
+
+async function openPendingOwnerRequest(solicitudId,solicitante){
+  switchTab('requests',document.querySelector('[data-tab="requests"]'));
+  if(el('requestSearch'))el('requestSearch').value=solicitante||'';
+  if(el('requestStateFilter'))el('requestStateFilter').value='PENDIENTES_POR_ATENDER_ITEMS';
+  if(isAdmin()&&el('requestOriginFilter'))el('requestOriginFilter').value='';
+  await loadRequests();
+  if(solicitudId){
+    const row=(requestRows||[]).find(r=>String(r.id)===String(solicitudId));
+    if(row)await openEditRequest(row.id);
+  }
 }
 
 async function openOwnerExpedientes(nombre,tipo='custody'){
@@ -3896,6 +3906,17 @@ async function openOwnerExpedientes(nombre,tipo='custody'){
     behavior:'smooth',
     block:'start'
   });
+}
+
+function syncSelectedOwnerKpisFromCards(){
+  if(!selectedOwnerIsUser())return;
+  const s=ownerCardsRows.find(x=>x.nombre===selectedOwner)||{};
+  if(el('kTotal'))el('kTotal').textContent=Number(s.total_custodia||0);
+  if(el('kLoan'))el('kLoan').textContent=Number(s.en_prestamo||0);
+  if(el('kReassigned'))el('kReassigned').textContent=Number(s.reasignados||0);
+  if(el('kPendingAttention'))el('kPendingAttention').textContent=Number(s.pendientes_por_atender||0);
+  if(el('kPending'))el('kPending').textContent=Number(s.devoluciones_pendientes_aceptacion||0);
+  if(el('kReturnedHistory'))el('kReturnedHistory').textContent=Number(s.devoluciones_realizadas||0);
 }
 
 function summaryFor(name){
@@ -4057,6 +4078,7 @@ async function loadOwnerUserKpis(name){
   el('kTotal').textContent=ownerUserKpiSummary.total_custodia;
   el('kLoan').textContent=ownerUserKpiSummary.en_prestamo;
   el('kReassigned').textContent=ownerUserKpiSummary.reasignados;
+  if(el('kPendingAttention'))el('kPendingAttention').textContent=ownerUserKpiSummary.pendientes_por_atender;
   el('kPending').textContent=ownerUserKpiSummary.devoluciones_pendientes_aceptacion;
   el('kReturnedHistory').textContent=ownerUserKpiSummary.devoluciones_realizadas;
   el('kAlert').textContent=ownerUserKpiSummary.alertas_30;
@@ -4070,10 +4092,14 @@ async function loadOwnerUserKpis(name){
 function renderKpis(){
   updateOwnerPanelVisibility();
 
-  // ADMINISTRADOR / ARCHIVO usan el selector "Estado del expediente"
-  // en lugar de una segunda fila de tarjetas de estado.
+  // ADMINISTRADOR / ARCHIVO: las tarjetas aparecen al seleccionar
+  // un usuario y quedan vinculadas a su detalle.
   if(hasFullAccess() && !isLimitedUser()){
-    if(el('fullAccessKpis'))el('fullAccessKpis').classList.add('hidden');
+    if(el('fullAccessKpis')){
+      el('fullAccessKpis').classList.toggle('hidden',!selectedOwnerIsUser());
+      el('fullAccessKpis').classList.toggle('owner-user-kpis',selectedOwnerIsUser());
+    }
+    syncSelectedOwnerKpisFromCards();
     return;
   }
 
@@ -4371,12 +4397,13 @@ async function showUserCard(tipo){
 }
 
 function panelQuickLabel(){
-  return panelQuickFilter==='custody'?'Total en custodia del usuario':
+  return panelQuickFilter==='custody'?'Total en custodia':
     panelQuickFilter==='pending'
-      ?(selectedOwnerIsUser()?'Pendientes de aceptar devolución':'Pendientes de devolución'):
+      ?(selectedOwnerIsUser()?'Solicitudes de devolución':'Solicitudes de devolución'):
     panelQuickFilter==='returns'?'Devueltos al Archivo':
+    panelQuickFilter==='pending_attention'?'Pendientes por atender':
     panelQuickFilter==='loan'?'En préstamo':
-    panelQuickFilter==='reassigned'?'Reasignados al usuario':
+    panelQuickFilter==='reassigned'?'Reasignados':
     panelQuickFilter==='alert'?'Alertas > 30 días':
     '';
 }
@@ -4389,6 +4416,7 @@ function updateKpiQuickUI(){
     returns:'kpiReturnedHistoryCard',
     loan:'kpiLoanCard',
     reassigned:'kpiReassignedCard',
+    pending_attention:'kpiPendingAttentionCard',
     alert:'kpiAlertCard'
   };
 
@@ -4422,7 +4450,7 @@ async function changeOwnerStateFilter(value){
 
   if(!selectedOwnerIsUser())return;
 
-  const valid=['custody','loan','reassigned','pending','returns','alert'];
+  const valid=['custody','loan','reassigned','pending_attention','pending','returns'];
   panelQuickFilter=valid.includes(value)?value:'custody';
 
   if(el('ownerStateFilter')){
@@ -4531,6 +4559,66 @@ async function loadPanel(){
   // las tarjetas se calculan por la trazabilidad del usuario, no por
   // el simple valor de expedientes.estado.
   if(selectedOwnerIsUser()){
+    // PENDIENTES POR ATENDER todavía no forman parte de la custodia física.
+    // Se muestran en esta misma vista para mantener vinculadas las tarjetas
+    // por usuario con el panel global de Estados.
+    if(panelQuickFilter==='pending_attention'){
+      const search=norm(el('searchInput')?.value||'');
+      const {data,error}=await sb.rpc('listar_pendientes_verificacion_archivo');
+
+      if(error){
+        el('panelTable').innerHTML=`<div class="empty">${esc(error.message)}</div>`;
+        panelRows=[];
+        panelCount=0;
+        return;
+      }
+
+      let all=(data||[]).filter(r=>
+        norm(r.solicitante||'')===norm(selectedOwner)
+      );
+
+      if(search){
+        all=all.filter(r=>[
+          r.expediente,r.extension,r.rd,r.ultimo_folio,
+          r.solicitud_numero,r.asunto,r.observacion
+        ].some(v=>norm(v||'').includes(search)));
+      }
+
+      panelCount=all.length;
+      const rows=all.slice(from,to+1);
+      panelRows=rows;
+
+      el('panelTitle').textContent=`Expedientes de ${selectedOwner} · Pendientes por atender`;
+      el('pageInfo').textContent=`${page+1} · ${panelCount} registros`;
+
+      if(!rows.length){
+        el('panelTable').innerHTML='<div class="empty">No hay expedientes pendientes por atender para este usuario.</div>';
+      }else{
+        el('panelTable').innerHTML=`<table>
+          <thead><tr>
+            <th>Expediente</th><th>Extensión</th><th>R.D.</th><th>Último folio</th>
+            <th>Solicitud</th><th>Asunto</th><th>Estado</th><th></th>
+          </tr></thead>
+          <tbody>${rows.map(r=>`<tr>
+            <td><b>${esc(r.expediente||'—')}</b></td>
+            <td>${esc(r.extension||'—')}</td>
+            <td>${esc(r.rd||'—')}</td>
+            <td>${esc(r.ultimo_folio||'—')}</td>
+            <td>${esc(r.solicitud_numero||'—')}</td>
+            <td>${esc(r.asunto||'—')}</td>
+            <td><span class="pill pending">PENDIENTE POR ATENDER</span></td>
+            <td><div style="display:flex;gap:6px;white-space:nowrap">
+              <button class="btn secondary small" onclick="showExpHistory('${r.expediente_id}')">Historial</button>
+              <button class="btn small" onclick="openPendingOwnerRequest('${r.solicitud_id||''}','${String(r.solicitante||'').replace(/'/g,"\'")}')">Gestionar</button>
+            </div></td>
+          </tr>`).join('')}</tbody>
+        </table>`;
+      }
+
+      updateKpiQuickUI();
+      return;
+    }
+
     const tipoMap={
       custody:'CUSTODIA',
       loan:'PRESTAMO',
@@ -4795,17 +4883,24 @@ async function loadStates(){
     }))
     .sort((a,b)=>b.total-a.total||a.estado.localeCompare(b.estado));
 
-  // REASIGNADO representa ahora un estado operativo vigente,
-  // porque se obtiene del último movimiento del expediente.
-  // EN TRÁMITE se conserva internamente, pero ya no se muestra
-  // como tarjeta principal en la vista de Estados.
-  const visibleStateRows=stateRows.filter(x=>x.estado!=='EN TRÁMITE');
+  // Panel global: mostrar únicamente los estados operativos definidos.
+  const globalOperationalStates=new Set([
+    'EN PRÉSTAMO','DEVUELTOS AL ARCHIVO','REASIGNADO','PENDIENTE DE VERIFICACIÓN'
+  ]);
+  const visibleStateRows=stateRows.filter(x=>globalOperationalStates.has(x.estado));
 
-  const top=visibleStateRows
+  const globalSummaryRows=[
+    ...visibleStateRows,
+    {estado:'PENDIENTES POR REGISTRAR',total:pendingRegisterRows.length||0},
+    {estado:'SOLICITUDES DE DEVOLUCIÓN',total:returnRequestRows.length||0}
+  ];
+
+  const top=globalSummaryRows
     .slice()
     .sort((a,b)=>b.total-a.total)[0]||{estado:'—',total:0};
 
-  el('statesTotalTypes').textContent=visibleStateRows.length;
+  // Panel global: 4 estados operativos + Pendientes por registrar + Solicitudes de devolución.
+  el('statesTotalTypes').textContent=isAdmin()?6:5;
   el('statesTotalRecords').textContent=totalExpedientes;
   el('statesTopCount').textContent=top.total;
   el('statesTopName').textContent=stateDisplayName(top.estado);
@@ -4821,14 +4916,12 @@ function renderStates(){
   if(!el('stateGrid'))return;
 
   const q=norm(el('stateSearch')?.value||'');
-  const visibleRows=stateRows.filter(x=>x.estado!=='EN TRÁMITE');
-  const data=visibleRows.filter(x=>!q||norm(x.estado).includes(q));
+  const allowedGlobalStates=new Set([
+    'EN PRÉSTAMO','DEVUELTOS AL ARCHIVO','REASIGNADO','PENDIENTE DE VERIFICACIÓN'
+  ]);
+  const visibleRows=stateRows.filter(x=>allowedGlobalStates.has(x.estado));
+  const data=visibleRows.filter(x=>!q||norm(stateDisplayName(x.estado)).includes(q));
   const total=visibleRows.reduce((a,x)=>a+x.total,0);
-
-  if(!data.length){
-    el('stateGrid').innerHTML='<div class="empty">No se encontraron estados.</div>';
-    return;
-  }
 
   const normalCards=data.map(x=>{
     const pct=total?((x.total/total)*100):0;
@@ -4893,7 +4986,8 @@ function renderStates(){
       </div>`
     :'';
 
-  el('stateGrid').innerHTML=normalCards+pendingRegisterCard+returnCard;
+  const cardsHtml=normalCards+pendingRegisterCard+returnCard;
+  el('stateGrid').innerHTML=cardsHtml||'<div class="empty">No se encontraron estados.</div>';
 }
 
 async function loadStateDetail(estado){
