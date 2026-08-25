@@ -1101,14 +1101,14 @@
       <div>
         <strong>Bandeja operativa de solicitudes</strong>
         <div class="note" style="margin-top:5px;padding:0;border:0;background:transparent">
-          Cada etapa representa un hecho distinto: recibir, aceptar, preparar, generar cargo y confirmar la entrega física.
+          Cada etapa representa un hecho distinto: recibir, aceptar, preparar y generar/imprimir el cargo. Al generar el cargo, el expediente queda registrado EN PRÉSTAMO.
         </div>
         <div class="workflow-steps">
           <span class="workflow-step"><b>1</b> Registrada</span>
           <span class="workflow-step"><b>2</b> Aceptar</span>
           <span class="workflow-step"><b>3</b> Pendiente por atender</span>
-          <span class="workflow-step"><b>4</b> Cargo pendiente de entrega</span>
-          <span class="workflow-step"><b>5</b> Confirmar entrega</span>
+          <span class="workflow-step"><b>4</b> Generar e imprimir cargo</span>
+          <span class="workflow-step"><b>5</b> EN PRÉSTAMO</span>
           <span class="workflow-step"><b>6</b> Cerrar devolución</span>
         </div>
       </div>
@@ -1118,7 +1118,6 @@
     <div class="request-workflow-kpis" id="fullRequestKpis">
       <div class="card kpi" data-rq-state="REGISTRADA" onclick="selectAdminRequestCard('REGISTRADA')"><div class="label">POR ACEPTAR</div><div class="value" id="rqSolicitado">0</div><div class="note-mini">Enviadas y aún no aceptadas por Archivo.</div></div>
       <div class="card kpi" data-rq-state="REGISTRADA POR ARCHIVO" onclick="selectAdminRequestCard('REGISTRADA POR ARCHIVO')"><div class="label">PENDIENTES POR ATENDER</div><div class="value" id="rqAceptado">0</div><div class="note-mini">Aceptadas por Archivo y todavía por preparar.</div></div>
-      <div class="card kpi warn" data-rq-state="CARGO PENDIENTE DE ENTREGA" onclick="selectAdminRequestCard('CARGO PENDIENTE DE ENTREGA')"><div class="label">CARGO PENDIENTE DE ENTREGA</div><div class="value" id="rqCargoPendiente">0</div><div class="note-mini">Cargo generado; falta entrega física.</div></div>
       <div class="card kpi warn" data-rq-state="ENTREGA PARCIAL" onclick="selectAdminRequestCard('ENTREGA PARCIAL')"><div class="label">ENTREGA PARCIAL</div><div class="value" id="rqEntregaParcial">0</div><div class="note-mini">Parte de los expedientes ya fue entregada.</div></div>
       <div class="card kpi" data-rq-state="ENTREGA TOTAL" onclick="selectAdminRequestCard('ENTREGA TOTAL')"><div class="label">ENTREGA TOTAL</div><div class="value" id="rqEntregaTotal">0</div><div class="note-mini">Todos los expedientes fueron entregados.</div></div>
       <div class="card kpi" data-rq-state="PENDIENTE DE CIERRE" onclick="selectAdminRequestCard('PENDIENTE DE CIERRE')"><div class="label">PENDIENTES DE CIERRE</div><div class="value" id="rqPendienteRecepcion">0</div><div class="note-mini">Devoluciones pendientes de recepción física.</div></div>
@@ -1148,28 +1147,6 @@
         <button class="kpi-view" type="button">Ver solicitudes</button>
       </div>
 
-      <div class="card kpi warn req-card-click" id="userRqCargoPendiente"
-           onclick="selectMyRequestCard('CARGO PENDIENTE DE ENTREGA')">
-        <div class="label">Cargo pendiente de entrega</div>
-        <div class="value" id="uRqCargoPendiente">0</div>
-        <button class="kpi-view" type="button">Ver solicitudes</button>
-      </div>
-
-      <div class="card kpi warn req-card-click" id="userRqParcial"
-           onclick="selectMyRequestCard('ENTREGA PARCIAL')">
-        <div class="label">Entrega parcial</div>
-        <div class="value" id="uRqParcial">0</div>
-        <button class="kpi-view" type="button">Ver solicitudes</button>
-      </div>
-
-      <div class="card kpi req-card-click" id="userRqTotal"
-           onclick="selectMyRequestCard('ENTREGA TOTAL')">
-        <div class="label">Entrega total</div>
-        <div class="value" id="uRqTotal">0</div>
-        <button class="kpi-view" type="button">Ver solicitudes</button>
-      </div>
-    </div>
-
     <div class="card filters">
       <div class="field">
         <label>Buscar solicitud</label>
@@ -1181,8 +1158,7 @@
           <option value="">TODOS</option>
           <option value="REGISTRADA">POR ACEPTAR</option>
           <option value="REGISTRADA POR ARCHIVO">PENDIENTE POR ATENDER</option>
-          <option>CARGO PENDIENTE DE ENTREGA</option>
-          <option value="ENTREGA PARCIAL">ENTREGA PARCIAL</option>
+          
           <option value="ENTREGA TOTAL">ENTREGA TOTAL</option>
           <option value="PENDIENTE DE CIERRE">PENDIENTE DE CIERRE</option>
           <option value="CERRADA POR ARCHIVO">CERRADA</option>
@@ -1313,12 +1289,12 @@
       <div>
         <strong>Elaboración, impresión y entrega de cargos</strong>
         <div class="note" style="margin-top:5px;padding:0;border:0;background:transparent">
-          El cargo se genera desde una solicitud PENDIENTE POR ATENDER. Imprimir no equivale a entregar físicamente.
+          El cargo se genera desde una solicitud PENDIENTE POR ATENDER. Generar e imprimir el cargo registra la entrega y el expediente pasa a EN PRÉSTAMO.
         </div>
         <div class="cargo-flow-bar">
           <div class="cargo-flow-step"><b>1. Generar cargo</b>Desde Solicitudes → Pendiente por atender.</div>
-          <div class="cargo-flow-step"><b>2. Imprimir / reimprimir</b>El número queda fijo y no se duplica.</div>
-          <div class="cargo-flow-step"><b>3. Confirmar entrega física</b>Recién aquí pasa a EN PRÉSTAMO.</div>
+          <div class="cargo-flow-step"><b>2. Generar e imprimir</b>Se registra el cargo y el expediente pasa a EN PRÉSTAMO.</div>
+          <div class="cargo-flow-step"><b>3. Reimprimir</b>El mismo cargo puede reimprimirse sin crear otro número ni modificar el préstamo.</div>
         </div>
       </div>
     </div>
@@ -1329,26 +1305,16 @@
         <div class="value" id="cargoPendingGenerateCount">0</div>
         <div class="note-mini">Solicitudes aceptadas que aún deben atenderse.</div>
       </div>
-      <div class="card kpi warn" data-cargo-filter="PENDIENTE DE ENTREGA" onclick="setCargoStatusFilter('PENDIENTE DE ENTREGA')">
-        <div class="label">CARGOS PENDIENTES DE ENTREGA</div>
-        <div class="value" id="cargoPendingDeliveryCount">0</div>
-        <div class="note-mini">Generados, sin entrega física confirmada.</div>
-      </div>
-      <div class="card kpi" data-cargo-filter="ENTREGA PARCIAL" onclick="setCargoStatusFilter('ENTREGA PARCIAL')">
-        <div class="label">ENTREGA PARCIAL</div>
-        <div class="value" id="cargoPartialCount">0</div>
-        <div class="note-mini">Parte del cargo ya fue entregada.</div>
-      </div>
       <div class="card kpi" data-cargo-filter="ENTREGADO" onclick="setCargoStatusFilter('ENTREGADO')">
-        <div class="label">CARGOS ENTREGADOS</div>
+        <div class="label">CARGOS GENERADOS / EN PRÉSTAMO</div>
         <div class="value" id="cargoDeliveredCount">0</div>
-        <div class="note-mini">Entrega física completada.</div>
+        <div class="note-mini">El cargo generado registra el préstamo de los expedientes.</div>
       </div>
     </div>
 
     <div class="card filters">
       <div class="field"><label>Buscar cargo</label><input id="cargoSearch" placeholder="Cargo, solicitante, asunto, quien atiende..." oninput="debounceCargos()"></div>
-      <div class="field"><label>Estado de entrega</label><select id="cargoStatusFilter" onchange="renderCargos()"><option value="">TODOS</option><option value="PENDIENTE DE ENTREGA">PENDIENTE DE ENTREGA</option><option value="ENTREGA PARCIAL">ENTREGA PARCIAL</option><option value="ENTREGADO">ENTREGADO</option><option value="SIN FLUJO DE ENTREGA">SIN FLUJO DE ENTREGA</option></select></div>
+      <div class="field"><label>Estado del cargo</label><select id="cargoStatusFilter" onchange="renderCargos()"><option value="">TODOS</option><option value="ENTREGADO">GENERADO / EN PRÉSTAMO</option><option value="SIN FLUJO DE ENTREGA">SIN FLUJO DE ENTREGA</option></select></div>
       <div style="display:flex;align-items:flex-end"><button class="btn secondary" onclick="setCargoStatusFilter('')">Ver todos</button></div>
     </div>
 
@@ -1356,7 +1322,6 @@
       <div class="cargo-toolbar">
         <div><strong>Cargo seleccionado:</strong> <span id="selectedCargoLabel">Ninguno</span></div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn secondary" id="confirmSelectedCargoBtn" onclick="confirmSelectedCargoDelivery()" disabled>✓ Confirmar entrega física</button>
           <button class="btn" id="printSelectedCargoBtn" onclick="printSelectedCargo()" disabled>🖨 Imprimir / reimprimir cargo</button>
         </div>
       </div>
@@ -1964,7 +1929,7 @@
     <div class="modal-head">
       <div>
         <h2>Generar cargo de préstamo</h2>
-        <div style="font-size:12px;color:#64748b;margin-top:3px">El asunto y quien atiende se cargan automáticamente desde la solicitud aceptada. Imprimir el cargo no confirma la entrega física.</div>
+        <div style="font-size:12px;color:#64748b;margin-top:3px">El asunto y quien atiende se cargan automáticamente desde la solicitud aceptada. Al generar e imprimir el cargo, el expediente queda EN PRÉSTAMO.</div>
       </div>
       <button class="btn secondary small" onclick="closeCargoModal()">Cerrar</button>
     </div>
@@ -2072,13 +2037,13 @@ function setVisible(id,visible){
 function norm(v){return String(v??'').trim().toUpperCase()}
 function stateDisplayName(estado){
   if(estado==='PENDIENTE DE VERIFICACIÓN')return 'PENDIENTE POR ATENDER';
-  if(estado==='CARGO GENERADO')return 'CARGO PENDIENTE DE ENTREGA';
+  if(estado==='CARGO GENERADO')return 'EN PRÉSTAMO';
   return estado||'';
 }
 function requestStateDisplayName(estado){
   if(estado==='REGISTRADA POR ARCHIVO')return 'PENDIENTE POR ATENDER';
   if(estado==='ACEPTADO')return 'PENDIENTE POR ATENDER';
-  if(estado==='CARGO GENERADO')return 'CARGO PENDIENTE DE ENTREGA';
+  if(estado==='CARGO GENERADO')return 'EN PRÉSTAMO';
   return estado||'';
 }
 function esc(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
@@ -6931,7 +6896,6 @@ function renderRequestsByLawyer(){
       <div class="lawyer-stats">
         <div>POR ACEPTAR<b>${Number(x.solicitado||0)}</b></div>
         <div>PEND. POR ATENDER<b>${Number(x.aceptado||0)}</b></div>
-        <div>CARGO PEND. ENTREGA<b>${Number(x.cargo_pendiente||0)}</b></div>
         <div>ENTREGA PARCIAL<b>${Number(x.entrega_parcial||0)}</b></div>
         <div>ENTREGA TOTAL<b>${Number(x.entrega_total||0)}</b></div>
         <div>POR RECIBIR<b>${Number(x.por_recibir||0)}</b></div>
@@ -6942,7 +6906,6 @@ function renderRequestsByLawyer(){
         <button class="btn secondary small" onclick="openLawyerRequests('${x.solicitante.replace(/'/g,"\\'")}')">Ver todas (${Number(x.total||0)})</button>
         ${Number(x.solicitado||0)>0?`<button class="btn small" onclick="openLawyerRequests('${x.solicitante.replace(/'/g,"\\'")}','REGISTRADA')">Por aceptar (${Number(x.solicitado||0)})</button>`:''}
         ${Number(x.aceptado||0)>0?`<button class="btn small" onclick="openLawyerRequests('${x.solicitante.replace(/'/g,"\\'")}','REGISTRADA POR ARCHIVO')">Por atender (${Number(x.aceptado||0)})</button>`:''}
-        ${Number(x.cargo_pendiente||0)>0?`<button class="btn secondary small" onclick="openLawyerRequests('${x.solicitante.replace(/'/g,"\\'")}','CARGO PENDIENTE DE ENTREGA')">Cargo pendiente (${Number(x.cargo_pendiente||0)})</button>`:''}
         ${Number(x.entrega_parcial||0)>0?`<button class="btn secondary small" onclick="openLawyerRequests('${x.solicitante.replace(/'/g,"\\'")}','ENTREGA PARCIAL')">Parcial (${Number(x.entrega_parcial||0)})</button>`:''}
         ${Number(x.entrega_total||0)>0?`<button class="btn secondary small" onclick="openLawyerRequests('${x.solicitante.replace(/'/g,"\\'")}','ENTREGA TOTAL')">Entrega total (${Number(x.entrega_total||0)})</button>`:''}
         ${Number(x.por_recibir||0)>0?`<button class="btn secondary small" onclick="openLawyerRequests('${x.solicitante.replace(/'/g,"\\'")}','PENDIENTE DE CIERRE')">Por recibir (${Number(x.por_recibir||0)})</button>`:''}
@@ -7024,7 +6987,7 @@ function requestWorkflowAction(r){
   if(!hasFullAccess())return `<button class="btn secondary small" onclick="openRequestDetail('${r.id}')">Ver solicitud</button>`;
   if(st==='REGISTRADA')return `<button class="btn small" onclick="openRequestDetail('${r.id}')">Revisar / aceptar</button>`;
   if(st==='REGISTRADA POR ARCHIVO')return `<button class="btn small" onclick="openEditRequest('${r.id}')">Atender solicitud</button>`;
-  if(st==='CARGO PENDIENTE DE ENTREGA')return `<button class="btn small" onclick="openRequestDetail('${r.id}')">Cargo / confirmar entrega</button>`;
+  if(st==='CARGO PENDIENTE DE ENTREGA')return `<button class="btn small" onclick="openRequestDetail('${r.id}')">Regularizar cargo</button>`;
   if(st==='ENTREGA PARCIAL')return `<button class="btn small" onclick="openRequestDetail('${r.id}')">Continuar atención</button>`;
   if(st==='ENTREGA TOTAL')return `<button class="btn secondary small" onclick="openRequestDetail('${r.id}')">Ver entrega</button>`;
   if(st==='PENDIENTE DE CIERRE')return `<button class="btn small" onclick="openRequestDetail('${r.id}')">Recibir devolución</button>`;
@@ -7547,7 +7510,7 @@ async function saveAndPrintCargoFromEdit(){
 
   w.document.write(
     '<!doctype html><html><body style="font-family:Arial;padding:30px">'+
-    '<p>Generando cargo pendiente de entrega...</p></body></html>'
+    '<p>Generando cargo y registrando préstamo...</p></body></html>'
   );
 
   btn.disabled=true;
@@ -7637,7 +7600,7 @@ async function saveAndPrintCargoFromEdit(){
     closeNewRequestModal();
 
     showToast(
-      `Cargo ${cargoNumero} generado e impresión preparada · pendiente de entrega física`
+      `Cargo ${cargoNumero} generado · expediente(s) registrados EN PRÉSTAMO`
     );
 
     await Promise.all([
@@ -7871,10 +7834,7 @@ function renderRequestActions(){
           ya no se puede modificar el asunto, modalidad, observación ni agregar o retirar expedientes.
         </span>`;
     }else if(r.estado==='ACEPTADO'){
-      const hasCargoPending=requestDetailRows.some(x=>x.estado_item==='CARGO GENERADO');
-      actions=hasCargoPending
-        ?'<span class="note">El cargo ya fue generado. El expediente todavía no está EN PRÉSTAMO hasta que Archivo confirme la entrega física.</span>'
-        :'<span class="note">Solicitud pendiente por atender. Archivo ya registró la aceptación y todavía no se ha generado el cargo.</span>';
+      actions='<span class="note">Solicitud pendiente por atender. Archivo ya registró la aceptación y todavía no se ha generado el cargo.</span>';
     }
 
     if(hasMyLoan){
@@ -7911,15 +7871,13 @@ function renderRequestActions(){
       actions += `
         <button class="btn" onclick="assignNewCargoToAccepted()">Generar e imprimir cargo</button>
         <button class="btn secondary" onclick="assignExistingCargoToAccepted()">Vincular a cargo existente</button>
-        <span class="note">Generar el cargo NO significa entrega física. Los expedientes quedarán como CARGO PENDIENTE DE ENTREGA.</span>`;
+        <span class="note">Al generar e imprimir el cargo, los expedientes seleccionados pasarán directamente a EN PRÉSTAMO.</span>`;
     }
+  }
 
-    if(requestDetailRows.some(x=>x.estado_item==='CARGO GENERADO')){
-      actions += `
-        <button class="btn" onclick="confirmDeliveryItems()">Confirmar entrega física</button>
-        <button class="btn secondary" onclick="printCargoFromSelectedRequestItems()">Imprimir / reimprimir cargo</button>
-        <span class="note">El estado EN PRÉSTAMO se registrará únicamente al confirmar la entrega física.</span>`;
-    }
+  if(requestDetailRows.some(x=>x.cargo_numero && ['EN PRÉSTAMO','DEVOLUCIÓN SOLICITADA','DEVUELTO','CARGO GENERADO'].includes(x.estado_item))){
+    actions += `
+      <button class="btn secondary" onclick="printCargoFromSelectedRequestItems()">Imprimir / reimprimir cargo</button>`;
   }
 
   if(requestDetailRows.some(x=>x.estado_item==='EN PRÉSTAMO')){
@@ -7987,62 +7945,14 @@ function selectedAcceptedIds(){
     .map(x=>x.expediente_id);
 }
 
-function selectedCargoGeneratedIds(){
-  const ids=[...requestSelectedIds];
-  return requestDetailRows
-    .filter(x=>ids.includes(x.expediente_id) && x.estado_item==='CARGO GENERADO')
-    .map(x=>x.expediente_id);
-}
-
-async function confirmDeliveryItems(){
-  if(!hasFullAccess())return;
-
-  const ids=[...requestSelectedIds];
-  const ready=selectedCargoGeneratedIds();
-  const obs=el('rqDObservacion').value.trim();
-
-  if(!ids.length){
-    el('rqActionStatus').textContent='Seleccione uno o más expedientes con CARGO PENDIENTE DE ENTREGA.';
-    return;
-  }
-  if(ready.length!==ids.length){
-    el('rqActionStatus').textContent='Seleccione únicamente expedientes con CARGO PENDIENTE DE ENTREGA.';
-    return;
-  }
-
-  if(!confirm(`¿Confirmar la entrega física de ${ready.length} expediente(s)? Desde este momento quedarán EN PRÉSTAMO.`))return;
-
-  el('rqActionStatus').textContent='Confirmando entrega física...';
-
-  const {data,error}=await sb.rpc('confirmar_entrega_expedientes',{
-    p_solicitud_id:currentRequestId,
-    p_expediente_ids:ready,
-    p_observacion:obs||null
-  });
-
-  if(error){
-    el('rqActionStatus').textContent=error.message;
-    return;
-  }
-
-  requestSelectedIds.clear();
-  showToast(`${data?.entregados||ready.length} expediente(s) entregados · EN PRÉSTAMO`);
-
-  await Promise.all([
-    loadSummary(),loadPanel(),loadAll(),loadStates(),loadRequests(),
-    loadRequestsByLawyer(),loadCargos(),loadHistory()
-  ]);
-  await refreshRequestDetail();
-}
-
 async function printCargoFromSelectedRequestItems(){
   const ids=[...requestSelectedIds];
   const rows=requestDetailRows.filter(x=>
-    ids.includes(x.expediente_id) && x.estado_item==='CARGO GENERADO'
+    ids.includes(x.expediente_id) && x.cargo_numero
   );
 
   if(!rows.length){
-    el('rqActionStatus').textContent='Seleccione expedientes con cargo generado.';
+    el('rqActionStatus').textContent='Seleccione uno o más expedientes que tengan cargo.';
     return;
   }
 
@@ -8080,7 +7990,7 @@ async function assignNewCargoToAccepted(){
 
   if(!confirm(`¿Generar un cargo nuevo para ${accepted.length} expediente(s) seleccionado(s)?`))return;
 
-  el('rqActionStatus').textContent='Generando cargo pendiente de entrega...';
+  el('rqActionStatus').textContent='Generando cargo y registrando préstamo...';
 
   const {data,error}=await sb.rpc('generar_cargo_pendiente_entrega',{
     p_solicitud_id:currentRequestId,
@@ -8095,7 +8005,7 @@ async function assignNewCargoToAccepted(){
   }
 
   requestSelectedIds.clear();
-  showToast(`Cargo ${data?.cargo_numero||''} generado · pendiente de entrega física`);
+  showToast(`Cargo ${data?.cargo_numero||''} generado · expediente(s) EN PRÉSTAMO`);
 
   if(data?.cargo_numero)await openExistingCargoForPrint(data.cargo_numero);
 
@@ -8133,7 +8043,7 @@ async function assignExistingCargoToAccepted(){
 
   if(!confirm(`¿Atender ${accepted.length} expediente(s) con el Cargo N.° ${cargo}?`))return;
 
-  el('rqActionStatus').textContent='Vinculando al cargo · pendiente de entrega física...';
+  el('rqActionStatus').textContent='Vinculando al cargo y registrando préstamo...';
 
   const {data,error}=await sb.rpc('vincular_cargo_pendiente_entrega',{
     p_solicitud_id:currentRequestId,
@@ -8149,7 +8059,7 @@ async function assignExistingCargoToAccepted(){
 
   requestSelectedIds.clear();
   el('rqDCargoExistente').value='';
-  showToast(`${accepted.length} expediente(s) vinculados al Cargo ${data?.cargo_numero||cargo} · pendiente de entrega`);
+  showToast(`${accepted.length} expediente(s) vinculados al Cargo ${data?.cargo_numero||cargo} · EN PRÉSTAMO`);
   await openExistingCargoForPrint(data?.cargo_numero||cargo);
 
   await Promise.all([
@@ -8616,7 +8526,7 @@ async function loadCargos(){
     }
   }
 
-  // Estado operativo del cargo respecto de la entrega física.
+  // Estado operativo del cargo según su registro de préstamo.
   const cargoNums=cargosRows.map(c=>c.numero).filter(Boolean);
   if(cargoNums.length){
     const {data:deliveryLinks,error:deliveryLinksError}=await sb
@@ -8672,11 +8582,6 @@ async function loadCargos(){
 
   el('cargosCount').textContent=cargosRows.length+' cargos';
 
-  if(el('confirmSelectedCargoBtn')){
-    const selected=cargosRows.find(c=>c.numero===selectedCargoNumero);
-    el('confirmSelectedCargoBtn').disabled=!(hasFullAccess() && Number(selected?.pending_delivery||0)>0);
-  }
-
   renderCargos();
 }
 function debounceCargos(){
@@ -8695,11 +8600,6 @@ function selectCargoForPrint(numero){
     el('printSelectedCargoBtn').disabled=!selectedCargoNumero;
   }
 
-  if(el('confirmSelectedCargoBtn')){
-    const c=cargosRows.find(x=>x.numero===selectedCargoNumero);
-    el('confirmSelectedCargoBtn').disabled=!(hasFullAccess() && Number(c?.pending_delivery||0)>0);
-  }
-
   renderCargos();
 }
 
@@ -8710,46 +8610,6 @@ async function printSelectedCargo(){
   }
 
   await openExistingCargoForPrint(selectedCargoNumero);
-}
-
-async function confirmSelectedCargoDelivery(){
-  if(!hasFullAccess()||!selectedCargoNumero)return;
-
-  const cargo=cargosRows.find(x=>x.numero===selectedCargoNumero);
-  const pending=(cargo?.delivery_items||[]).filter(x=>x.estado==='CARGO GENERADO');
-
-  if(!pending.length){
-    alert('Este cargo no tiene expedientes pendientes de entrega física.');
-    return;
-  }
-
-  if(!confirm(`¿Confirmar la entrega física de ${pending.length} expediente(s) del Cargo ${selectedCargoNumero}?`))return;
-
-  const groups=new Map();
-  pending.forEach(x=>{
-    if(!x.solicitud_id)return;
-    if(!groups.has(x.solicitud_id))groups.set(x.solicitud_id,[]);
-    groups.get(x.solicitud_id).push(x.expediente_id);
-  });
-
-  try{
-    for(const [solicitudId,ids] of groups){
-      const {error}=await sb.rpc('confirmar_entrega_expedientes',{
-        p_solicitud_id:solicitudId,
-        p_expediente_ids:ids,
-        p_observacion:null
-      });
-      if(error)throw error;
-    }
-
-    showToast(`Cargo ${selectedCargoNumero} · entrega física confirmada`);
-    await Promise.all([
-      loadSummary(),loadPanel(),loadAll(),loadStates(),loadRequests(),
-      loadRequestsByLawyer(),loadCargos(),loadHistory()
-    ]);
-  }catch(e){
-    serverError(e);
-  }
 }
 
 function renderCargos(){
@@ -8916,7 +8776,7 @@ function operationalStatus(r){
     return 'REASIGNADO';
   }
 
-  // Archivo ya realizó la entrega física al abogado.
+  // El cargo ya registró el préstamo al abogado.
   if(action.includes('EN PRÉSTAMO') ||
      action.includes('ATENDIDO CON CARGO')){
     return 'EN PRÉSTAMO';
@@ -9279,6 +9139,15 @@ async function saveAndPrintCargo(){
     return;
   }
 
+  // Abrir primero la ventana de impresión. Si el navegador la bloquea,
+  // no se registra ningún préstamo ni se genera un cargo nuevo.
+  const w=window.open('','_blank','width=980,height=800');
+  if(!w){
+    el('cargoStatus').textContent='El navegador bloqueó la ventana de impresión. Permita ventanas emergentes para este sitio.';
+    return;
+  }
+  w.document.write('<!doctype html><html><body style="font-family:Arial;padding:30px"><p>Preparando cargo...</p></body></html>');
+
   const btn=el('cargoPrintBtn');
   btn.disabled=true;
   btn.textContent='Generando cargo...';
@@ -9310,9 +9179,6 @@ async function saveAndPrintCargo(){
     const {data:header,error:headError}=await sb.from('cargos').select('*').eq('id',cargoId).single();
     if(headError)throw headError;
 
-    const w=window.open('','_blank','width=980,height=800');
-    if(!w)throw new Error('El navegador bloqueó la ventana de impresión. Permita ventanas emergentes para este sitio.');
-
     w.document.open();
     w.document.write(cargoPrintHtml(
       header.numero,
@@ -9329,9 +9195,12 @@ async function saveAndPrintCargo(){
     cargoRows=[];
     updateSelectionUI();
     closeCargoModal();
-    showToast(`Cargo N.° ${numeroGenerado} guardado sin duplicidad`);
+    showToast(resultado?.prestamo_registrado
+      ? `Cargo N.° ${numeroGenerado} generado · expediente(s) EN PRÉSTAMO`
+      : `Cargo N.° ${numeroGenerado} reimpreso sin modificar el préstamo`);
     await Promise.all([loadSummary(),loadPanel(),loadAll(),loadStates(),loadRequests(),loadCargos(),loadHistory()]);
   }catch(err){
+    try{w.close()}catch(_){}
     el('cargoStatus').textContent=err?.message||String(err);
   }finally{
     btn.disabled=false;
