@@ -4713,11 +4713,15 @@ async function loadStates(){
 
   // REASIGNADO representa ahora un estado operativo vigente,
   // porque se obtiene del último movimiento del expediente.
-  const top=stateRows
+  // EN TRÁMITE se conserva internamente, pero ya no se muestra
+  // como tarjeta principal en la vista de Estados.
+  const visibleStateRows=stateRows.filter(x=>x.estado!=='EN TRÁMITE');
+
+  const top=visibleStateRows
     .slice()
     .sort((a,b)=>b.total-a.total)[0]||{estado:'—',total:0};
 
-  el('statesTotalTypes').textContent=stateRows.length;
+  el('statesTotalTypes').textContent=visibleStateRows.length;
   el('statesTotalRecords').textContent=totalExpedientes;
   el('statesTopCount').textContent=top.total;
   el('statesTopName').textContent=stateDisplayName(top.estado);
@@ -4733,8 +4737,9 @@ function renderStates(){
   if(!el('stateGrid'))return;
 
   const q=norm(el('stateSearch')?.value||'');
-  const data=stateRows.filter(x=>!q||norm(x.estado).includes(q));
-  const total=stateRows.reduce((a,x)=>a+x.total,0);
+  const visibleRows=stateRows.filter(x=>x.estado!=='EN TRÁMITE');
+  const data=visibleRows.filter(x=>!q||norm(x.estado).includes(q));
+  const total=visibleRows.reduce((a,x)=>a+x.total,0);
 
   if(!data.length){
     el('stateGrid').innerHTML='<div class="empty">No se encontraron estados.</div>';
