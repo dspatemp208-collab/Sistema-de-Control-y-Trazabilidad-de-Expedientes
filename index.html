@@ -1039,6 +1039,19 @@
   }
 }
 
+
+/* Último folio obligatorio para movimientos realizados por el USUARIO */
+.request-item-edit.user-required-folio{
+  min-width:105px;
+  border-color:#c58b19;
+  background:#fffdf5;
+  font-weight:700;
+}
+.request-item-edit.user-required-folio:focus{
+  outline:2px solid rgba(197,139,25,.22);
+  border-color:#9a6900;
+}
+
 </style>
 </head>
 <body>
@@ -3124,7 +3137,35 @@ function renderArchiveDeliveryRequests(){
 }
 
 async function markArchiveDeliveryPrepared(id){
-  if(!confirm('¿Confirmar que el expediente está preparado para ser entregado a Archivo? La custodia seguirá a su nombre hasta que Archivo confirme la recepción.'))return;
+  const row=(archiveDeliveryRows||[]).find(x=>String(x.id)===String(id));
+  if(!row){
+    alert('No se encontró la solicitud de entrega a Archivo.');
+    return;
+  }
+
+  const folio=prompt(
+    `Último folio actual del expediente ${row.expediente||''} (obligatorio):`,
+    row.ultimo_folio||''
+  );
+  if(folio===null)return;
+  if(!String(folio).trim()){
+    alert('Debe actualizar o confirmar el Último folio antes de preparar la entrega.');
+    return;
+  }
+
+  if(!confirm(`¿Preparar el expediente para entregarlo a Archivo con Último folio ${String(folio).trim()}? La custodia seguirá a su nombre hasta que Archivo confirme la recepción.`))return;
+
+  const {error:folioError}=await sb.rpc('actualizar_ultimos_folios_mi_custodia',{
+    p_solicitud_id:row.solicitud_id,
+    p_items:[{
+      id:row.expediente_id,
+      ultimo_folio:String(folio).trim()
+    }]
+  });
+
+  if(folioError){alert(folioError.message);return}
+
+  row.ultimo_folio=String(folio).trim();
 
   const {error}=await sb.rpc('marcar_entrega_archivo_preparada',{
     p_solicitud_entrega_id:id
@@ -8615,7 +8656,14 @@ function renderRequestDetailItems(){
                    value="${esc(x.ultimo_folio||'')}"
                    placeholder="Último folio"
                    oninput="updateRequestDetailPendingField('${x.expediente_id}','ultimo_folio',this.value)">`
-          :esc(x.ultimo_folio||'—')}</td>
+          :(isLimitedUser() && (requestItemCanReassign(x)||requestItemCanRequestReturn(x))
+            ?`<input class="request-item-edit folio user-required-folio"
+                     data-user-folio-id="${x.expediente_id}"
+                     value="${esc(x.ultimo_folio||'')}"
+                     placeholder="Último folio *"
+                     title="Dato obligatorio antes de reasignar o solicitar devolución"
+                     oninput="updateUserCustodyFolioField('${x.expediente_id}',this.value)">`
+            :esc(x.ultimo_folio||'—'))}</td>
         <td>${reqStatePill(x.estado_item)}</td>
         <td>${esc(x.estado_fisico||'')}</td>
         <td>${esc(x.responsable_actual||x.ubicacion_actual||'')}</td>
@@ -8641,6 +8689,56 @@ function updateRequestDetailPendingField(expedienteId,field,value){
   if(!row || row.estado_item!=='ACEPTADO')return;
   if(!['extension','rd','ultimo_folio'].includes(field))return;
   row[field]=value;
+}
+
+function updateUserCustodyFolioField(expedienteId,value){
+  const row=(requestDetailRows||[]).find(x=>String(x.expediente_id)===String(expedienteId));
+  if(!row || !isLimitedUser())return;
+  if(!requestItemCanReassign(row) && !requestItemCanRequestReturn(row))return;
+  row.ultimo_folio=value;
+}
+
+async function saveRequiredUserFoliosBeforeMovement(expedienteIds){
+  if(!isLimitedUser())return true;
+
+  const ids=[...new Set((expedienteIds||[]).filter(Boolean))];
+  if(!ids.length)return true;
+
+  const rows=(requestDetailRows||[]).filter(x=>ids.includes(x.expediente_id));
+
+  const missing=rows.filter(x=>!String(x.ultimo_folio||'').trim());
+  if(missing.length){
+    const names=missing.map(x=>x.expediente).filter(Boolean).join(', ');
+    if(el('rqActionStatus')){
+      el('rqActionStatus').textContent=`Último folio obligatorio. Complete el dato antes de continuar${names?' para: '+names:''}.`;
+    }
+    const first=missing[0];
+    document.querySelector(`[data-user-folio-id="${first?.expediente_id||''}"]`)?.focus();
+    return false;
+  }
+
+  if(el('rqActionStatus')){
+    el('rqActionStatus').textContent='Registrando Último folio antes del movimiento...';
+  }
+
+  const {data,error}=await sb.rpc('actualizar_ultimos_folios_mi_custodia',{
+    p_solicitud_id:currentRequestId,
+    p_items:rows.map(x=>({
+      id:x.expediente_id,
+      ultimo_folio:String(x.ultimo_folio||'').trim()
+    }))
+  });
+
+  if(error){
+    if(el('rqActionStatus'))el('rqActionStatus').textContent=error.message;
+    return false;
+  }
+
+  if(el('rqActionStatus')){
+    el('rqActionStatus').textContent=`Último folio registrado para ${Number(data?.actualizados||rows.length)} expediente(s).`;
+  }
+
+  return true;
 }
 
 async function savePendingRequestDetailData(silent=false){
@@ -8737,6 +8835,7 @@ function renderRequestActions(){
 
     if(hasMyLoan){
       actions += `
+        <span class="note"><b>Requisito:</b> antes de reasignar o solicitar devolución debe verificar/actualizar el <b>Último folio</b> de cada expediente seleccionado. No se requiere observación; el registro queda automáticamente en el Historial.</span>
         <button class="btn secondary" onclick="reassignRequestItems()">Reasignar seleccionados</button>
         <button class="btn" onclick="requestReturnItems()">Solicitar devolución</button>`;
     }
@@ -9004,7 +9103,10 @@ async function reassignRequestItems(){
     return;
   }
 
-  if(!confirm(`¿Reasignar ${ids.length} expediente(s) a ${nuevo}?`))return;
+  if(!confirm(`¿Reasignar ${ids.length} expediente(s) a ${nuevo}? Antes de la reasignación se registrará el Último folio actualizado.`))return;
+
+  const foliosOk=await saveRequiredUserFoliosBeforeMovement(ids);
+  if(!foliosOk)return;
 
   el('rqActionStatus').textContent='Registrando reasignación...';
 
@@ -9087,7 +9189,10 @@ async function requestReturnItems(){
     return;
   }
 
-  if(!confirm(`¿Solicitar la devolución de ${ids.length} expediente(s)? Archivo deberá confirmar la recepción física.`))return;
+  if(!confirm(`¿Solicitar la devolución de ${ids.length} expediente(s)? Antes de registrar la devolución se guardará el Último folio actualizado.`))return;
+
+  const foliosOk=await saveRequiredUserFoliosBeforeMovement(ids);
+  if(!foliosOk)return;
 
   el('rqActionStatus').textContent='Registrando solicitud de devolución...';
 
