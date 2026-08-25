@@ -774,6 +774,58 @@
 .app.limited-user #tab-requests #requestsTable table{min-width:1180px}
 .app.limited-user #userRequestKpis .req-card-click{cursor:pointer}
 
+
+/* =========================================================
+   ENCABEZADOS FIJOS EN LAS TABLAS PRINCIPALES
+   ========================================================= */
+#panelDetailWrap,
+#tab-states .table-wrap,
+#tab-requests .table-wrap,
+#tab-all .table-wrap,
+#tab-cargos .table-wrap,
+#tab-history .table-wrap{
+  position:relative;
+  overflow:auto;
+  max-height:calc(100vh - 360px);
+  min-height:170px;
+}
+
+/* Los nombres de las columnas permanecen visibles al recorrer registros. */
+#panelDetailWrap th,
+#tab-states .table-wrap th,
+#tab-requests .table-wrap th,
+#tab-all .table-wrap th,
+#tab-cargos .table-wrap th,
+#tab-history .table-wrap th{
+  position:sticky;
+  top:0;
+  z-index:20;
+  background:var(--navy);
+  color:#fff;
+}
+
+/* Evita que el contenido de las filas se vea por encima del encabezado. */
+#panelDetailWrap thead,
+#tab-states .table-wrap thead,
+#tab-requests .table-wrap thead,
+#tab-all .table-wrap thead,
+#tab-cargos .table-wrap thead,
+#tab-history .table-wrap thead{
+  position:relative;
+  z-index:20;
+}
+
+@media(max-height:700px){
+  #panelDetailWrap,
+  #tab-states .table-wrap,
+  #tab-requests .table-wrap,
+  #tab-all .table-wrap,
+  #tab-cargos .table-wrap,
+  #tab-history .table-wrap{
+    max-height:55vh;
+  }
+}
+
 </style>
 </head>
 <body>
