@@ -681,6 +681,27 @@
   .master-search-grid,.master-advanced{grid-template-columns:1fr}
 }
 
+
+.request-item-edit{
+  width:100%;
+  min-width:85px;
+  padding:6px 7px;
+  border:1px solid var(--line);
+  border-radius:7px;
+  background:#fff;
+  font:inherit;
+  font-size:11px
+}
+.request-item-edit.folio{min-width:80px}
+.request-item-edit.rd{min-width:110px}
+.request-item-edit.extension{min-width:80px}
+.request-edit-help{
+  display:block;
+  margin-top:5px;
+  font-size:10px;
+  color:var(--muted)
+}
+
 </style>
 </head>
 <body>
@@ -1288,8 +1309,8 @@
   <div class="modal-box">
     <div class="modal-head">
       <div>
-        <h2>Nueva solicitud de expedientes</h2>
-        <div class="note">La solicitud no cambia la ubicación física. Archivo acepta y verifica la solicitud sin generar cargo. Luego decide si cada expediente se atiende con un cargo nuevo o con un cargo ya existente.</div>
+        <h2 id="rqModalTitle">Nueva solicitud de expedientes</h2>
+        <div id="rqModalNote" class="note">La solicitud no cambia la ubicación física. Archivo acepta y verifica la solicitud sin generar cargo. Luego decide si cada expediente se atiende con un cargo nuevo o con un cargo ya existente.</div>
       </div>
       <button class="btn secondary small" onclick="closeNewRequestModal()">Cerrar</button>
     </div>
@@ -4751,8 +4772,25 @@ function openAddItemsToExistingRequest(){
 
 function closeNewRequestModal(){
   const modal=el('newRequestModal');
-  if(modal)modal.classList.remove('show');
+  if(modal){
+    modal.classList.remove('show');
+    modal.dataset.editId='';
+  }
+
   window.__newRequestHeaderDraft=null;
+  window.__editingRequestId=null;
+  window.__editingRequestNumero=null;
+
+  if(el('rqModalTitle')){
+    el('rqModalTitle').textContent='Nueva solicitud de expedientes';
+  }
+  if(el('rqModalNote')){
+    el('rqModalNote').textContent=
+      'La solicitud no cambia la ubicación física. Archivo acepta y verifica la solicitud sin generar cargo. Luego decide si cada expediente se atiende con un cargo nuevo o con un cargo ya existente.';
+  }
+  if(el('rqSaveBtn')){
+    el('rqSaveBtn').textContent='Enviar solicitud';
+  }
 }
 
 async function saveNewRequest(){
@@ -4833,34 +4871,49 @@ async function saveNewRequest(){
     return;
   }
 
+  const editId=window.__editingRequestId||null;
+  const editNumero=window.__editingRequestNumero||'';
+
   if(btn){
     btn.disabled=true;
-    btn.textContent='Enviando...';
+    btn.textContent=editId?'Guardando...':'Enviando...';
   }
 
   if(status){
-    status.textContent=
-      `Registrando solicitud con ${cleanItems.length} expediente(s)...`;
+    status.textContent=editId
+      ?`Guardando cambios de ${editNumero||'la solicitud'}...`
+      :`Registrando solicitud con ${cleanItems.length} expediente(s)...`;
   }
 
   try{
-    const {data,error}=await sb.rpc(
-      'crear_solicitud_multiple_mixta_con_modalidad',
-      {
-        p_solicitante:solicitante,
-        p_asunto:asunto,
-        p_observacion:observacion||null,
-        p_modalidad:modalidad,
-        p_items:cleanItems
-      }
-    );
+    const rpcName=editId
+      ?'editar_solicitud_antes_cargo'
+      :'crear_solicitud_multiple_mixta_con_modalidad';
+
+    const rpcArgs=editId
+      ?{
+          p_solicitud_id:editId,
+          p_solicitante:solicitante,
+          p_asunto:asunto,
+          p_observacion:observacion||null,
+          p_modalidad:modalidad,
+          p_items:cleanItems
+        }
+      :{
+          p_solicitante:solicitante,
+          p_asunto:asunto,
+          p_observacion:observacion||null,
+          p_modalidad:modalidad,
+          p_items:cleanItems
+        };
+
+    const {data,error}=await sb.rpc(rpcName,rpcArgs);
 
     if(error)throw error;
 
     selectedIds.clear();
     updateSelectionUI();
 
-    // Limpiar borradores solo después de guardar correctamente.
     requestDraftItems=[];
     requestSearchSelectedIds.clear();
     requestExcelRows=[];
@@ -4870,8 +4923,10 @@ async function saveNewRequest(){
     closeNewRequestModal();
 
     showToast(
-      `Solicitud ${data?.numero||''} registrada · `+
-      `${data?.total||cleanItems.length} expediente(s) · ${modalidad}`
+      editId
+        ?`Solicitud ${data?.numero||editNumero} actualizada correctamente`
+        :`Solicitud ${data?.numero||''} registrada · `+
+          `${data?.total||cleanItems.length} expediente(s) · ${modalidad}`
     );
 
     await loadRequests();
@@ -4880,7 +4935,6 @@ async function saveNewRequest(){
       await loadRequestsByLawyer();
     }
 
-    // Actualizar también panel personal del usuario.
     if(isLimitedUser()){
       await loadSummary();
       await loadPanel();
@@ -4897,13 +4951,15 @@ async function saveNewRequest(){
     if(status){
       status.textContent=
         err?.message ||
-        'No se pudo registrar la solicitud. Revise los datos e intente nuevamente.';
+        (editId
+          ?'No se pudieron guardar los cambios de la solicitud.'
+          :'No se pudo registrar la solicitud. Revise los datos e intente nuevamente.');
     }
 
   }finally{
     if(btn){
       btn.disabled=false;
-      btn.textContent='Enviar solicitud';
+      btn.textContent=editId?'Guardar cambios':'Enviar solicitud';
     }
   }
 }
@@ -4912,6 +4968,31 @@ async function openNewRequestModal(rowsOverride=null,preserveHeader=false){
   if(!sb||!session){
     alert('Debe iniciar sesión.');
     return;
+  }
+
+  const editMode=!!window.__editingRequestId;
+
+  if(el('newRequestModal')){
+    el('newRequestModal').dataset.editId=
+      editMode ? window.__editingRequestId : '';
+  }
+
+  if(el('rqModalTitle')){
+    el('rqModalTitle').textContent=editMode
+      ?`Editar solicitud ${window.__editingRequestNumero||''}`
+      :'Nueva solicitud de expedientes';
+  }
+
+  if(el('rqModalNote')){
+    el('rqModalNote').textContent=editMode
+      ?'Puede corregir la solicitud antes de generar el cargo o entregar expedientes. Los cambios quedarán registrados en el historial.'
+      :'La solicitud no cambia la ubicación física. Archivo acepta y verifica la solicitud sin generar cargo. Luego decide si cada expediente se atiende con un cargo nuevo o con un cargo ya existente.';
+  }
+
+  if(el('rqSaveBtn')){
+    el('rqSaveBtn').textContent=editMode
+      ?'Guardar cambios'
+      :'Enviar solicitud';
   }
 
   let rows=Array.isArray(rowsOverride)?rowsOverride:[];
@@ -5011,6 +5092,8 @@ async function openNewRequestModal(rowsOverride=null,preserveHeader=false){
         Utilice <b>Agregar manualmente</b>, <b>Buscar en la base</b> o <b>Cargar Excel</b>.
       </div>`;
   }else{
+    const editMode=!!window.__editingRequestId;
+
     el('rqSelectedTable').innerHTML=`<table>
       <thead>
         <tr>
@@ -5018,6 +5101,7 @@ async function openNewRequestModal(rowsOverride=null,preserveHeader=false){
           <th>Expediente</th>
           <th>Ext.</th>
           <th>R.D.</th>
+          <th>Último folio</th>
           <th>Tipo</th>
           <th>Estado</th>
           <th></th>
@@ -5027,8 +5111,34 @@ async function openNewRequestModal(rowsOverride=null,preserveHeader=false){
         ${rows.map((r,i)=>`<tr>
           <td>${i+1}</td>
           <td><b>${esc(expBase(r.expediente))}</b></td>
-          <td>${r.extension?esc(r.extension):'—'}</td>
-          <td>${esc(r.rd||'')}</td>
+
+          <td>
+            ${editMode
+              ?`<input class="request-item-edit extension"
+                       value="${esc(r.extension||'')}"
+                       placeholder="Ext."
+                       oninput="updateNewRequestItemField(${i},'extension',this.value)">`
+              :(r.extension?esc(r.extension):'—')}
+          </td>
+
+          <td>
+            ${editMode
+              ?`<input class="request-item-edit rd"
+                       value="${esc(r.rd||'')}"
+                       placeholder="R.D."
+                       oninput="updateNewRequestItemField(${i},'rd',this.value)">`
+              :esc(r.rd||'')}
+          </td>
+
+          <td>
+            ${editMode
+              ?`<input class="request-item-edit folio"
+                       value="${esc(r.ultimo_folio||'')}"
+                       placeholder="Último folio"
+                       oninput="updateNewRequestItemField(${i},'ultimo_folio',this.value)">`
+              :esc(r.ultimo_folio||'—')}
+          </td>
+
           <td>${(r._nuevo||r.nuevo)?'NUEVO':'EXISTENTE'}</td>
           <td>${esc(r.estado||((r._nuevo||r.nuevo)?'PENDIENTE DE VERIFICACIÓN':''))}</td>
           <td>
@@ -5040,7 +5150,10 @@ async function openNewRequestModal(rowsOverride=null,preserveHeader=false){
           </td>
         </tr>`).join('')}
       </tbody>
-    </table>`;
+    </table>
+    ${editMode
+      ?'<span class="request-edit-help">Puede completar o corregir Extensión, R.D. y Último folio antes de generar el cargo.</span>'
+      :''}`;
   }
 
   const normalized=rows.map(r=>({
@@ -5057,6 +5170,26 @@ async function openNewRequestModal(rowsOverride=null,preserveHeader=false){
   el('newRequestModal').dataset.ids='';
   el('newRequestModal').dataset.newExp='';
   el('newRequestModal').classList.add('show');
+}
+
+
+function updateNewRequestItemField(index,field,value){
+  let items=[];
+  try{
+    items=JSON.parse(el('newRequestModal')?.dataset.items||'[]');
+  }catch(_){
+    items=[];
+  }
+
+  if(index<0 || index>=items.length)return;
+  if(!['extension','rd','ultimo_folio'].includes(field))return;
+
+  const v=String(value??'').trim();
+  items[index][field]=v||null;
+
+  if(el('newRequestModal')){
+    el('newRequestModal').dataset.items=JSON.stringify(items);
+  }
 }
 
 function removeNewRequestItem(index){
@@ -6309,6 +6442,27 @@ function attentionStatePill(value){
   return `<span class="status-attn ${attentionStateClass(v)}">${esc(v)}</span>`;
 }
 
+
+function canEditRequestBeforeCargo(r){
+  if(!hasFullAccess() || !r)return false;
+
+  const cargo=String(r.cargo_numero||'').trim();
+  const atendidos=Number(r.atendidos||0);
+  const state=norm(r.estado_atencion||r.estado||'');
+
+  if(cargo && cargo!=='—')return false;
+  if(atendidos>0)return false;
+
+  if([
+    'ENTREGA PARCIAL',
+    'ENTREGA TOTAL',
+    'PENDIENTE DE CIERRE',
+    'CERRADA POR ARCHIVO'
+  ].includes(state))return false;
+
+  return true;
+}
+
 function renderRequests(){
   if(!el('requestsTable'))return;
 
@@ -6358,13 +6512,81 @@ function renderRequests(){
         <td><b>${r.hora_atencion?fmtTime(r.hora_atencion):'—'}</b></td>
         <td><b>${requestDeliveryText(r)}</b></td>
         <td>
-          <button class="btn secondary small" onclick="openRequestDetail('${r.id}')">
-            Gestionar
-          </button>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            ${canEditRequestBeforeCargo(r)
+              ?`<button class="btn secondary small" onclick="openEditRequest('${r.id}')">
+                  Editar
+                </button>`
+              :''}
+            <button class="btn secondary small" onclick="openRequestDetail('${r.id}')">
+              Gestionar
+            </button>
+          </div>
         </td>
       </tr>`).join('')}
     </tbody>
   </table>`;
+}
+
+
+async function openEditRequest(id){
+  if(!hasFullAccess()){
+    alert('Solo ADMINISTRADOR o ARCHIVO puede editar una solicitud.');
+    return;
+  }
+
+  let header=requestRows.find(x=>x.id===id);
+
+  if(!header){
+    await loadRequests();
+    header=requestRows.find(x=>x.id===id);
+  }
+
+  if(!header){
+    alert('No se encontró la solicitud.');
+    return;
+  }
+
+  if(!canEditRequestBeforeCargo(header)){
+    alert(
+      'Esta solicitud ya no puede editarse porque tiene cargo, '+
+      'expedientes entregados o el ciclo de atención ya avanzó.'
+    );
+    return;
+  }
+
+  const {data:items,error}=await sb.rpc(
+    'detalle_solicitud_prestamo',
+    {p_solicitud_id:id}
+  );
+
+  if(error){
+    alert(error.message);
+    return;
+  }
+
+  window.__editingRequestId=id;
+  window.__editingRequestNumero=header.numero||'';
+  window.__newRequestHeaderDraft={
+    solicitante:header.solicitante||'',
+    asunto:header.asunto||'',
+    modalidad:header.modalidad||'PRÉSTAMO',
+    observacion:header.observacion||''
+  };
+
+  const rows=(items||[]).map(x=>({
+    id:x.expediente_id,
+    expediente:x.expediente,
+    extension:x.extension||null,
+    rd:x.rd||null,
+    ultimo_folio:x.ultimo_folio||null,
+    observacion:x.observacion||null,
+    estado:x.estado_fisico||x.estado_item||null,
+    _nuevo:false,
+    nuevo:false
+  }));
+
+  await openNewRequestModal(rows,true);
 }
 
 async function openRequestDetail(id){
@@ -6548,7 +6770,7 @@ function renderRequestMovements(){
   el('rqMovements').innerHTML=`<table>
     <thead><tr><th>Fecha</th><th>Expediente</th><th>Acción</th><th>Desde</th><th>Hacia</th><th>Estado</th><th>Cargo</th><th>Observación</th></tr></thead>
     <tbody>${requestMovementRows.map(m=>`<tr>
-      <td>${fmtDate(m.created_at)}</td>
+      <td>${fmtDate(m.created_at)}<br><span class="note">${fmtTime(m.created_at)}</span></td>
       <td>${esc(m.expediente||'')}</td>
       <td>${esc(m.accion||'')}</td>
       <td>${esc(m.desde||'')}</td>
