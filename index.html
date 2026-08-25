@@ -762,6 +762,18 @@
 
 
 .workflow-intro{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:#f8fafc}.workflow-intro strong{color:var(--navy)}.workflow-steps{display:flex;gap:7px;flex-wrap:wrap;margin-top:7px}.workflow-step{display:inline-flex;align-items:center;gap:5px;padding:5px 8px;border-radius:999px;background:#fff;border:1px solid var(--line);color:var(--muted);font-size:10px;font-weight:700}.workflow-step b{color:var(--navy)}.request-workflow-kpis{display:grid;grid-template-columns:repeat(4,minmax(150px,1fr));gap:10px;margin-bottom:12px}.request-workflow-kpis .kpi{cursor:pointer;min-height:110px;transition:.12s ease}.request-workflow-kpis .kpi:hover{transform:translateY(-1px);box-shadow:0 5px 15px rgba(15,39,71,.08)}.request-workflow-kpis .kpi.selected{box-shadow:0 0 0 2px #173f6b inset}.request-workflow-kpis .kpi .label{font-size:10px;line-height:1.25}.request-workflow-kpis .kpi .value{margin-top:5px}.note-mini{margin-top:5px;font-size:9px;line-height:1.25;color:var(--muted)}.cargo-kpis{display:grid;grid-template-columns:repeat(4,minmax(160px,1fr));gap:10px;margin-bottom:12px}.cargo-kpis .kpi{cursor:pointer;min-height:105px}.cargo-kpis .kpi.selected{box-shadow:0 0 0 2px #173f6b inset}.cargo-flow-bar{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0 0}.cargo-flow-step{padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;font-size:10px;color:var(--muted)}.cargo-flow-step b{display:block;margin-bottom:3px;color:var(--navy);font-size:11px}@media(max-width:1050px){.request-workflow-kpis,.cargo-kpis{grid-template-columns:repeat(2,1fr)}}@media(max-width:700px){.request-workflow-kpis,.cargo-kpis,.cargo-flow-bar{grid-template-columns:1fr}}
+
+/* Corrección de vista de Solicitudes para perfil USUARIO */
+.app.limited-user #tab-requests{width:100%;min-width:0}
+.app.limited-user #tab-requests .workflow-intro,
+.app.limited-user #tab-requests .user-request-kpis,
+.app.limited-user #tab-requests .filters,
+.app.limited-user #tab-requests .table-wrap{width:100%;box-sizing:border-box}
+.app.limited-user #tab-requests .table-wrap{overflow-x:auto}
+.app.limited-user #tab-requests #requestsTable{min-width:100%}
+.app.limited-user #tab-requests #requestsTable table{min-width:1180px}
+.app.limited-user #userRequestKpis .req-card-click{cursor:pointer}
+
 </style>
 </head>
 <body>
@@ -1146,6 +1158,7 @@
         <div class="value" id="uRqArchivo">0</div>
         <button class="kpi-view" type="button">Ver solicitudes</button>
       </div>
+    </div>
 
     <div class="card filters">
       <div class="field">
