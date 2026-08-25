@@ -1131,10 +1131,7 @@
       <div class="card kpi" data-rq-state="REGISTRADA" onclick="selectAdminRequestCard('REGISTRADA')"><div class="label">POR ACEPTAR</div><div class="value" id="rqSolicitado">0</div><div class="note-mini">Enviadas y aún no aceptadas por Archivo.</div></div>
       <div class="card kpi" data-rq-state="REGISTRADA POR ARCHIVO" onclick="selectAdminRequestCard('REGISTRADA POR ARCHIVO')"><div class="label">PENDIENTES POR ATENDER</div><div class="value" id="rqAceptado">0</div><div class="note-mini">Aceptadas por Archivo y todavía por preparar.</div></div>
       <div class="card kpi warn" data-rq-state="ENTREGA PARCIAL" onclick="selectAdminRequestCard('ENTREGA PARCIAL')"><div class="label">ENTREGA PARCIAL</div><div class="value" id="rqEntregaParcial">0</div><div class="note-mini">Parte de los expedientes ya fue entregada.</div></div>
-      <div class="card kpi" data-rq-state="ENTREGA TOTAL" onclick="selectAdminRequestCard('ENTREGA TOTAL')"><div class="label">ENTREGA TOTAL</div><div class="value" id="rqEntregaTotal">0</div><div class="note-mini">Todos los expedientes fueron entregados.</div></div>
-      <div class="card kpi" data-rq-state="PENDIENTE DE CIERRE" onclick="selectAdminRequestCard('PENDIENTE DE CIERRE')"><div class="label">PENDIENTES DE CIERRE</div><div class="value" id="rqPendienteRecepcion">0</div><div class="note-mini">Devoluciones pendientes de recepción física.</div></div>
-      <div class="card kpi" data-rq-state="CERRADA POR ARCHIVO" onclick="selectAdminRequestCard('CERRADA POR ARCHIVO')"><div class="label">CERRADAS</div><div class="value" id="rqDevuelto">0</div><div class="note-mini">Ciclo concluido por Archivo.</div></div>
-      <div class="card kpi" data-rq-state="" onclick="selectAdminRequestCard('')"><div class="label">TODAS LAS SOLICITUDES</div><div class="value" id="rqTodas">0</div><div class="note-mini">Vista completa de la bandeja.</div></div>
+      <div class="card kpi" data-rq-state="" onclick="selectAdminRequestCard('')"><div class="label">TOTAL DE SOLICITUDES</div><div class="value" id="rqTodas">0</div><div class="note-mini">Vista completa de todas las solicitudes.</div></div>
     </div>
 
     <div class="user-request-kpis hidden-by-role" id="userRequestKpis">
@@ -1171,10 +1168,7 @@
           <option value="">TODOS</option>
           <option value="REGISTRADA">POR ACEPTAR</option>
           <option value="REGISTRADA POR ARCHIVO">PENDIENTE POR ATENDER</option>
-          
-          <option value="ENTREGA TOTAL">ENTREGA TOTAL</option>
-          <option value="PENDIENTE DE CIERRE">PENDIENTE DE CIERRE</option>
-          <option value="CERRADA POR ARCHIVO">CERRADA</option>
+          <option value="ENTREGA PARCIAL">ENTREGA PARCIAL</option>
         </select>
       </div>
       <div class="field hidden-by-role" id="requestOriginField">
