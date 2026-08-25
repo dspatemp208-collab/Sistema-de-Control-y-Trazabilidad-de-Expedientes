@@ -1338,6 +1338,7 @@
 
 
 
+
 <!-- Nueva solicitud de préstamo -->
 <div class="modal" id="newRequestModal">
   <div class="modal-box">
@@ -1357,6 +1358,7 @@
       <div class="field span2">
         <label>Asunto *</label>
         <input id="rqAsunto" list="listaAsuntosCargo" placeholder="Seleccione o escriba el asunto">
+        <span class="note">Puede cambiar el asunto mientras prepara la solicitud. Después de enviarla a Archivo quedará bloqueado para el perfil USUARIO.</span>
       </div>
       <div class="field span2">
         <label>Modalidad *</label>
@@ -4683,11 +4685,10 @@ async function loadStateDetail(estado){
 
     el('stateDetailTable').innerHTML=`
       <div class="note" style="margin:8px 10px 10px">
-        Use <b>Gestionar</b> para completar o corregir
-        <b>Extensión, R.D. y Último folio</b> y, cuando corresponda,
-        generar e imprimir el cargo desde la misma opción.
-        El botón <b>Editar</b> permite modificar directamente el expediente;
-        el perfil <b>Administrador</b> puede modificar todo.
+        <b>Gestionar</b> abre el flujo normal de la solicitud para cargo, entrega,
+        reasignación o devolución según corresponda. <b>Editar</b> abre directamente
+        el expediente para corregir sus datos; el perfil <b>Administrador</b> puede
+        modificar todos los campos del expediente.
       </div>
       <table>
       <thead>
@@ -4724,7 +4725,7 @@ async function loadStateDetail(estado){
                 Historial
               </button>
               ${hasFullAccess()?`<button class="btn small"
-                onclick="openPendingPrepareDelivery(${i})">
+                onclick="openPendingManageRequest(${i})">
                 Gestionar
               </button>`:''}
               ${hasFullAccess()?`<button class="btn secondary small"
@@ -4888,6 +4889,12 @@ function reqStatePill(state){
 function openAddItemsToExistingRequest(){
   if(!currentRequestId || !currentRequest){
     alert('No se pudo identificar la solicitud.');
+    return;
+  }
+
+  // Una vez enviada, la solicitud del perfil USUARIO queda en solo lectura.
+  if(isLimitedUser()){
+    alert('La solicitud ya fue enviada a Archivo y no puede modificarse a nivel usuario.');
     return;
   }
 
@@ -6845,6 +6852,7 @@ function attentionStatePill(value){
 }
 
 
+
 function canEditRequestBeforeCargo(r){
   if(!hasFullAccess() || !r)return false;
 
@@ -6931,7 +6939,7 @@ function renderRequests(){
 
 
 
-async function openPendingPrepareDelivery(rowIndex){
+async function openPendingManageRequest(rowIndex){
   const row=pendingVerifyRows?.[Number(rowIndex)];
 
   if(!row){
@@ -7030,13 +7038,13 @@ async function openPendingPrepareDelivery(rowIndex){
       return;
     }
 
-    await openEditRequest(requestId);
+    await openRequestDetail(requestId);
 
   }catch(err){
-    console.error('openPendingPrepareDelivery:',err);
+    console.error('openPendingManageRequest:',err);
     alert(
       err?.message||
-      'No se pudo abrir la solicitud para preparar la entrega.'
+      'No se pudo abrir la solicitud para gestionar.'
     );
   }
 }
@@ -7554,8 +7562,10 @@ function renderRequestActions(){
 
     if(r.estado==='SOLICITADO'){
       actions=`
-        <button class="btn secondary" onclick="openAddItemsToExistingRequest()">+ Agregar expedientes</button>
-        <span class="note">Solicitud registrada. Archivo debe aceptarla y verificarla. Todavía no existe cargo.</span>`;
+        <span class="note">
+          Solicitud enviada a Archivo. Para el perfil USUARIO queda en solo lectura:
+          ya no se puede modificar el asunto, modalidad, observación ni agregar o retirar expedientes.
+        </span>`;
     }else if(r.estado==='ACEPTADO'){
       actions='<span class="note">Solicitud aceptada por Archivo. La fecha de aceptación ya quedó registrada; la fecha de entrega en préstamo se registrará recién cuando se atienda cada expediente con un cargo.</span>';
     }
@@ -9081,7 +9091,10 @@ async function editRecord(id,directManagement=false){
   if(el('recordModeNote'))el('recordModeNote').style.display='none';
 
   el('modalTitle').textContent=
-    (directManagement?'Gestionar expediente · ':'Editar ')+expKey(r);
+    (directManagement
+      ?'Gestionar expediente · '
+      :(isAdmin()?'Editar expediente (Administrador) · ':'Editar ')
+    )+expKey(r);
 
   el('recordSaveBtn').textContent=
     directManagement?'Guardar gestión':'Guardar expediente';
