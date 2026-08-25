@@ -754,6 +754,12 @@
   width:100%;
 }
 
+
+/* Mejora visual de fecha y hora en tablas de historial */
+.datetime-cell{display:flex;flex-direction:column;align-items:flex-start;gap:4px;min-width:112px}
+.datetime-date{font-weight:700;color:var(--navy);line-height:1.15;white-space:nowrap}
+.datetime-time{display:inline-flex;align-items:center;justify-content:center;padding:4px 8px;border-radius:999px;background:#eef4ff;border:1px solid #cddcf7;color:var(--navy);font-size:11px;font-weight:700;line-height:1;white-space:nowrap}
+
 </style>
 </head>
 <body>
@@ -7590,7 +7596,7 @@ function renderRequestMovements(){
   el('rqMovements').innerHTML=`<table>
     <thead><tr><th>Fecha / hora</th><th>Expediente</th><th>Acción</th><th>Desde</th><th>Hacia</th><th>Estado</th><th>Cargo</th><th>Observación</th></tr></thead>
     <tbody>${requestMovementRows.map(m=>`<tr>
-      <td>${fmtDate(m.created_at)}<br><span class="note">${fmtTime(m.created_at)}</span></td>
+      <td><div class="datetime-cell"><span class="datetime-date">${fmtDate(m.created_at)}</span><span class="datetime-time">${fmtTime(m.created_at)}</span></div></td>
       <td>${esc(m.expediente||'')}</td>
       <td>${esc(m.accion||'')}</td>
       <td>${esc(m.desde||'')}</td>
@@ -8554,7 +8560,7 @@ function recordTable(data,withOwner=false,source='panel'){
 
 function renderHistory(){
   if(!historyRows.length){el('historyTable').innerHTML='<div class="empty">No hay movimientos para mostrar.</div>';return}
-  el('historyTable').innerHTML=`<table><thead><tr><th>Fecha / hora</th><th>Expediente</th><th>Extensión</th><th>Acción</th><th>Desde</th><th>Hacia</th><th>Cargo</th><th>Detalle</th></tr></thead><tbody>${historyRows.map(h=>`<tr><td>${fmtDate(h.created_at)}<br><span class="note">${fmtTime(h.created_at)}</span></td><td><b>${esc(h.expediente)}</b></td><td>${h.extension?esc(h.extension):'—'}</td><td>${esc(h.accion)}</td><td>${esc(h.desde)}</td><td>${esc(h.hacia)}</td><td>${esc(h.cargo)}</td><td>${esc(h.detalle)}</td></tr>`).join('')}</tbody></table>`
+  el('historyTable').innerHTML=`<table><thead><tr><th>Fecha / hora</th><th>Expediente</th><th>Extensión</th><th>Acción</th><th>Desde</th><th>Hacia</th><th>Cargo</th><th>Detalle</th></tr></thead><tbody>${historyRows.map(h=>`<tr><td><div class="datetime-cell"><span class="datetime-date">${fmtDate(h.created_at)}</span><span class="datetime-time">${fmtTime(h.created_at)}</span></div></td><td><b>${esc(h.expediente)}</b></td><td>${h.extension?esc(h.extension):'—'}</td><td>${esc(h.accion)}</td><td>${esc(h.desde)}</td><td>${esc(h.hacia)}</td><td>${esc(h.cargo)}</td><td>${esc(h.detalle)}</td></tr>`).join('')}</tbody></table>`
 }
 function switchTab(name,btn){['panel','summary','states','requests','requestsByLawyer','all','cargos','history'].forEach(x=>el('tab-'+x).classList.toggle('hidden',x!==name));document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));if(btn)btn.classList.add('active')}
 
