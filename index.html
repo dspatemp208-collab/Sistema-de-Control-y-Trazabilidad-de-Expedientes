@@ -1999,6 +1999,11 @@ function setVisible(id,visible){
   x.classList.toggle('hidden',!visible);
 }
 function norm(v){return String(v??'').trim().toUpperCase()}
+function stateDisplayName(estado){
+  return estado==='PENDIENTE DE VERIFICACIÓN'
+    ?'PENDIENTES POR ATENDER'
+    :(estado||'');
+}
 function esc(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
 function expBase(v){let s=String(v??'').trim().replace(/\s+/g,'');const m=s.match(/^(\d+)[-\/]([12]\d{3})$/);if(m){let n=m[1];if(n.length<4)n=n.padStart(4,'0');return n+'-'+m[2]}return s.replace('/','-')}
 function expKey(r){return r.extension?expBase(r.expediente)+'-'+r.extension:expBase(r.expediente)}
