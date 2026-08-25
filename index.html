@@ -8728,8 +8728,8 @@ function syncUserReturnButtonState(){
   const ready=userReturnSelectionReady();
   btn.disabled=!ready;
   btn.title=ready
-    ?'Registrar la devolución y dejarla pendiente de recepción por Archivo'
-    :'Seleccione el expediente e ingrese el Último folio obligatorio';
+    ?'Devolver el expediente y dejarlo pendiente de recepción por Archivo'
+    :'Ingrese el Último folio obligatorio para habilitar Devolver';
 }
 
 async function saveUserReturnDataBeforeReturn(expedienteIds){
@@ -8912,9 +8912,8 @@ function renderRequestActions(){
 
     if(hasMyLoan){
       actions += `
-        <span class="note"><b>Para devolver:</b> puede actualizar la <b>R.D.</b> y debe ingresar obligatoriamente el <b>Último folio</b>. Luego seleccione <b>Efectuar devolución</b>. Los cambios quedan registrados automáticamente en el Historial y no requieren observación.</span>
-        <button class="btn secondary" onclick="reassignRequestItems()">Reasignar seleccionados</button>
-        <button class="btn" id="btnEffectReturn" onclick="requestReturnItems()" disabled>Efectuar devolución</button>`;
+        <span class="note"><b>Para devolver:</b> actualice la <b>R.D.</b> si corresponde e ingrese obligatoriamente el <b>Último folio</b>. Luego seleccione <b>Devolver</b>. Los cambios quedan registrados automáticamente en el Historial.</span>
+        <button class="btn" id="btnEffectReturn" onclick="requestReturnItems()" disabled>Devolver</button>`;
       setTimeout(syncUserReturnButtonState,0);
     }
 
@@ -9267,12 +9266,12 @@ async function requestReturnItems(){
     return;
   }
 
-  if(!confirm(`¿Efectuar la devolución de ${ids.length} expediente(s)? Se guardarán la R.D. (si fue actualizada) y el Último folio. La devolución quedará pendiente de recepción por Archivo.`))return;
+  if(!confirm(`¿Devolver ${ids.length} expediente(s)? Se guardarán la R.D. (si fue actualizada) y el Último folio. La devolución quedará pendiente de recepción por Archivo.`))return;
 
   const datosOk=await saveUserReturnDataBeforeReturn(ids);
   if(!datosOk)return;
 
-  el('rqActionStatus').textContent='Registrando devolución pendiente de recepción por Archivo...';
+  el('rqActionStatus').textContent='Registrando devolución...';
 
   const {data,error}=await sb.rpc('solicitar_devolucion_expedientes',{
     p_solicitud_id:currentRequestId,
