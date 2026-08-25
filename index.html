@@ -1129,7 +1129,7 @@
 
     <div class="request-workflow-kpis" id="fullRequestKpis">
       <div class="card kpi" data-rq-state="REGISTRADA" onclick="selectAdminRequestCard('REGISTRADA')"><div class="label">POR ACEPTAR</div><div class="value" id="rqSolicitado">0</div><div class="note-mini">Enviadas y aún no aceptadas por Archivo.</div></div>
-      <div class="card kpi" data-rq-state="REGISTRADA POR ARCHIVO" onclick="selectAdminRequestCard('REGISTRADA POR ARCHIVO')"><div class="label">PENDIENTES POR ATENDER</div><div class="value" id="rqAceptado">0</div><div class="note-mini">Aceptadas por Archivo y todavía por preparar.</div></div>
+      <div class="card kpi" data-rq-state="PENDIENTES_POR_ATENDER_ITEMS" onclick="selectAdminRequestCard('PENDIENTES_POR_ATENDER_ITEMS')"><div class="label">EXPEDIENTES PENDIENTES POR ATENDER</div><div class="value" id="rqAceptado">0</div><div class="note-mini"><b><span id="rqAceptadoExpedientes">0 expedientes</span></b> · <span id="rqAceptadoSolicitudes">0 solicitudes</span> con atención pendiente.</div></div>
       <div class="card kpi warn" data-rq-state="ENTREGA PARCIAL" onclick="selectAdminRequestCard('ENTREGA PARCIAL')"><div class="label">ENTREGA PARCIAL</div><div class="value" id="rqEntregaParcial">0</div><div class="note-mini">Parte de los expedientes ya fue entregada.</div></div>
       <div class="card kpi" data-rq-state="" onclick="selectAdminRequestCard('')"><div class="label">TOTAL DE SOLICITUDES</div><div class="value" id="rqTodas">0</div><div class="note-mini">Vista completa de todas las solicitudes.</div></div>
     </div>
@@ -1150,8 +1150,8 @@
       </div>
 
       <div class="card kpi req-card-click" id="userRqArchivo"
-           onclick="selectMyRequestCard('REGISTRADA POR ARCHIVO')">
-        <div class="label">Pendiente por atender</div>
+           onclick="selectMyRequestCard('PENDIENTES_POR_ATENDER_ITEMS')">
+        <div class="label">Expedientes pendientes por atender</div>
         <div class="value" id="uRqArchivo">0</div>
         <button class="kpi-view" type="button">Ver solicitudes</button>
       </div>
@@ -1167,7 +1167,7 @@
         <select id="requestStateFilter" onchange="loadRequests()">
           <option value="">TODOS</option>
           <option value="REGISTRADA">POR ACEPTAR</option>
-          <option value="REGISTRADA POR ARCHIVO">PENDIENTE POR ATENDER</option>
+          <option value="PENDIENTES_POR_ATENDER_ITEMS">PENDIENTE POR ATENDER</option>
           <option value="ENTREGA PARCIAL">ENTREGA PARCIAL</option>
         </select>
       </div>
@@ -2057,6 +2057,7 @@ function movementActionDisplay(action){
 }
 
 function requestStateDisplayName(estado){
+  if(estado==='PENDIENTES_POR_ATENDER_ITEMS')return 'PENDIENTE POR ATENDER';
   if(estado==='REGISTRADA POR ARCHIVO')return 'PENDIENTE POR ATENDER';
   if(estado==='ACEPTADO')return 'PENDIENTE POR ATENDER';
   if(estado==='CARGO GENERADO')return 'EN PRÉSTAMO';
@@ -6987,7 +6988,7 @@ function renderRequestsByLawyer(){
       <div class="lawyer-actions">
         <button class="btn secondary small" onclick="openLawyerRequests('${x.solicitante.replace(/'/g,"\\'")}')">Ver todas (${Number(x.total||0)})</button>
         ${Number(x.solicitado||0)>0?`<button class="btn small" onclick="openLawyerRequests('${x.solicitante.replace(/'/g,"\\'")}','REGISTRADA')">Por aceptar (${Number(x.solicitado||0)})</button>`:''}
-        ${Number(x.aceptado||0)>0?`<button class="btn small" onclick="openLawyerRequests('${x.solicitante.replace(/'/g,"\\'")}','REGISTRADA POR ARCHIVO')">Por atender (${Number(x.aceptado||0)})</button>`:''}
+        ${Number(x.aceptado||0)>0?`<button class="btn small" onclick="openLawyerRequests('${x.solicitante.replace(/'/g,"\\'")}','PENDIENTES_POR_ATENDER_ITEMS')">Por atender (${Number(x.aceptado||0)})</button>`:''}
         ${Number(x.entrega_parcial||0)>0?`<button class="btn secondary small" onclick="openLawyerRequests('${x.solicitante.replace(/'/g,"\\'")}','ENTREGA PARCIAL')">Parcial (${Number(x.entrega_parcial||0)})</button>`:''}
         ${Number(x.entrega_total||0)>0?`<button class="btn secondary small" onclick="openLawyerRequests('${x.solicitante.replace(/'/g,"\\'")}','ENTREGA TOTAL')">Entrega total (${Number(x.entrega_total||0)})</button>`:''}
         ${Number(x.por_recibir||0)>0?`<button class="btn secondary small" onclick="openLawyerRequests('${x.solicitante.replace(/'/g,"\\'")}','PENDIENTE DE CIERRE')">Por recibir (${Number(x.por_recibir||0)})</button>`:''}
@@ -7018,7 +7019,7 @@ function updateMyRequestCards(){
   const map={
     '':'userRqTotalSolicitudes',
     'REGISTRADA':'userRqRegistradas',
-    'REGISTRADA POR ARCHIVO':'userRqArchivo',
+    'PENDIENTES_POR_ATENDER_ITEMS':'userRqArchivo',
     'CARGO PENDIENTE DE ENTREGA':'userRqCargoPendiente',
     'ENTREGA PARCIAL':'userRqParcial',
     'ENTREGA TOTAL':'userRqTotal'
@@ -7077,6 +7078,24 @@ function requestWorkflowAction(r){
   return `<button class="btn secondary small" onclick="openRequestDetail('${r.id}')">Gestionar</button>`;
 }
 
+function pendingRequestMatchKey(row){
+  const id=String(row?.solicitud_id||row?.id||'').trim();
+  if(id)return 'ID:'+id;
+  const num=String(row?.solicitud_numero||row?.numero||'').trim();
+  const sol=String(row?.solicitante||'').trim().toUpperCase();
+  return 'NUM:'+num+'|SOL:'+sol;
+}
+
+function requestRowPendingKeys(row){
+  const keys=[];
+  const id=String(row?.id||row?.solicitud_id||'').trim();
+  if(id)keys.push('ID:'+id);
+  const num=String(row?.numero||row?.solicitud_numero||'').trim();
+  const sol=String(row?.solicitante||'').trim().toUpperCase();
+  if(num)keys.push('NUM:'+num+'|SOL:'+sol);
+  return keys;
+}
+
 async function loadRequests(){
   if(!sb||!session)return;
 
@@ -7106,6 +7125,35 @@ async function loadRequests(){
     );
   }
 
+  // Conteo real de EXPEDIENTES pendientes por atender.
+  // Incluye expedientes que todavía están pendientes dentro de una solicitud
+  // con ENTREGA PARCIAL, por eso no depende solo del estado de la cabecera.
+  let pendingAttentionItems=[];
+  const {data:pendingAttentionData,error:pendingAttentionError}=await sb.rpc(
+    'listar_pendientes_verificacion_archivo'
+  );
+
+  if(pendingAttentionError){
+    console.warn('Conteo de expedientes pendientes por atender:',pendingAttentionError.message);
+  }else{
+    pendingAttentionItems=pendingAttentionData||[];
+  }
+
+  // Respetar los filtros actuales de búsqueda/origen de la bandeja.
+  const visibleRequestKeys=new Set();
+  allRequestRows.forEach(r=>requestRowPendingKeys(r).forEach(k=>visibleRequestKeys.add(k)));
+  pendingAttentionItems=pendingAttentionItems.filter(r=>{
+    const key=pendingRequestMatchKey(r);
+    return visibleRequestKeys.has(key);
+  });
+
+  const pendingRequestKeys=new Set(
+    pendingAttentionItems.map(pendingRequestMatchKey)
+  );
+  const pendingRequestCount=allRequestRows.filter(r=>
+    requestRowPendingKeys(r).some(k=>pendingRequestKeys.has(k))
+  ).length;
+
   const counts={
     'REGISTRADA':0,
     'REGISTRADA POR ARCHIVO':0,
@@ -7123,7 +7171,9 @@ async function loadRequests(){
 
   // Tarjetas ADMINISTRADOR / ARCHIVO
   if(el('rqSolicitado'))el('rqSolicitado').textContent=counts['REGISTRADA'];
-  if(el('rqAceptado'))el('rqAceptado').textContent=counts['REGISTRADA POR ARCHIVO'];
+  if(el('rqAceptado'))el('rqAceptado').textContent=pendingAttentionItems.length;
+  if(el('rqAceptadoExpedientes'))el('rqAceptadoExpedientes').textContent=pendingAttentionItems.length+' expediente'+(pendingAttentionItems.length===1?'':'s');
+  if(el('rqAceptadoSolicitudes'))el('rqAceptadoSolicitudes').textContent=pendingRequestCount+' solicitud'+(pendingRequestCount===1?'':'es');
   if(el('rqCargoPendiente'))el('rqCargoPendiente').textContent=counts['CARGO PENDIENTE DE ENTREGA'];
   if(el('rqEntregaParcial'))el('rqEntregaParcial').textContent=counts['ENTREGA PARCIAL'];
   if(el('rqEntregaTotal'))el('rqEntregaTotal').textContent=counts['ENTREGA TOTAL'];
@@ -7134,13 +7184,19 @@ async function loadRequests(){
   // Tarjetas exclusivas del USUARIO
   if(el('uRqTotalSolicitudes'))el('uRqTotalSolicitudes').textContent=allRequestRows.length;
   if(el('uRqRegistradas'))el('uRqRegistradas').textContent=counts['REGISTRADA'];
-  if(el('uRqArchivo'))el('uRqArchivo').textContent=counts['REGISTRADA POR ARCHIVO'];
+  if(el('uRqArchivo'))el('uRqArchivo').textContent=pendingAttentionItems.length;
   if(el('uRqCargoPendiente'))el('uRqCargoPendiente').textContent=counts['CARGO PENDIENTE DE ENTREGA'];
   if(el('uRqParcial'))el('uRqParcial').textContent=counts['ENTREGA PARCIAL'];
   if(el('uRqTotal'))el('uRqTotal').textContent=counts['ENTREGA TOTAL'];
 
   // Segunda consulta: solo lo que se debe mostrar en la tabla.
-  if(state){
+  if(state==='PENDIENTES_POR_ATENDER_ITEMS'){
+    // Mostrar todas las solicitudes que todavía contienen al menos un
+    // expediente pendiente, aunque la cabecera esté en ENTREGA PARCIAL.
+    requestRows=allRequestRows.filter(r=>
+      requestRowPendingKeys(r).some(k=>pendingRequestKeys.has(k))
+    );
+  }else if(state){
     const {data,error}=await sb.rpc('listar_solicitudes_prestamo',{
       p_busqueda:search||null,
       p_estado:state
