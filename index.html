@@ -1241,7 +1241,7 @@
            role="button" tabindex="0"
            onclick="showKpiExpedientes('pending')"
            onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();showKpiExpedientes('pending')}">
-        <div class="label" id="kPendingLabel">Devoluciones solicitadas</div>
+        <div class="label" id="kPendingLabel">Solicitudes de devolución</div>
         <div class="value" id="kPending">0</div>
         <div class="user-card-caption">Expedientes cuya devolución fue solicitada y todavía está pendiente de recepción por Archivo.</div>
         <div class="user-card-footer">
@@ -1359,7 +1359,7 @@
       <div class="card" style="margin-bottom:12px">
         <div class="table-head" style="padding:0">
           <div>
-            <strong>Devoluciones solicitadas</strong>
+            <strong>Solicitudes de devolución</strong>
             <div class="note" style="margin-top:4px">
               Expedientes cuya devolución fue solicitada y están pendientes de recepción física por Archivo.
             </div>
@@ -1411,7 +1411,7 @@
 
     <div class="card table-wrap">
       <div class="table-head">
-        <strong>Devoluciones solicitadas pendientes</strong>
+        <strong>Solicitudes de devolución pendientes</strong>
         <span id="returnRequestsCount">0 expedientes</span>
       </div>
       <div id="returnRequestsTable">
@@ -4260,7 +4260,7 @@ function updateOwnerPanelVisibility(){
         <option value="reassigned">REASIGNADO</option>
         <option value="pending_attention">PENDIENTE POR ATENDER</option>
         <option value="returns">DEVUELTO AL ARCHIVO</option>
-        <option value="pending">DEVOLUCIONES SOLICITADAS</option>`;
+        <option value="pending">SOLICITUDES DE DEVOLUCIÓN</option>`;
       el('ownerStateFilter').value=current;
     }
   }
@@ -4407,7 +4407,7 @@ function renderOwnerCards(){
         </div>
 
         <div class="owner-user-stat">
-          <span>DEVOLUCIONES SOLICITADAS</span>
+          <span>SOLICITUDES DE DEVOLUCIÓN</span>
           <b>${Number(x.devoluciones_pendientes_aceptacion||0)}</b>
         </div>
 
@@ -4990,7 +4990,7 @@ async function showUserCard(tipo){
 function panelQuickLabel(){
   return panelQuickFilter==='custody'?'Total en custodia':
     panelQuickFilter==='pending'
-      ?(selectedOwnerIsUser()?'Devoluciones solicitadas':'Devoluciones solicitadas'):
+      ?(selectedOwnerIsUser()?'Solicitudes de devolución':'Solicitudes de devolución'):
     panelQuickFilter==='returns'?'Devueltos al Archivo':
     panelQuickFilter==='pending_attention'?'Pendientes por atender':
     panelQuickFilter==='loan'?'En préstamo':
@@ -5565,7 +5565,7 @@ function renderStates(){
 
   const returnCard=showReturnCard
     ? `<div class="card state-card">
-        <div class="state-name">DEVOLUCIONES SOLICITADAS</div>
+        <div class="state-name">SOLICITUDES DE DEVOLUCIÓN</div>
         <div class="state-count">${returnRequestRows.length||0}</div>
         <div class="state-meta">Pendientes de recepción física</div>
         <div class="state-progress"><span style="width:${returnRequestRows.length?100:0}%"></span></div>
@@ -9512,15 +9512,28 @@ async function requestReturnItems(){
 
   if(!confirm(`¿Devolver ${ids.length} expediente(s)? Se guardarán la R.D. (si fue actualizada) y el Último folio. La devolución quedará pendiente de recepción por Archivo.`))return;
 
-  const datosOk=await saveUserReturnDataBeforeReturn(ids);
-  if(!datosOk)return;
+  const rows=selected.map(x=>({
+    id:x.expediente_id,
+    rd:String(x.rd||'').trim()||null,
+    ultimo_folio:String(x.ultimo_folio||'').trim()
+  }));
 
-  el('rqActionStatus').textContent='Registrando devolución...';
+  const missing=selected.filter(x=>!String(x.ultimo_folio||'').trim());
+  if(missing.length){
+    const names=missing.map(x=>x.expediente).filter(Boolean).join(', ');
+    el('rqActionStatus').textContent=`Último folio obligatorio. Complete el dato antes de devolver${names?' para: '+names:''}.`;
+    document.querySelector(`[data-user-folio-id="${missing[0]?.expediente_id||''}"]`)?.focus();
+    syncUserReturnButtonState();
+    return;
+  }
 
-  const {error}=await sb.rpc('solicitar_devolucion_solicitud_expedientes',{
-    p_solicitud_id:currentRequestId,
-    p_expediente_ids:ids,
-    p_observacion:obs||null
+  el('rqActionStatus').textContent='Guardando datos y generando solicitud de devolución...';
+
+  // Unificar la devolución individual y múltiple en la misma función.
+  // Esta RPC actualiza R.D./folio, cambia el item a DEVOLUCIÓN SOLICITADA
+  // y registra los movimientos para que Archivo pueda confirmar recepción.
+  const {data,error}=await sb.rpc('solicitar_devolucion_multiple_mi_custodia',{
+    p_items:rows
   });
 
   if(error){
@@ -9529,12 +9542,19 @@ async function requestReturnItems(){
   }
 
   requestSelectedIds.clear();
-  showToast('Devolución registrada. Archivo debe confirmar la recepción.');
+  showToast(`${Number(data?.total||ids.length)} expediente(s): devolución solicitada. Archivo debe confirmar la recepción.`);
 
   if(hasFullAccess()){
-    await Promise.all([loadSummary(),loadPanel(),loadAll(),loadStates(),loadRequestsByLawyer(),loadHistory()]);
+    await Promise.all([
+      loadSummary(),loadPanel(),loadAll(),loadStates(),loadRequests(),
+      loadRequestsByLawyer(),loadReturnRequests(),loadHistory(),
+      loadArchiveDeliveryRequests(true),loadOperationalAlerts(true),loadNotifications(true)
+    ]);
   }else{
-    await Promise.all([loadSummary(),loadPanel(),loadRequests(),loadHistory()]);
+    await Promise.all([
+      loadSummary(),loadPanel(),loadRequests(),loadHistory(),
+      loadArchiveDeliveryRequests(true),loadOperationalAlerts(true),loadNotifications(true)
+    ]);
   }
 
   await refreshRequestDetail();
