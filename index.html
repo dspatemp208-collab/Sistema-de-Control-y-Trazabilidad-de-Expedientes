@@ -1052,6 +1052,19 @@
   border-color:#9a6900;
 }
 
+
+/* ===== Piloto: devolución múltiple del usuario ===== */
+.bulk-return-table{overflow:auto;max-height:48vh;border:1px solid var(--line);border-radius:9px;margin-top:10px}
+.bulk-return-table table{min-width:760px}
+.bulk-return-table th{top:0;z-index:2}
+.bulk-return-input{width:100%;min-width:120px;border:1px solid var(--line);border-radius:7px;padding:7px 8px;font:inherit;background:#fff}
+.bulk-return-input.required{border-color:#c58b19;background:#fffdf5}
+.bulk-return-input.required:focus{outline:2px solid rgba(197,139,25,.18);border-color:#9a6900}
+.bulk-return-source{display:inline-block;padding:3px 7px;border-radius:999px;font-size:10px;font-weight:800;background:#e8eef6;color:var(--navy)}
+.bulk-return-source.archive{background:#fff0e8;color:#984514}
+.bulk-return-summary{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.bulk-return-summary .mini{padding:6px 9px;border:1px solid var(--line);border-radius:8px;background:#f8fafc;font-size:11px;color:var(--muted)}
+
 </style>
 </head>
 <body>
@@ -1072,6 +1085,7 @@
       <button class="btn secondary" id="requestBtn" onclick="openNewRequestModal()" disabled>📥 Solicitar seleccionados</button>
       <button class="btn secondary" id="searchRequestBtn" onclick="openRequestSearchModal()">🔎 Buscar para solicitar</button>
       <span class="sel-count" id="selectedCount">0 seleccionados</span>
+      <button class="btn secondary hidden-by-role" id="bulkReturnBtn" onclick="openBulkReturnModal()" disabled>↩ Devolver seleccionados</button>
       <button class="btn secondary" id="importCsvBtn" onclick="document.getElementById('csvFile').click()">Importar registro CSV</button>
       <input class="hidden" id="csvFile" type="file" accept=".csv,text/csv" onchange="importCSV(event)">
       <button class="btn secondary" id="exportCsvBtn" onclick="exportCSV(this)">Exportar registro</button>
@@ -2366,6 +2380,41 @@
   </div>
 </div>
 
+
+<!-- Devolución múltiple del usuario -->
+<div class="modal" id="bulkReturnModal">
+  <div class="modal-box" style="max-width:1050px">
+    <div class="modal-head">
+      <div>
+        <h2>Devolver varios expedientes</h2>
+        <div style="font-size:12px;color:#64748b;margin-top:3px">
+          Actualice R.D. si corresponde y registre obligatoriamente el Último folio de cada expediente antes de devolver.
+        </div>
+      </div>
+      <button class="btn secondary small" onclick="closeBulkReturnModal()">Cerrar</button>
+    </div>
+
+    <div class="note">
+      La devolución puede reunir expedientes de distintas solicitudes o cargos. La custodia permanecerá con el usuario hasta que Archivo confirme la recepción. Los expedientes solicitados expresamente por Archivo se identificarán en la columna Origen.
+    </div>
+
+    <div class="bulk-return-summary">
+      <div class="mini"><b id="bulkReturnCount">0</b> expedientes seleccionados</div>
+      <div class="mini"><b id="bulkReturnArchiveCount">0</b> solicitados por Archivo</div>
+    </div>
+
+    <div class="bulk-return-table" id="bulkReturnTable">
+      <div class="empty">Seleccione expedientes para devolver.</div>
+    </div>
+
+    <div class="modal-foot">
+      <span id="bulkReturnStatus" style="margin-right:auto;font-size:12px;color:#64748b"></span>
+      <button class="btn secondary" onclick="closeBulkReturnModal()">Cancelar</button>
+      <button class="btn" id="bulkReturnSubmitBtn" onclick="submitBulkReturn()" disabled>DEVOLVER EXPEDIENTES</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast">Guardado correctamente</div>
 
 <script>
@@ -2375,6 +2424,7 @@ const STATUSES=['CUSTODIA','EN PRÉSTAMO','DEVUELTO','REASIGNADO','EN TRÁMITE']
 const PAGE_SIZE=200;
 let sb=null, session=null, currentProfile=null, userProfiles=[], abogadoProfiles=[], reassignmentProfiles=[], reassignmentProfilesLoadedAt=0, returnRequestRows=[], pendingRegisterRows=[], pendingVerifyRows=[], notificationRows=[], notificationUnread=0, notificationsLoaded=false, requestExcelRows=[], requestExcelMissing=[], requestExcelDuplicates=0, summaryRows=[], panelRows=[], allRows=[], historyRows=[], cargosRows=[], selectedCargoNumero='', stateRows=[], stateDetailRows=[], requestRows=[], requestDetailRows=[], requestMovementRows=[], requestSearchRows=[], requestsByLawyerRows=[];
 let activeArchiveDeliveryRequestId='';
+let bulkReturnRows=[];
 let catalogo=MASTER.map(([nombre,tipo],i)=>({id:'fallback-'+i,nombre,tipo,activo:true}));
 let asuntosCatalogo=ASUNTOS_PREDETERMINADOS.map((nombre,i)=>({id:'fallback-asunto-'+i,nombre,activo:true}));
 let selectedIds=new Set(), cargoRows=[];
@@ -2832,6 +2882,7 @@ function applyRoleUI(){
 
   setVisible('newRecordBtn',full);
   setVisible('cargoBtn',full);
+  setVisible('bulkReturnBtn',limited);
   setVisible('importCsvBtn',full);
   setVisible('exportCsvBtn',full);
   setVisible('peopleBtn',admin);
@@ -10066,6 +10117,7 @@ function updateSelectionUI(){
   el('selectedCount').textContent=n+' seleccionado'+(n===1?'':'s');
   el('cargoBtn').disabled=n===0;
   if(el('requestBtn'))el('requestBtn').disabled=n===0;
+  if(el('bulkReturnBtn'))el('bulkReturnBtn').disabled=n===0;
 }
 function toggleSelect(id,checked){
   if(checked)selectedIds.add(id);else selectedIds.delete(id);
@@ -10078,6 +10130,214 @@ function toggleAllRows(checked,source){
   if(source==='all')el('allTable').innerHTML=recordTable(allRows,true,'all');
   else if(source==='states')el('stateDetailTable').innerHTML=recordTable(stateDetailRows,true,'states');
   else el('panelTable').innerHTML=recordTable(panelRows,false,'panel');
+}
+
+
+function closeBulkReturnModal(){
+  el('bulkReturnModal')?.classList.remove('show');
+  bulkReturnRows=[];
+}
+
+function updateBulkReturnField(id,field,value){
+  const row=bulkReturnRows.find(x=>String(x.id)===String(id));
+  if(!row)return;
+  row[field]=String(value??'').trim();
+  syncBulkReturnState();
+}
+
+function syncBulkReturnState(){
+  const rows=bulkReturnRows||[];
+  const missing=rows.filter(x=>!String(x.ultimo_folio||'').trim());
+  const btn=el('bulkReturnSubmitBtn');
+  if(btn){
+    btn.disabled=!rows.length||missing.length>0;
+    btn.textContent=rows.length
+      ?`DEVOLVER ${rows.length} EXPEDIENTE${rows.length===1?'':'S'}`
+      :'DEVOLVER EXPEDIENTES';
+  }
+  if(el('bulkReturnStatus')){
+    el('bulkReturnStatus').textContent=missing.length
+      ?`Falta ingresar el Último folio en ${missing.length} expediente${missing.length===1?'':'s'}.`
+      :'Datos completos. Puede efectuar la devolución.';
+  }
+}
+
+function renderBulkReturnRows(){
+  if(el('bulkReturnCount'))el('bulkReturnCount').textContent=bulkReturnRows.length;
+  if(el('bulkReturnArchiveCount')){
+    el('bulkReturnArchiveCount').textContent=bulkReturnRows.filter(x=>x.archive_request_id).length;
+  }
+
+  if(!bulkReturnRows.length){
+    el('bulkReturnTable').innerHTML='<div class="empty">No hay expedientes válidos para devolver.</div>';
+    syncBulkReturnState();
+    return;
+  }
+
+  el('bulkReturnTable').innerHTML=`<table>
+    <thead><tr>
+      <th>N°</th><th>Expediente</th><th>Ext.</th><th>Cargo</th><th>Origen</th><th>R.D. (opcional)</th><th>Último folio *</th>
+    </tr></thead>
+    <tbody>${bulkReturnRows.map((r,i)=>`<tr>
+      <td>${i+1}</td>
+      <td><b>${esc(r.expediente||'—')}</b></td>
+      <td>${esc(r.extension||'—')}</td>
+      <td>${esc(r.cargo||r.cargo_numero||'—')}</td>
+      <td><span class="bulk-return-source ${r.archive_request_id?'archive':''}">${r.archive_request_id?'SOLICITADO POR EL ARCHIVO':'DEVOLUCIÓN DEL USUARIO'}</span></td>
+      <td><input class="bulk-return-input" value="${esc(r.rd||'')}" placeholder="R.D. (opcional)"
+        oninput="updateBulkReturnField('${r.id}','rd',this.value)"></td>
+      <td><input class="bulk-return-input required" value="${esc(r.ultimo_folio||'')}" placeholder="Último folio" required
+        oninput="updateBulkReturnField('${r.id}','ultimo_folio',this.value)"></td>
+    </tr>`).join('')}</tbody>
+  </table>`;
+
+  syncBulkReturnState();
+}
+
+async function openBulkReturnModal(){
+  if(!isLimitedUser()){
+    showToast('La devolución múltiple está disponible en el perfil USUARIO.');
+    return;
+  }
+
+  const ids=[...selectedIds];
+  if(!ids.length){
+    showToast('Seleccione uno o más expedientes.');
+    return;
+  }
+
+  const nombre=String(currentProfile?.nombre_personal||'').trim();
+  if(!nombre){
+    showToast('La cuenta no tiene personal asociado.');
+    return;
+  }
+
+  if(el('bulkReturnStatus'))el('bulkReturnStatus').textContent='Verificando expedientes seleccionados...';
+  el('bulkReturnModal')?.classList.add('show');
+
+  const [{data:expData,error:expError},{data:linkData,error:linkError},{data:archiveData,error:archiveError}]=await Promise.all([
+    sb.from('expedientes')
+      .select('id,expediente,extension,rd,ultimo_folio,responsable,estado,cargo,modalidad')
+      .in('id',ids),
+    sb.from('solicitud_expedientes')
+      .select('id,solicitud_id,expediente_id,estado,responsable_actual,cargo_numero,updated_at')
+      .in('expediente_id',ids)
+      .in('estado',['EN PRÉSTAMO','DEVOLUCIÓN SOLICITADA'])
+      .order('updated_at',{ascending:false}),
+    sb.rpc('listar_solicitudes_entrega_archivo_pendientes')
+  ]);
+
+  if(expError||linkError){
+    el('bulkReturnTable').innerHTML=`<div class="empty">${esc((expError||linkError).message)}</div>`;
+    if(el('bulkReturnStatus'))el('bulkReturnStatus').textContent='No se pudo preparar la devolución múltiple.';
+    return;
+  }
+
+  // Si la función del piloto de Archivo no está instalada, la devolución normal sigue funcionando.
+  const archiveRows=archiveError?[]:(archiveData||[]);
+  const archiveMap=new Map(
+    archiveRows
+      .filter(x=>String(x.estado||'').toUpperCase()==='SOLICITADA')
+      .map(x=>[String(x.expediente_id),x])
+  );
+
+  const links=linkData||[];
+  const invalid=[];
+  const rows=[];
+
+  for(const e of (expData||[])){
+    const mine=norm(e.responsable)===norm(nombre);
+    if(!mine || String(e.modalidad||'').toUpperCase()==='COPIA DIGITAL'){
+      invalid.push(e.expediente||e.id);
+      continue;
+    }
+
+    const archiveReq=archiveMap.get(String(e.id))||null;
+    const expectedState=archiveReq?'DEVOLUCIÓN SOLICITADA':'EN PRÉSTAMO';
+    const link=links.find(x=>
+      String(x.expediente_id)===String(e.id) &&
+      norm(x.responsable_actual)===norm(nombre) &&
+      String(x.estado||'').toUpperCase()===expectedState
+    );
+
+    if(!link){
+      invalid.push(e.expediente||e.id);
+      continue;
+    }
+
+    rows.push({
+      ...e,
+      solicitud_id:link.solicitud_id,
+      solicitud_expediente_id:link.id,
+      cargo_numero:link.cargo_numero,
+      archive_request_id:archiveReq?.id||null,
+      ultimo_folio:String(e.ultimo_folio||'').trim(),
+      rd:String(e.rd||'').trim()
+    });
+  }
+
+  // También detectar ids no devueltos por RLS/consulta.
+  const returnedIds=new Set((expData||[]).map(x=>String(x.id)));
+  ids.filter(id=>!returnedIds.has(String(id))).forEach(id=>invalid.push(id));
+
+  if(invalid.length){
+    bulkReturnRows=[];
+    el('bulkReturnTable').innerHTML=`<div class="empty">
+      La selección contiene expedientes que no pueden devolverse en esta operación.<br><br>
+      <b>${esc(invalid.join(', '))}</b><br><br>
+      Seleccione únicamente expedientes que actualmente estén bajo su responsabilidad.
+    </div>`;
+    if(el('bulkReturnCount'))el('bulkReturnCount').textContent='0';
+    if(el('bulkReturnArchiveCount'))el('bulkReturnArchiveCount').textContent='0';
+    if(el('bulkReturnStatus'))el('bulkReturnStatus').textContent='Corrija la selección y vuelva a intentar.';
+    if(el('bulkReturnSubmitBtn'))el('bulkReturnSubmitBtn').disabled=true;
+    return;
+  }
+
+  bulkReturnRows=rows.sort((a,b)=>String(a.expediente||'').localeCompare(String(b.expediente||''),'es',{numeric:true}));
+  renderBulkReturnRows();
+}
+
+async function submitBulkReturn(){
+  if(!isLimitedUser()||!bulkReturnRows.length)return;
+
+  const missing=bulkReturnRows.filter(x=>!String(x.ultimo_folio||'').trim());
+  if(missing.length){
+    if(el('bulkReturnStatus'))el('bulkReturnStatus').textContent='El Último folio es obligatorio para todos los expedientes.';
+    return;
+  }
+
+  const count=bulkReturnRows.length;
+  if(!confirm(`¿Efectuar la devolución de ${count} expediente${count===1?'':'s'}? Archivo deberá confirmar posteriormente la recepción.`))return;
+
+  const btn=el('bulkReturnSubmitBtn');
+  if(btn)btn.disabled=true;
+  if(el('bulkReturnStatus'))el('bulkReturnStatus').textContent='Actualizando datos y registrando devoluciones...';
+
+  const {data,error}=await sb.rpc('solicitar_devolucion_multiple_mi_custodia',{
+    p_items:bulkReturnRows.map(x=>({
+      id:x.id,
+      rd:String(x.rd||'').trim()||null,
+      ultimo_folio:String(x.ultimo_folio||'').trim()
+    }))
+  });
+
+  if(error){
+    if(el('bulkReturnStatus'))el('bulkReturnStatus').textContent=error.message;
+    if(btn)btn.disabled=false;
+    return;
+  }
+
+  selectedIds.clear();
+  updateSelectionUI();
+  closeBulkReturnModal();
+
+  showToast(`${Number(data?.total||count)} expediente(s) enviados a devolución.`);
+
+  await Promise.all([
+    loadPanel(),loadRequests(),loadHistory(),
+    loadArchiveDeliveryRequests(true),loadOperationalAlerts(true),loadNotifications(true)
+  ]);
 }
 
 function operationalStatus(r){
