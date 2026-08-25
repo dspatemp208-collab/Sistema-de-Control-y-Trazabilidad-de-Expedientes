@@ -1357,8 +1357,10 @@
       </div>
       <div class="field span2">
         <label>Asunto *</label>
-        <input id="rqAsunto" list="listaAsuntosCargo" placeholder="Seleccione o escriba el asunto">
-        <span class="note">Puede cambiar el asunto mientras prepara la solicitud. Después de enviarla a Archivo quedará bloqueado para el perfil USUARIO.</span>
+        <select id="rqAsunto">
+          <option value="">— SELECCIONE ASUNTO —</option>
+        </select>
+        <span class="note">Puede cambiar el asunto todas las veces que necesite antes de pulsar <b>Enviar solicitud</b>. Después del envío quedará bloqueado para el perfil USUARIO.</span>
       </div>
       <div class="field span2">
         <label>Modalidad *</label>
@@ -2855,6 +2857,37 @@ function asuntoActivo(nombre){
   return asuntosCatalogo.some(x=>x.activo!==false && norm(x.nombre)===n);
 }
 
+function renderRequestAsuntoSelect(preferred=''){
+  const sel=el('rqAsunto');
+  if(!sel)return;
+
+  const wanted=String(preferred||sel.value||'').trim();
+  const activos=asuntosCatalogo
+    .filter(x=>x.activo!==false)
+    .slice()
+    .sort((a,b)=>a.nombre.localeCompare(b.nombre,'es'));
+
+  let options='<option value="">— SELECCIONE ASUNTO —</option>';
+
+  // Si se está abriendo una solicitud antigua cuyo asunto ya no está
+  // activo, mostrarlo temporalmente como referencia.
+  if(wanted && !activos.some(x=>norm(x.nombre)===norm(wanted))){
+    options+=`<option value="${esc(wanted)}">${esc(wanted)} (ASUNTO ANTERIOR)</option>`;
+  }
+
+  options+=activos
+    .map(x=>`<option value="${esc(x.nombre)}">${esc(x.nombre)}</option>`)
+    .join('');
+
+  sel.innerHTML=options;
+
+  if(wanted && [...sel.options].some(o=>o.value===wanted)){
+    sel.value=wanted;
+  }else{
+    sel.value='';
+  }
+}
+
 function renderAsuntosDatalist(){
   const dl=el('listaAsuntosCargo');
   if(!dl)return;
@@ -2867,6 +2900,8 @@ function renderAsuntosDatalist(){
   dl.innerHTML=activos
     .map(x=>`<option value="${esc(x.nombre)}"></option>`)
     .join('');
+
+  renderRequestAsuntoSelect();
 }
 
 async function loadAsuntosCatalogo(){
@@ -5226,6 +5261,8 @@ async function openNewRequestModal(rowsOverride=null,preserveHeader=false){
       el('rqSolicitante').value=preferred;
     }
   }
+
+  renderRequestAsuntoSelect(headerDraft.asunto||'');
 
   if(preserveHeader){
     el('rqAsunto').value=headerDraft.asunto||'';
