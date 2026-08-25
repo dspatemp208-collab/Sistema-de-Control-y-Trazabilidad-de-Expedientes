@@ -3610,6 +3610,35 @@ async function loadOwnerCards(){
     grid.innerHTML='<div class="empty">Cargando expedientes por usuario...</div>';
   }
 
+  // Expedientes PENDIENTES POR ATENDER por solicitante.
+  // No forman parte de la custodia física todavía.
+  const pendingByUser=new Map();
+  const {data:pendingAttentionData,error:pendingAttentionError}=await sb.rpc(
+    'listar_solicitudes_prestamo',
+    {
+      p_busqueda:null,
+      p_estado:'REGISTRADA POR ARCHIVO'
+    }
+  );
+
+  if(pendingAttentionError){
+    console.warn('pendientes por atender por usuario:',pendingAttentionError.message);
+  }else{
+    (pendingAttentionData||[]).forEach(r=>{
+      const solicitante=String(r.solicitante||'').trim();
+      if(!solicitante)return;
+
+      const total=Number(r.total_expedientes||0);
+      const atendidos=Number(r.atendidos||0);
+      const pendientes=Math.max(0,total-atendidos);
+
+      pendingByUser.set(
+        solicitante,
+        Number(pendingByUser.get(solicitante)||0)+pendientes
+      );
+    });
+  }
+
   const results=await Promise.all(
     names.map(async nombre=>{
       const {data,error}=await sb.rpc(
@@ -3623,6 +3652,7 @@ async function loadOwnerCards(){
           nombre,
           error:error.message,
           total_custodia:0,
+          pendientes_por_atender:Number(pendingByUser.get(nombre)||0),
           en_prestamo:0,
           reasignados:0,
           devoluciones_pendientes_aceptacion:0,
@@ -3636,6 +3666,7 @@ async function loadOwnerCards(){
       return {
         nombre,
         total_custodia:Number(s.total_custodia||0),
+        pendientes_por_atender:Number(pendingByUser.get(nombre)||0),
         en_prestamo:Number(s.en_prestamo||0),
         reasignados:Number(s.reasignados||0),
         devoluciones_pendientes_aceptacion:Number(s.devoluciones_pendientes_aceptacion||0),
@@ -3686,6 +3717,11 @@ function renderOwnerCards(){
 
       <div class="owner-user-stats">
         <div class="owner-user-stat">
+          <span>PENDIENTES POR ATENDER</span>
+          <b>${Number(x.pendientes_por_atender||0)}</b>
+        </div>
+
+        <div class="owner-user-stat">
           <span>EN PRÉSTAMO</span>
           <b>${Number(x.en_prestamo||0)}</b>
         </div>
@@ -3723,6 +3759,13 @@ function renderOwnerCards(){
       </div>
 
       <div class="owner-user-options">
+        ${Number(x.pendientes_por_atender||0)>0
+          ?`<button class="btn small"
+              onclick="event.stopPropagation();openLawyerRequests('${String(x.nombre).replace(/'/g,"\'")}','REGISTRADA POR ARCHIVO')">
+              Por atender (${Number(x.pendientes_por_atender||0)})
+            </button>`
+          :''}
+
         ${Number(x.en_prestamo||0)>0
           ?`<button class="btn secondary small"
               onclick="event.stopPropagation();openOwnerExpedientes('${String(x.nombre).replace(/'/g,"\'")}','loan')">
