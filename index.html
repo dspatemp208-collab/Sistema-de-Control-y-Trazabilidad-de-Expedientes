@@ -4683,9 +4683,11 @@ async function loadStateDetail(estado){
 
     el('stateDetailTable').innerHTML=`
       <div class="note" style="margin:8px 10px 10px">
-        Use <b>Preparar entrega</b> para completar o corregir
+        Use <b>Gestionar</b> para completar o corregir
         <b>Extensión, R.D. y Último folio</b> y, cuando corresponda,
         generar e imprimir el cargo desde la misma opción.
+        El botón <b>Editar</b> permite modificar directamente el expediente;
+        el perfil <b>Administrador</b> puede modificar todo.
       </div>
       <table>
       <thead>
@@ -4721,10 +4723,14 @@ async function loadStateDetail(estado){
                 onclick="showExpHistory('${x.expediente_id}')">
                 Historial
               </button>
-              <button class="btn small"
+              ${hasFullAccess()?`<button class="btn small"
                 onclick="openPendingPrepareDelivery(${i})">
-                Preparar entrega
-              </button>
+                Gestionar
+              </button>`:''}
+              ${hasFullAccess()?`<button class="btn secondary small"
+                onclick="editRecord('${x.expediente_id}')">
+                Editar
+              </button>`:''}
             </div>
           </td>
         </tr>`).join('')}
