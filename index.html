@@ -4704,7 +4704,7 @@ async function loadStateDetail(estado){
         </tr>
       </thead>
       <tbody>
-        ${rows.map(x=>`<tr>
+        ${rows.map((x,i)=>`<tr>
           <td><b>${esc(x.expediente||'—')}</b></td>
           <td>${esc(x.extension||'—')}</td>
           <td>${esc(x.rd||'—')}</td>
@@ -4722,7 +4722,7 @@ async function loadStateDetail(estado){
                 Historial
               </button>
               <button class="btn small"
-                onclick="openEditRequest('${x.solicitud_id}')">
+                onclick="openPendingPrepareDelivery(${i})">
                 Preparar entrega
               </button>
             </div>
@@ -6924,17 +6924,150 @@ function renderRequests(){
 }
 
 
+
+async function openPendingPrepareDelivery(rowIndex){
+  const row=pendingVerifyRows?.[Number(rowIndex)];
+
+  if(!row){
+    alert('No se pudo identificar el expediente seleccionado.');
+    return;
+  }
+
+  try{
+    let requestId=null;
+
+    // 1. Si la función SQL ya devolvió el ID, usarlo directamente.
+    if(row.solicitud_id){
+      requestId=row.solicitud_id;
+    }
+
+    // 2. Buscar en las solicitudes ya cargadas por número + solicitante.
+    if(!requestId){
+      const localMatches=(requestRows||[]).filter(r=>
+        String(r.numero||'').trim()===String(row.solicitud_numero||'').trim()
+        &&
+        norm(r.solicitante||'')===norm(row.solicitante||'')
+      );
+
+      if(localMatches.length===1){
+        requestId=localMatches[0].id;
+      }
+    }
+
+    // 3. Resolver desde la relación expediente ↔ solicitud.
+    // Esto evita equivocarse incluso si existen números repetidos.
+    if(!requestId && row.expediente_id){
+      const {data:links,error:linkError}=await sb
+        .from('solicitud_expedientes')
+        .select('solicitud_id')
+        .eq('expediente_id',row.expediente_id);
+
+      if(linkError)throw linkError;
+
+      const ids=[...new Set((links||[])
+        .map(x=>x.solicitud_id)
+        .filter(Boolean))];
+
+      if(ids.length){
+        const {data:headers,error:headerError}=await sb
+          .from('solicitudes_prestamo')
+          .select('id,numero,solicitante,created_at')
+          .in('id',ids);
+
+        if(headerError)throw headerError;
+
+        const exact=(headers||[])
+          .filter(h=>
+            String(h.numero||'').trim()===
+              String(row.solicitud_numero||'').trim()
+            &&
+            norm(h.solicitante||'')===norm(row.solicitante||'')
+          )
+          .sort((a,b)=>
+            String(b.created_at||'').localeCompare(String(a.created_at||''))
+          );
+
+        if(exact.length){
+          requestId=exact[0].id;
+        }
+      }
+    }
+
+    // 4. Último respaldo: número + solicitante directamente en cabecera.
+    if(!requestId && row.solicitud_numero){
+      let q=sb
+        .from('solicitudes_prestamo')
+        .select('id,numero,solicitante,created_at')
+        .eq('numero',row.solicitud_numero);
+
+      const {data:headers,error:headerError}=await q;
+      if(headerError)throw headerError;
+
+      const exact=(headers||[])
+        .filter(h=>
+          norm(h.solicitante||'')===norm(row.solicitante||'')
+        )
+        .sort((a,b)=>
+          String(b.created_at||'').localeCompare(String(a.created_at||''))
+        );
+
+      if(exact.length){
+        requestId=exact[0].id;
+      }
+    }
+
+    if(!requestId){
+      alert(
+        `No se pudo vincular el expediente ${row.expediente||''} `+
+        `con la solicitud ${row.solicitud_numero||''}.`
+      );
+      return;
+    }
+
+    await openEditRequest(requestId);
+
+  }catch(err){
+    console.error('openPendingPrepareDelivery:',err);
+    alert(
+      err?.message||
+      'No se pudo abrir la solicitud para preparar la entrega.'
+    );
+  }
+}
+
 async function openEditRequest(id){
   if(!hasFullAccess()){
     alert('Solo ADMINISTRADOR o ARCHIVO puede editar una solicitud.');
     return;
   }
 
-  let header=requestRows.find(x=>x.id===id);
+  let header=requestRows.find(x=>
+    x.id===id || String(x.numero||'')===String(id||'')
+  );
 
   if(!header){
     await loadRequests();
-    header=requestRows.find(x=>x.id===id);
+
+    header=requestRows.find(x=>
+      x.id===id || String(x.numero||'')===String(id||'')
+    );
+  }
+
+  // Respaldo adicional: consultar directamente la cabecera por ID.
+  if(!header && id && id!=='undefined' && id!=='null'){
+    const looksUuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(id));
+
+    if(looksUuid){
+      const {data,error}=await sb
+        .from('solicitudes_prestamo')
+        .select('*')
+        .eq('id',id)
+        .maybeSingle();
+
+      if(!error && data){
+        header=data;
+      }
+    }
   }
 
   if(!header){
