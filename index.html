@@ -2269,35 +2269,72 @@
 </div>
 
 
-<!-- Alertas de reasignación -->
+<!-- Centro de alertas -->
 <div class="modal" id="alertsModal">
   <div class="modal-box">
     <div class="modal-head">
       <div>
         <h2>🔔 Centro de alertas</h2>
         <div style="font-size:12px;color:#64748b;margin-top:3px">
-          Avisos de expedientes que fueron reasignados a su responsabilidad.
+          Alertas operativas, solicitudes de entrega a Archivo y avisos de reasignación.
         </div>
       </div>
       <button class="btn secondary small" onclick="closeAlertsModal()">Cerrar</button>
     </div>
 
-    <div class="card" style="margin-bottom:10px">
-      <div class="table-head" style="padding:0">
+    <div class="card" style="margin-bottom:12px">
+      <div class="table-head" style="padding:0;gap:12px;flex-wrap:wrap">
         <div>
-          <strong>Alertas no leídas: <span id="alertsUnreadText">0</span></strong>
+          <strong>Alertas activas: <span id="alertsUnreadText">0</span></strong>
           <div class="note" style="margin-top:3px">
-            Las alertas se conservan hasta que sean marcadas como leídas.
+            Incluye préstamos sin movimiento, solicitudes de entrega a Archivo y reasignaciones no leídas.
           </div>
         </div>
-        <button class="btn secondary small" id="markAllAlertsBtn" onclick="markAllNotificationsRead()">
-          Marcar todas como leídas
-        </button>
       </div>
     </div>
 
-    <div id="notificationsList" class="notification-list">
-      <div class="empty">No hay alertas.</div>
+    <div class="card" style="margin-bottom:12px">
+      <div class="table-head">
+        <div>
+          <strong>⏱ Préstamos &gt; 30 días sin movimiento</strong>
+          <div class="note" style="margin-top:3px;padding:0;border:0;background:transparent">
+            Se calcula desde el último movimiento registrado; si no existe, desde la fecha de entrega.
+          </div>
+        </div>
+        <span class="pill alert"><span id="operationalAlertsCount">0</span> alertas</span>
+      </div>
+      <div id="operationalAlertsList" class="notification-list">
+        <div class="empty">Cargando alertas operativas...</div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:12px">
+      <div class="table-head">
+        <div>
+          <strong>📁 Solicitudes de entrega a Archivo</strong>
+          <div class="note" style="margin-top:3px;padding:0;border:0;background:transparent">
+            Archivo puede requerir un expediente que permanece bajo custodia de un usuario. La custodia cambia recién al confirmar la recepción.
+          </div>
+        </div>
+        <span class="pill alert"><span id="archiveDeliveryAlertsCount">0</span> pendientes</span>
+      </div>
+      <div id="archiveDeliveryAlertsList" class="notification-list">
+        <div class="empty">No hay solicitudes de entrega a Archivo.</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="table-head">
+        <div>
+          <strong>↪ Reasignaciones no leídas: <span id="reassignmentUnreadText">0</span></strong>
+        </div>
+        <button class="btn secondary small" id="markAllAlertsBtn" onclick="markAllNotificationsRead()">
+          Marcar reasignaciones como leídas
+        </button>
+      </div>
+      <div id="notificationsList" class="notification-list">
+        <div class="empty">No hay alertas de reasignación.</div>
+      </div>
     </div>
   </div>
 </div>
@@ -2329,7 +2366,7 @@ let asuntosCatalogo=ASUNTOS_PREDETERMINADOS.map((nombre,i)=>({id:'fallback-asunt
 let selectedIds=new Set(), cargoRows=[];
 let recordMode='single', batchCargoHeader=null;
 const ALL_PAGE_SIZE=50;
-let selectedOwner='', selectedState='', panelQuickFilter='', ownerCardsRows=[], ownerUserKpiSummary={total_custodia:0,en_prestamo:0,reasignados:0,devoluciones_pendientes_aceptacion:0,devoluciones_realizadas:0,alertas_30:0}, userPanelMode='TODOS', userPanelSummary={todos:0,en_prestamo:0,reasignados_por_mi:0,reasignados_a_mi:0,devueltos:0,alertas_30:0}, currentRequestId='', currentRequest=null, requestSelectedIds=new Set(), requestSearchSelectedIds=new Set(), requestDraftItems=[], addToExistingRequestId='', page=0, panelCount=0, allPage=0, allCountValue=0, allTotalGeneral=0, stateDetailCount=0, panelTimer=null, allTimer=null, historyTimer=null, cargosTimer=null, requestsTimer=null, returnRequestsTimer=null, notificationsPollTimer=null;
+let selectedOwner='', selectedState='', panelQuickFilter='', ownerCardsRows=[], ownerUserKpiSummary={total_custodia:0,en_prestamo:0,reasignados:0,devoluciones_pendientes_aceptacion:0,devoluciones_realizadas:0,alertas_30:0}, userPanelMode='TODOS', userPanelSummary={todos:0,en_prestamo:0,reasignados_por_mi:0,reasignados_a_mi:0,devueltos:0,alertas_30:0}, operationalAlertRows=[], operationalAlertCount=0, archiveDeliveryRows=[], archiveDeliveryAlertCount=0, currentRequestId='', currentRequest=null, requestSelectedIds=new Set(), requestSearchSelectedIds=new Set(), requestDraftItems=[], addToExistingRequestId='', page=0, panelCount=0, allPage=0, allCountValue=0, allTotalGeneral=0, stateDetailCount=0, panelTimer=null, allTimer=null, historyTimer=null, cargosTimer=null, requestsTimer=null, returnRequestsTimer=null, notificationsPollTimer=null;
 
 function el(id){return document.getElementById(id)}
 
@@ -2874,8 +2911,12 @@ async function afterLogin(){
   applyRoleUI();
   updateSelectionUI();
 
-  // Las alertas están disponibles para todos los perfiles.
-  await loadNotifications(true);
+  // Centro de alertas disponible para todos los perfiles.
+  await Promise.all([
+    loadNotifications(true),
+    loadOperationalAlerts(true),
+    loadArchiveDeliveryRequests(true)
+  ]);
   startNotificationPolling();
 
   if(isLimitedUser() && !currentProfile.nombre_personal){
@@ -2900,18 +2941,233 @@ async function afterLogin(){
 
 function updateAlertsBadge(){
   const badge=el('alertsBadge');
-  if(!badge)return;
+  const totalActive=Number(notificationUnread||0)+Number(operationalAlertCount||0)+Number(archiveDeliveryAlertCount||0);
 
-  badge.textContent=notificationUnread>99?'99+':String(notificationUnread);
-  badge.classList.toggle('zero',notificationUnread===0);
-
-  if(el('alertsUnreadText')){
-    el('alertsUnreadText').textContent=notificationUnread;
+  if(badge){
+    badge.textContent=totalActive>99?'99+':String(totalActive);
+    badge.classList.toggle('zero',totalActive===0);
+    badge.title=`${operationalAlertCount||0} préstamo(s) >30 días · ${archiveDeliveryAlertCount||0} entrega(s) a Archivo · ${notificationUnread||0} reasignación(es) no leídas`;
   }
+
+  if(el('alertsUnreadText'))el('alertsUnreadText').textContent=totalActive;
+  if(el('operationalAlertsCount'))el('operationalAlertsCount').textContent=operationalAlertCount||0;
+  if(el('reassignmentUnreadText'))el('reassignmentUnreadText').textContent=notificationUnread||0;
+  if(el('archiveDeliveryAlertsCount'))el('archiveDeliveryAlertsCount').textContent=archiveDeliveryAlertCount||0;
 
   if(el('markAllAlertsBtn')){
     el('markAllAlertsBtn').disabled=notificationUnread===0;
   }
+}
+
+async function loadOperationalAlerts(silent=false){
+  if(!sb||!session)return;
+
+  let q=sb
+    .from('expedientes')
+    .select('id,expediente,extension,rd,responsable,estado,modalidad,fecha_entrega,fecha_devolucion,cargo,ultimo_folio,observacion')
+    .is('fecha_devolucion',null)
+    .not('fecha_entrega','is',null)
+    .neq('modalidad','COPIA DIGITAL')
+    .order('fecha_entrega',{ascending:true})
+    .limit(1000);
+
+  // Para el perfil USUARIO reforzamos el alcance a su propio nombre, además del RLS.
+  if(isLimitedUser() && currentProfile?.nombre_personal){
+    q=q.eq('responsable',currentProfile.nombre_personal);
+  }
+
+  const {data,error}=await q;
+
+  if(error){
+    console.warn('alertas operativas >30 días:',error.message);
+    operationalAlertRows=[];
+    operationalAlertCount=0;
+    updateAlertsBadge();
+    if(!silent && el('operationalAlertsList')){
+      el('operationalAlertsList').innerHTML=`<div class="empty">${esc(error.message)}</div>`;
+    }
+    return;
+  }
+
+  const enriched=await attachLatestMovementToRecords(data||[]);
+
+  operationalAlertRows=enriched
+    .map(r=>{
+      const state=operationalStatus(r);
+      const lastDate=r.ultimo_movimiento_fecha||r.fecha_entrega;
+      const dias=lastDate?businessDays(lastDate,null):0;
+      return {...r,_estado_operativo:state,_ultima_fecha_alerta:lastDate,_dias_alerta:dias};
+    })
+    .filter(r=>
+      ['EN PRÉSTAMO','REASIGNADO'].includes(r._estado_operativo) &&
+      Number(r._dias_alerta||0)>30
+    )
+    .sort((a,b)=>Number(b._dias_alerta||0)-Number(a._dias_alerta||0));
+
+  operationalAlertCount=operationalAlertRows.length;
+  updateAlertsBadge();
+
+  if(el('alertsModal')?.classList.contains('show')){
+    renderOperationalAlerts();
+  }
+}
+
+function renderOperationalAlerts(){
+  const list=el('operationalAlertsList');
+  if(!list)return;
+
+  if(!operationalAlertRows.length){
+    list.innerHTML='<div class="empty">No hay expedientes con más de 30 días hábiles sin movimiento.</div>';
+    return;
+  }
+
+  list.innerHTML=operationalAlertRows.map(r=>`
+    <div class="notification-item unread">
+      <div class="notification-head">
+        <div>
+          <div class="notification-title">${esc(r.expediente||'—')} · ${esc(r._estado_operativo||'')}</div>
+          <div class="notification-meta">
+            Responsable: <b>${esc(r.responsable||'—')}</b>
+            ${r.cargo?' · Cargo '+esc(r.cargo):''}
+          </div>
+        </div>
+        <span class="pill alert">${Number(r._dias_alerta||0)} días háb.</span>
+      </div>
+      <div class="notification-message">
+        Sin movimiento desde ${fmtDate(r._ultima_fecha_alerta)}.
+        ${r.extension?' Ext.: '+esc(r.extension)+'.':''}
+        ${r.rd?' R.D.: '+esc(r.rd)+'.':''}
+      </div>
+      <div class="notification-actions">
+        <button class="btn small" onclick="closeAlertsModal();manageExpedienteFromPanel('${r.id}')">
+          Gestionar expediente
+        </button>
+      </div>
+    </div>
+  `).join('');
+}
+
+
+async function loadArchiveDeliveryRequests(silent=false){
+  if(!sb||!session)return;
+
+  const {data,error}=await sb.rpc('listar_solicitudes_entrega_archivo_pendientes');
+
+  if(error){
+    // Si el SQL piloto todavía no fue instalado, no bloqueamos el resto del sistema.
+    console.warn('solicitudes entrega archivo:',error.message);
+    archiveDeliveryRows=[];
+    archiveDeliveryAlertCount=0;
+    updateAlertsBadge();
+    if(!silent && el('archiveDeliveryAlertsList')){
+      el('archiveDeliveryAlertsList').innerHTML=
+        `<div class="empty">${esc(error.message)}</div>`;
+    }
+    return;
+  }
+
+  archiveDeliveryRows=data||[];
+  archiveDeliveryAlertCount=archiveDeliveryRows.length;
+  updateAlertsBadge();
+
+  if(el('alertsModal')?.classList.contains('show')){
+    renderArchiveDeliveryRequests();
+  }
+}
+
+function renderArchiveDeliveryRequests(){
+  const list=el('archiveDeliveryAlertsList');
+  if(!list)return;
+
+  if(!archiveDeliveryRows.length){
+    list.innerHTML='<div class="empty">No hay solicitudes de entrega a Archivo pendientes.</div>';
+    return;
+  }
+
+  list.innerHTML=archiveDeliveryRows.map(r=>{
+    const isPrepared=String(r.estado||'').toUpperCase()==='PREPARADA';
+    const mine=!hasFullAccess();
+
+    return `<div class="notification-item ${isPrepared?'':'unread'}">
+      <div class="notification-head">
+        <div>
+          <div class="notification-title">📁 ${esc(r.expediente||'—')} · ${esc(r.estado||'SOLICITADA')}</div>
+          <div class="notification-meta">
+            Responsable: <b>${esc(r.responsable_solicitado||'—')}</b>
+            ${r.solicitud_numero?' · Solicitud '+esc(r.solicitud_numero):''}
+            ${r.cargo_numero?' · Cargo '+esc(r.cargo_numero):''}
+          </div>
+        </div>
+        <span class="pill ${isPrepared?'returned':'alert'}">${isPrepared?'PREPARADA':'SOLICITADA'}</span>
+      </div>
+      <div class="notification-message">
+        Archivo solicitó la entrega el ${fmtDate(r.fecha_solicitud)}.
+        ${r.solicitado_por_nombre?' Solicitado por: '+esc(r.solicitado_por_nombre)+'.':''}
+        ${r.observacion?' '+esc(r.observacion):''}
+      </div>
+      <div class="notification-actions">
+        ${mine && !isPrepared
+          ?`<button class="btn" onclick="markArchiveDeliveryPrepared('${r.id}')">Preparar entrega a Archivo</button>`
+          :''}
+        ${mine && isPrepared
+          ?'<span class="note">Entrega preparada. Falta que Archivo confirme la recepción física.</span>'
+          :''}
+        ${hasFullAccess()
+          ?`<button class="btn" onclick="confirmArchiveDeliveryReceived('${r.id}')">Confirmar recepción</button>`
+          :''}
+        ${r.expediente_id
+          ?`<button class="btn secondary small" onclick="closeAlertsModal();manageExpedienteFromPanel('${r.expediente_id}')">Gestionar expediente</button>`
+          :''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function markArchiveDeliveryPrepared(id){
+  if(!confirm('¿Confirmar que el expediente está preparado para ser entregado a Archivo? La custodia seguirá a su nombre hasta que Archivo confirme la recepción.'))return;
+
+  const {error}=await sb.rpc('marcar_entrega_archivo_preparada',{
+    p_solicitud_entrega_id:id
+  });
+
+  if(error){alert(error.message);return}
+
+  showToast('Entrega preparada. Archivo debe confirmar la recepción.');
+  await Promise.all([
+    loadArchiveDeliveryRequests(true),
+    loadNotifications(true),
+    loadOperationalAlerts(true),
+    loadPanel(),
+    loadRequests()
+  ]);
+  renderArchiveDeliveryRequests();
+}
+
+async function confirmArchiveDeliveryReceived(id){
+  if(!hasFullAccess())return;
+
+  const ubicacion=prompt('Ubicación donde quedará el expediente:', 'ARCHIVO DE GESTIÓN');
+  if(ubicacion===null)return;
+  if(!String(ubicacion).trim()){
+    alert('Debe indicar la ubicación de retorno.');
+    return;
+  }
+
+  if(!confirm(`¿Confirmar que Archivo recibió físicamente el expediente y trasladar la custodia a ${ubicacion.trim()}?`))return;
+
+  const {data,error}=await sb.rpc('confirmar_recepcion_entrega_archivo',{
+    p_solicitud_entrega_id:id,
+    p_ubicacion_retorno:ubicacion.trim()
+  });
+
+  if(error){alert(error.message);return}
+
+  showToast(`${data?.expediente||'Expediente'} recibido por Archivo`);
+  await Promise.all([
+    loadArchiveDeliveryRequests(true),loadOperationalAlerts(true),
+    loadSummary(),loadPanel(),loadAll(),loadStates(),loadRequests(),loadHistory()
+  ]);
+  renderArchiveDeliveryRequests();
 }
 
 async function loadNotifications(silent=false){
@@ -3014,10 +3270,18 @@ async function openAlertsModal(){
   if(!session)return;
 
   el('alertsModal').classList.add('show');
-  el('notificationsList').innerHTML='<div class="empty">Cargando alertas...</div>';
+  if(el('notificationsList'))el('notificationsList').innerHTML='<div class="empty">Cargando reasignaciones...</div>';
+  if(el('operationalAlertsList'))el('operationalAlertsList').innerHTML='<div class="empty">Cargando alertas operativas...</div>';
 
-  await loadNotifications(false);
+  await Promise.all([
+    loadNotifications(false),
+    loadOperationalAlerts(false),
+    loadArchiveDeliveryRequests(false)
+  ]);
   renderNotifications();
+  renderOperationalAlerts();
+  renderArchiveDeliveryRequests();
+  updateAlertsBadge();
 }
 
 function closeAlertsModal(){
@@ -3071,12 +3335,18 @@ function startNotificationPolling(){
   notificationsPollTimer=setInterval(()=>{
     if(!document.hidden && session){
       loadNotifications(true);
+      loadOperationalAlerts(true);
+      loadArchiveDeliveryRequests(true);
     }
   },30000);
 
   if(!window.__notificationFocusHook){
     window.addEventListener('focus',()=>{
-      if(session)loadNotifications(true);
+      if(session){
+        loadNotifications(true);
+        loadOperationalAlerts(true);
+        loadArchiveDeliveryRequests(true);
+      }
     });
     window.__notificationFocusHook=true;
   }
@@ -8512,7 +8782,8 @@ function renderRequestActions(){
   if(requestDetailRows.some(x=>x.estado_item==='EN PRÉSTAMO')){
     actions += `
       <button class="btn secondary" onclick="reassignRequestItems()">Reasignar expedientes EN PRÉSTAMO</button>
-      <span class="note">Para reasignar, seleccione uno o más expedientes que ya estén EN PRÉSTAMO y elija el nuevo responsable en la parte superior.</span>`;
+      <button class="btn" onclick="requestArchiveDeliveryItems()">📁 Solicitar entrega a Archivo</button>
+      <span class="note">Para reasignar o solicitar la entrega a Archivo, seleccione uno o más expedientes que ya estén EN PRÉSTAMO. La solicitud de entrega no cambia la custodia hasta que Archivo confirme la recepción.</span>`;
   }else if(hasPendingAccepted){
     actions += `<span class="note">La reasignación se habilitará aquí cuando alguno de los expedientes de esta solicitud ya se encuentre EN PRÉSTAMO.</span>`;
   }
@@ -8753,6 +9024,51 @@ async function reassignRequestItems(){
   }else{
     await Promise.all([loadSummary(),loadPanel(),loadRequests()]);
   }
+  await refreshRequestDetail();
+}
+
+
+async function requestArchiveDeliveryItems(){
+  if(!hasFullAccess()){
+    el('rqActionStatus').textContent='Solo Archivo o Administrador puede iniciar esta solicitud.';
+    return;
+  }
+
+  const ids=[...requestSelectedIds];
+  if(!ids.length){
+    el('rqActionStatus').textContent='Seleccione uno o más expedientes EN PRÉSTAMO.';
+    return;
+  }
+
+  const selected=requestDetailRows.filter(x=>ids.includes(x.expediente_id));
+  if(selected.some(x=>x.estado_item!=='EN PRÉSTAMO')){
+    el('rqActionStatus').textContent='La entrega a Archivo solo puede solicitarse para expedientes EN PRÉSTAMO.';
+    return;
+  }
+
+  if(!confirm(`¿Solicitar al responsable actual la entrega de ${ids.length} expediente(s) a Archivo? La custodia no cambiará hasta confirmar la recepción.`))return;
+
+  el('rqActionStatus').textContent='Registrando solicitud de entrega a Archivo...';
+
+  const {data,error}=await sb.rpc('solicitar_entrega_archivo',{
+    p_solicitud_id:currentRequestId,
+    p_expediente_ids:ids,
+    p_observacion:null
+  });
+
+  if(error){
+    el('rqActionStatus').textContent=error.message;
+    return;
+  }
+
+  requestSelectedIds.clear();
+  showToast(`${data?.solicitados||ids.length} solicitud(es) de entrega enviada(s)`);
+
+  await Promise.all([
+    loadArchiveDeliveryRequests(true),loadOperationalAlerts(true),
+    loadSummary(),loadPanel(),loadAll(),loadStates(),loadRequests(),loadHistory()
+  ]);
+
   await refreshRequestDetail();
 }
 
