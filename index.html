@@ -1864,7 +1864,7 @@
       </div>
       <div class="field">
         <label>Nuevo responsable (reasignación de expedientes EN PRÉSTAMO)</label>
-        <select id="rqDNuevoResponsable"></select>
+        <select id="rqDNuevoResponsable" onchange="syncUserReturnButtonState()"></select>
       </div>
       <div class="field">
         <label>Ubicación al devolver</label>
@@ -3121,7 +3121,7 @@ function renderArchiveDeliveryRequests(){
       </div>
       <div class="notification-actions">
         ${mine && !isPrepared
-          ?`<button class="btn" onclick="openArchiveDeliveryReturnInRequest('${r.id}')">Gestionar devolución</button>`
+          ?`<button class="btn" onclick="openArchiveDeliveryReturnInRequest('${r.id}')">Gestionar expediente</button>`
           :''}
         ${mine && isPrepared
           ?'<span class="note">Devolución registrada por el usuario. Falta que Archivo confirme la recepción física.</span>'
@@ -3178,7 +3178,7 @@ async function openArchiveDeliveryReturnInRequest(id){
     return;
   }
 
-  if(requestItemCanRequestReturn(target)){
+  if(requestItemCanManageArchiveDelivery(target)){
     requestSelectedIds.add(target.expediente_id);
   }
 
@@ -3189,7 +3189,7 @@ async function openArchiveDeliveryReturnInRequest(id){
   if(el('rqActionStatus')){
     el('rqActionStatus').textContent=
       `Archivo solicitó la devolución de ${target.expediente||'este expediente'}. `+
-      'Actualice la R.D. si corresponde, ingrese obligatoriamente el Último folio y pulse Devolver.';
+      'Actualice la R.D. si corresponde e ingrese obligatoriamente el Último folio. Luego puede Reasignar o Devolver el expediente.';
   }
 
   setTimeout(()=>{
@@ -8622,6 +8622,15 @@ function requestItemCanConfirmReturn(x){
   return hasFullAccess() && x.estado_item==='DEVOLUCIÓN SOLICITADA';
 }
 
+function requestItemCanManageArchiveDelivery(x){
+  if(!isLimitedUser() || !activeArchiveDeliveryRequestId)return false;
+  if(!isArchiveRequestedReturnItem(x))return false;
+  if(!['DEVOLUCIÓN SOLICITADA','EN PRÉSTAMO'].includes(x.estado_item))return false;
+
+  const mine=currentProfile?.nombre_personal||'';
+  return !!mine && norm(x.responsable_actual||x.ubicacion_actual||'')===norm(mine);
+}
+
 function requestItemSelectable(x){
   if(hasFullAccess()){
     return requestItemCanAssignCargo(x) ||
@@ -8630,10 +8639,10 @@ function requestItemSelectable(x){
       requestItemCanConfirmReturn(x);
   }
 
-  // Si Archivo solicitó específicamente la devolución, esta pantalla
-  // se limita a ese expediente para no mezclar devoluciones ni reasignaciones.
+  // Si Archivo solicitó específicamente el expediente, esta pantalla
+  // se limita a ese expediente, pero permite REASIGNAR o DEVOLVER.
   if(activeArchiveDeliveryRequestId){
-    return isArchiveRequestedReturnItem(x) && requestItemCanRequestReturn(x);
+    return requestItemCanManageArchiveDelivery(x);
   }
 
   return requestItemCanReassign(x) || requestItemCanRequestReturn(x);
@@ -8677,7 +8686,7 @@ function renderRequestDetailItems(){
                    value="${esc(x.rd||'')}"
                    placeholder="R.D."
                    oninput="updateRequestDetailPendingField('${x.expediente_id}','rd',this.value)">`
-          :(isLimitedUser() && requestItemCanRequestReturn(x) && isArchiveRequestedReturnItem(x)
+          :(isLimitedUser() && (requestItemCanRequestReturn(x)||requestItemCanManageArchiveDelivery(x)) && isArchiveRequestedReturnItem(x)
             ?`<input class="request-item-edit rd user-return-rd"
                      data-user-rd-id="${x.expediente_id}"
                      value="${esc(x.rd||'')}"
@@ -8690,7 +8699,7 @@ function renderRequestDetailItems(){
                    value="${esc(x.ultimo_folio||'')}"
                    placeholder="Último folio"
                    oninput="updateRequestDetailPendingField('${x.expediente_id}','ultimo_folio',this.value)">`
-          :(isLimitedUser() && isArchiveRequestedReturnItem(x) && (requestItemCanReassign(x)||requestItemCanRequestReturn(x))
+          :(isLimitedUser() && isArchiveRequestedReturnItem(x) && (requestItemCanReassign(x)||requestItemCanRequestReturn(x)||requestItemCanManageArchiveDelivery(x))
             ?`<input class="request-item-edit folio user-required-folio"
                      data-user-folio-id="${x.expediente_id}"
                      value="${esc(x.ultimo_folio||'')}"
@@ -8729,7 +8738,7 @@ function updateRequestDetailPendingField(expedienteId,field,value){
 function updateUserCustodyReturnField(expedienteId,field,value){
   const row=(requestDetailRows||[]).find(x=>String(x.expediente_id)===String(expedienteId));
   if(!row || !isLimitedUser())return;
-  if(!requestItemCanReassign(row) && !requestItemCanRequestReturn(row))return;
+  if(!requestItemCanReassign(row) && !requestItemCanRequestReturn(row) && !requestItemCanManageArchiveDelivery(row))return;
   if(!['rd','ultimo_folio'].includes(field))return;
   row[field]=value;
   syncUserReturnButtonState();
@@ -8744,24 +8753,38 @@ function userReturnSelectionReady(){
   const ids=[...requestSelectedIds];
   if(!ids.length)return false;
   const rows=(requestDetailRows||[]).filter(x=>ids.includes(x.expediente_id));
-  if(!rows.length || rows.some(x=>!requestItemCanRequestReturn(x)))return false;
+  if(!rows.length)return false;
 
   if(activeArchiveDeliveryRequestId){
     const req=currentArchiveDeliveryRequest();
     if(!req || ids.length!==1 || String(ids[0])!==String(req.expediente_id))return false;
+    if(rows.some(x=>!requestItemCanManageArchiveDelivery(x)))return false;
+  }else if(rows.some(x=>!requestItemCanRequestReturn(x))){
+    return false;
   }
 
   return rows.every(x=>String(x.ultimo_folio||'').trim());
 }
 
 function syncUserReturnButtonState(){
-  const btn=el('btnEffectReturn');
-  if(!btn)return;
   const ready=userReturnSelectionReady();
-  btn.disabled=!ready;
-  btn.title=ready
-    ?'Devolver el expediente y dejarlo pendiente de recepción por Archivo'
-    :'Ingrese el Último folio obligatorio para habilitar Devolver';
+
+  const btn=el('btnEffectReturn');
+  if(btn){
+    btn.disabled=!ready;
+    btn.title=ready
+      ?'Devolver el expediente y dejarlo pendiente de recepción por Archivo'
+      :'Ingrese el Último folio obligatorio para habilitar Devolver';
+  }
+
+  const reassignBtn=el('btnEffectReassign');
+  if(reassignBtn){
+    const nuevo=String(el('rqDNuevoResponsable')?.value||'').trim();
+    reassignBtn.disabled=!ready || !nuevo;
+    reassignBtn.title=!ready
+      ?'Ingrese el Último folio obligatorio para habilitar Reasignar'
+      :(!nuevo?'Seleccione el nuevo responsable':'Reasignar el expediente al nuevo responsable');
+  }
 }
 
 async function saveUserReturnDataBeforeReturn(expedienteIds){
@@ -8922,6 +8945,7 @@ function renderRequestMovements(){
 function renderRequestActions(){
   const r=currentRequest||{};
   const hasMyLoan=requestDetailRows.some(x=>requestItemCanReassign(x));
+  const hasArchiveRequestedItem=requestDetailRows.some(x=>requestItemCanManageArchiveDelivery(x));
 
   if(isLimitedUser()){
     el('rqDAtiende').disabled=true;
@@ -8942,12 +8966,16 @@ function renderRequestActions(){
       actions='<span class="note">Solicitud pendiente por atender. Archivo ya registró la aceptación y todavía no se ha generado el cargo.</span>';
     }
 
-    if(hasMyLoan){
-      const archiveRequested=!!activeArchiveDeliveryRequestId;
+    if(hasArchiveRequestedItem){
       actions += `
-        <span class="note">${archiveRequested
-          ?'<b>Archivo solicitó este expediente.</b> Actualice la <b>R.D.</b> si corresponde e ingrese obligatoriamente el <b>Último folio</b>. Luego pulse <b>Devolver</b>.'
-          :'<b>Para devolver:</b> actualice la <b>R.D.</b> si corresponde e ingrese obligatoriamente el <b>Último folio</b>. Luego seleccione <b>Devolver</b>.'} Los cambios quedan registrados automáticamente en el Historial.</span>
+        <span class="note"><b>Archivo solicitó este expediente.</b> Actualice la <b>R.D.</b> si corresponde e ingrese obligatoriamente el <b>Último folio</b>. Después puede <b>Reasignar</b> si el expediente pasó a otro usuario, o <b>Devolver</b> si será entregado a Archivo. Si se reasigna, la solicitud de Archivo seguirá activa para el nuevo responsable.</span>
+        <button class="btn secondary" id="btnEffectReassign" onclick="userReassignSelectedItems()" disabled>Reasignar</button>
+        <button class="btn" id="btnEffectReturn" onclick="requestReturnItems()" disabled>Devolver</button>`;
+      setTimeout(syncUserReturnButtonState,0);
+    }else if(hasMyLoan){
+      actions += `
+        <span class="note"><b>Gestionar expediente:</b> ingrese obligatoriamente el <b>Último folio</b>. Puede actualizar la <b>R.D.</b> si corresponde y luego elegir entre <b>Reasignar</b> o <b>Devolver</b>.</span>
+        <button class="btn secondary" id="btnEffectReassign" onclick="userReassignSelectedItems()" disabled>Reasignar</button>
         <button class="btn" id="btnEffectReturn" onclick="requestReturnItems()" disabled>Devolver</button>`;
       setTimeout(syncUserReturnButtonState,0);
     }
@@ -9199,6 +9227,73 @@ async function deliverRequest(){
   el('rqActionStatus').textContent='Primero acepte la solicitud y luego asigne un cargo nuevo o existente.';
 }
 
+async function userReassignSelectedItems(){
+  if(activeArchiveDeliveryRequestId){
+    return reassignArchiveRequestedItem();
+  }
+  return reassignRequestItems();
+}
+
+async function reassignArchiveRequestedItem(){
+  if(!isLimitedUser())return;
+
+  const req=currentArchiveDeliveryRequest();
+  const ids=[...requestSelectedIds];
+  const nuevo=String(el('rqDNuevoResponsable')?.value||'').trim();
+
+  if(!req || ids.length!==1 || String(ids[0])!==String(req.expediente_id)){
+    el('rqActionStatus').textContent='Seleccione únicamente el expediente solicitado por Archivo.';
+    return;
+  }
+
+  const row=(requestDetailRows||[]).find(x=>String(x.expediente_id)===String(req.expediente_id));
+  if(!row || !requestItemCanManageArchiveDelivery(row)){
+    el('rqActionStatus').textContent='Este expediente ya no está disponible para esta gestión.';
+    return;
+  }
+
+  if(!String(row.ultimo_folio||'').trim()){
+    el('rqActionStatus').textContent='Ingrese obligatoriamente el Último folio antes de reasignar.';
+    document.querySelector(`[data-user-folio-id="${row.expediente_id}"]`)?.focus();
+    return;
+  }
+
+  if(!nuevo){
+    el('rqActionStatus').textContent='Seleccione el nuevo responsable.';
+    el('rqDNuevoResponsable')?.focus();
+    return;
+  }
+
+  if(!confirm(`¿Reasignar ${row.expediente} a ${nuevo}? La solicitud de entrega de Archivo seguirá activa y pasará al nuevo responsable.`))return;
+
+  el('rqActionStatus').textContent='Actualizando datos y reasignando expediente...';
+
+  const {data,error}=await sb.rpc('gestionar_entrega_archivo_usuario',{
+    p_solicitud_entrega_id:activeArchiveDeliveryRequestId,
+    p_accion:'REASIGNAR',
+    p_rd:String(row.rd||'').trim()||null,
+    p_ultimo_folio:String(row.ultimo_folio||'').trim(),
+    p_nuevo_responsable:nuevo
+  });
+
+  if(error){
+    el('rqActionStatus').textContent=error.message;
+    return;
+  }
+
+  const exp=row.expediente||'Expediente';
+  activeArchiveDeliveryRequestId='';
+  requestSelectedIds.clear();
+  showToast(`${exp} reasignado a ${data?.nuevo_responsable||nuevo}. Archivo mantiene la solicitud de entrega.`);
+
+  await Promise.all([
+    loadArchiveDeliveryRequests(true),loadOperationalAlerts(true),loadNotifications(true),
+    loadPanel(),loadRequests(),loadHistory()
+  ]);
+
+  closeRequestDetail();
+}
+
 async function reassignRequestItems(){
   const ids=(requestDetailRows||[])
     .filter(x=>requestSelectedIds.has(x.expediente_id) && requestItemCanReassign(x))
@@ -9291,13 +9386,65 @@ async function requestReturnItems(){
   const obs=el('rqDObservacion').value.trim();
 
   if(!ids.length){
-    el('rqActionStatus').textContent='Seleccione uno o más expedientes EN PRÉSTAMO.';
+    el('rqActionStatus').textContent='Seleccione uno o más expedientes.';
     return;
   }
 
+  // Caso especial: Archivo solicitó expresamente este expediente.
+  if(activeArchiveDeliveryRequestId){
+    const req=currentArchiveDeliveryRequest();
+    if(!req || ids.length!==1 || String(ids[0])!==String(req.expediente_id)){
+      el('rqActionStatus').textContent='Seleccione únicamente el expediente solicitado por Archivo.';
+      return;
+    }
+
+    const row=(requestDetailRows||[]).find(x=>String(x.expediente_id)===String(req.expediente_id));
+    if(!row || !requestItemCanManageArchiveDelivery(row)){
+      el('rqActionStatus').textContent='Este expediente ya no está disponible para esta gestión.';
+      return;
+    }
+
+    if(!String(row.ultimo_folio||'').trim()){
+      el('rqActionStatus').textContent='Ingrese obligatoriamente el Último folio antes de devolver.';
+      document.querySelector(`[data-user-folio-id="${row.expediente_id}"]`)?.focus();
+      return;
+    }
+
+    if(!confirm(`¿Devolver ${row.expediente} a Archivo? Se guardarán la R.D. y el Último folio y quedará pendiente la confirmación de recepción.`))return;
+
+    el('rqActionStatus').textContent='Actualizando datos y registrando devolución a Archivo...';
+
+    const {data,error}=await sb.rpc('gestionar_entrega_archivo_usuario',{
+      p_solicitud_entrega_id:activeArchiveDeliveryRequestId,
+      p_accion:'DEVOLVER',
+      p_rd:String(row.rd||'').trim()||null,
+      p_ultimo_folio:String(row.ultimo_folio||'').trim(),
+      p_nuevo_responsable:null
+    });
+
+    if(error){
+      el('rqActionStatus').textContent=error.message;
+      return;
+    }
+
+    const expedienteNombre=row.expediente||'Expediente';
+    activeArchiveDeliveryRequestId='';
+    requestSelectedIds.clear();
+    showToast(`${expedienteNombre}: devolución registrada. Archivo debe confirmar la recepción.`);
+
+    await Promise.all([
+      loadArchiveDeliveryRequests(true),loadOperationalAlerts(true),loadNotifications(true),
+      loadPanel(),loadRequests(),loadHistory()
+    ]);
+
+    closeRequestDetail();
+    return;
+  }
+
+  // Devolución normal iniciada por el usuario.
   const selected=requestDetailRows.filter(x=>ids.includes(x.expediente_id));
   if(selected.some(x=>!requestItemCanRequestReturn(x))){
-    el('rqActionStatus').textContent='Solo puede solicitar la devolución de expedientes EN PRÉSTAMO que actualmente están bajo su responsabilidad.';
+    el('rqActionStatus').textContent='Solo puede devolver expedientes EN PRÉSTAMO que actualmente están bajo su responsabilidad.';
     return;
   }
 
@@ -9306,52 +9453,9 @@ async function requestReturnItems(){
   const datosOk=await saveUserReturnDataBeforeReturn(ids);
   if(!datosOk)return;
 
-  // Si la devolución fue solicitada previamente por Archivo, usamos el
-  // mismo formulario pero cerramos el paso como ENTREGA PREPARADA.
-  // La custodia seguirá con el usuario hasta que Archivo confirme recepción.
-  if(activeArchiveDeliveryRequestId){
-    const req=currentArchiveDeliveryRequest();
-    if(!req){
-      el('rqActionStatus').textContent='No se encontró la solicitud de devolución realizada por Archivo.';
-      return;
-    }
-    if(ids.length!==1 || String(ids[0])!==String(req.expediente_id)){
-      el('rqActionStatus').textContent='Seleccione únicamente el expediente solicitado por Archivo.';
-      return;
-    }
-
-    el('rqActionStatus').textContent='Registrando devolución solicitada por Archivo...';
-
-    const {error:archiveError}=await sb.rpc('marcar_entrega_archivo_preparada',{
-      p_solicitud_entrega_id:activeArchiveDeliveryRequestId
-    });
-
-    if(archiveError){
-      el('rqActionStatus').textContent=archiveError.message;
-      return;
-    }
-
-    const expedienteNombre=req.expediente||'Expediente';
-    activeArchiveDeliveryRequestId='';
-    requestSelectedIds.clear();
-    showToast(`${expedienteNombre}: devolución registrada. Archivo debe confirmar la recepción.`);
-
-    await Promise.all([
-      loadArchiveDeliveryRequests(true),
-      loadOperationalAlerts(true),
-      loadNotifications(true),
-      loadPanel(),
-      loadRequests(),
-      loadHistory()
-    ]);
-
-    closeRequestDetail();
-    return;
-  }
-
   el('rqActionStatus').textContent='Registrando devolución...';
 
-  const {data,error}=await sb.rpc('solicitar_devolucion_expedientes',{
+  const {error}=await sb.rpc('solicitar_devolucion_solicitud_expedientes',{
     p_solicitud_id:currentRequestId,
     p_expediente_ids:ids,
     p_observacion:obs||null
@@ -9363,15 +9467,12 @@ async function requestReturnItems(){
   }
 
   requestSelectedIds.clear();
-  showToast(`${data?.solicitados||ids.length} expediente(s) devuelto(s), pendiente(s) de recepción por Archivo`);
+  showToast('Devolución registrada. Archivo debe confirmar la recepción.');
 
   if(hasFullAccess()){
-    await Promise.all([
-      loadSummary(),loadPanel(),loadAll(),loadStates(),
-      loadRequestsByLawyer(),loadHistory()
-    ]);
+    await Promise.all([loadSummary(),loadPanel(),loadAll(),loadStates(),loadRequestsByLawyer(),loadHistory()]);
   }else{
-    await Promise.all([loadSummary(),loadPanel(),loadRequests()]);
+    await Promise.all([loadSummary(),loadPanel(),loadRequests(),loadHistory()]);
   }
 
   await refreshRequestDetail();
