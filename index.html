@@ -760,6 +760,8 @@
 .datetime-date{font-weight:700;color:var(--navy);line-height:1.15;white-space:nowrap}
 .datetime-time{display:inline-flex;align-items:center;justify-content:center;padding:4px 8px;border-radius:999px;background:#eef4ff;border:1px solid #cddcf7;color:var(--navy);font-size:11px;font-weight:700;line-height:1;white-space:nowrap}
 
+
+.workflow-intro{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:#f8fafc}.workflow-intro strong{color:var(--navy)}.workflow-steps{display:flex;gap:7px;flex-wrap:wrap;margin-top:7px}.workflow-step{display:inline-flex;align-items:center;gap:5px;padding:5px 8px;border-radius:999px;background:#fff;border:1px solid var(--line);color:var(--muted);font-size:10px;font-weight:700}.workflow-step b{color:var(--navy)}.request-workflow-kpis{display:grid;grid-template-columns:repeat(4,minmax(150px,1fr));gap:10px;margin-bottom:12px}.request-workflow-kpis .kpi{cursor:pointer;min-height:110px;transition:.12s ease}.request-workflow-kpis .kpi:hover{transform:translateY(-1px);box-shadow:0 5px 15px rgba(15,39,71,.08)}.request-workflow-kpis .kpi.selected{box-shadow:0 0 0 2px #173f6b inset}.request-workflow-kpis .kpi .label{font-size:10px;line-height:1.25}.request-workflow-kpis .kpi .value{margin-top:5px}.note-mini{margin-top:5px;font-size:9px;line-height:1.25;color:var(--muted)}.cargo-kpis{display:grid;grid-template-columns:repeat(4,minmax(160px,1fr));gap:10px;margin-bottom:12px}.cargo-kpis .kpi{cursor:pointer;min-height:105px}.cargo-kpis .kpi.selected{box-shadow:0 0 0 2px #173f6b inset}.cargo-flow-bar{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0 0}.cargo-flow-step{padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;font-size:10px;color:var(--muted)}.cargo-flow-step b{display:block;margin-bottom:3px;color:var(--navy);font-size:11px}@media(max-width:1050px){.request-workflow-kpis,.cargo-kpis{grid-template-columns:repeat(2,1fr)}}@media(max-width:700px){.request-workflow-kpis,.cargo-kpis,.cargo-flow-bar{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -1059,7 +1061,7 @@
       <div class="field">
         <label>Responsable actual</label>
         <select id="returnResponsible" onchange="loadReturnRequests()">
-          <option value="">TODOS</option>
+          <option value="">TODAS</option>
         </select>
       </div>
       <div style="display:flex;align-items:flex-end">
@@ -1095,13 +1097,33 @@
 
 
   <section id="tab-requests" class="hidden">
-    <div class="req-kpis" id="fullRequestKpis">
-      <div class="card kpi"><div class="label">Registradas</div><div class="value" id="rqSolicitado">0</div></div>
-      <div class="card kpi"><div class="label">Pendiente por atender</div><div class="value" id="rqAceptado">0</div></div>
-      <div class="card kpi warn"><div class="label">Cargo pendiente de entrega</div><div class="value" id="rqCargoPendiente">0</div></div>
-      <div class="card kpi"><div class="label">Atendidos / entregados</div><div class="value" id="rqPrestamo">0</div></div>
-      <div class="card kpi"><div class="label">Pendientes de cierre</div><div class="value" id="rqPendienteRecepcion">0</div></div>
-      <div class="card kpi"><div class="label">Cerradas</div><div class="value" id="rqDevuelto">0</div></div>
+    <div class="workflow-intro">
+      <div>
+        <strong>Bandeja operativa de solicitudes</strong>
+        <div class="note" style="margin-top:5px;padding:0;border:0;background:transparent">
+          Cada etapa representa un hecho distinto: recibir, aceptar, preparar, generar cargo y confirmar la entrega física.
+        </div>
+        <div class="workflow-steps">
+          <span class="workflow-step"><b>1</b> Registrada</span>
+          <span class="workflow-step"><b>2</b> Aceptar</span>
+          <span class="workflow-step"><b>3</b> Pendiente por atender</span>
+          <span class="workflow-step"><b>4</b> Cargo pendiente de entrega</span>
+          <span class="workflow-step"><b>5</b> Confirmar entrega</span>
+          <span class="workflow-step"><b>6</b> Cerrar devolución</span>
+        </div>
+      </div>
+      <button class="btn" onclick="openNewRequestModal()">+ Nueva solicitud</button>
+    </div>
+
+    <div class="request-workflow-kpis" id="fullRequestKpis">
+      <div class="card kpi" data-rq-state="REGISTRADA" onclick="selectAdminRequestCard('REGISTRADA')"><div class="label">POR ACEPTAR</div><div class="value" id="rqSolicitado">0</div><div class="note-mini">Enviadas y aún no aceptadas por Archivo.</div></div>
+      <div class="card kpi" data-rq-state="REGISTRADA POR ARCHIVO" onclick="selectAdminRequestCard('REGISTRADA POR ARCHIVO')"><div class="label">PENDIENTES POR ATENDER</div><div class="value" id="rqAceptado">0</div><div class="note-mini">Aceptadas por Archivo y todavía por preparar.</div></div>
+      <div class="card kpi warn" data-rq-state="CARGO PENDIENTE DE ENTREGA" onclick="selectAdminRequestCard('CARGO PENDIENTE DE ENTREGA')"><div class="label">CARGO PENDIENTE DE ENTREGA</div><div class="value" id="rqCargoPendiente">0</div><div class="note-mini">Cargo generado; falta entrega física.</div></div>
+      <div class="card kpi warn" data-rq-state="ENTREGA PARCIAL" onclick="selectAdminRequestCard('ENTREGA PARCIAL')"><div class="label">ENTREGA PARCIAL</div><div class="value" id="rqEntregaParcial">0</div><div class="note-mini">Parte de los expedientes ya fue entregada.</div></div>
+      <div class="card kpi" data-rq-state="ENTREGA TOTAL" onclick="selectAdminRequestCard('ENTREGA TOTAL')"><div class="label">ENTREGA TOTAL</div><div class="value" id="rqEntregaTotal">0</div><div class="note-mini">Todos los expedientes fueron entregados.</div></div>
+      <div class="card kpi" data-rq-state="PENDIENTE DE CIERRE" onclick="selectAdminRequestCard('PENDIENTE DE CIERRE')"><div class="label">PENDIENTES DE CIERRE</div><div class="value" id="rqPendienteRecepcion">0</div><div class="note-mini">Devoluciones pendientes de recepción física.</div></div>
+      <div class="card kpi" data-rq-state="CERRADA POR ARCHIVO" onclick="selectAdminRequestCard('CERRADA POR ARCHIVO')"><div class="label">CERRADAS</div><div class="value" id="rqDevuelto">0</div><div class="note-mini">Ciclo concluido por Archivo.</div></div>
+      <div class="card kpi" data-rq-state="" onclick="selectAdminRequestCard('')"><div class="label">TODAS LAS SOLICITUDES</div><div class="value" id="rqTodas">0</div><div class="note-mini">Vista completa de la bandeja.</div></div>
     </div>
 
     <div class="user-request-kpis hidden-by-role" id="userRequestKpis">
@@ -1154,16 +1176,16 @@
         <input id="requestSearch" placeholder="Solicitud, solicitante, asunto, cargo..." oninput="debounceRequests()">
       </div>
       <div class="field">
-        <label>Estado</label>
+        <label>Etapa de atención</label>
         <select id="requestStateFilter" onchange="loadRequests()">
           <option value="">TODOS</option>
-          <option>REGISTRADA</option>
+          <option value="REGISTRADA">POR ACEPTAR</option>
           <option value="REGISTRADA POR ARCHIVO">PENDIENTE POR ATENDER</option>
           <option>CARGO PENDIENTE DE ENTREGA</option>
-          <option>ENTREGA PARCIAL</option>
-          <option>ENTREGA TOTAL</option>
-          <option>PENDIENTE DE CIERRE</option>
-          <option>CERRADA POR ARCHIVO</option>
+          <option value="ENTREGA PARCIAL">ENTREGA PARCIAL</option>
+          <option value="ENTREGA TOTAL">ENTREGA TOTAL</option>
+          <option value="PENDIENTE DE CIERRE">PENDIENTE DE CIERRE</option>
+          <option value="CERRADA POR ARCHIVO">CERRADA</option>
         </select>
       </div>
       <div class="field hidden-by-role" id="requestOriginField">
@@ -1177,13 +1199,13 @@
         </select>
       </div>
       <div style="display:flex;align-items:flex-end">
-        <button class="btn" onclick="openNewRequestModal()">+ Nueva solicitud</button>
+        <button class="btn secondary" onclick="clearRequestWorkflowFilter()">Limpiar filtros</button>
       </div>
     </div>
 
     <div class="card table-wrap">
       <div class="table-head">
-        <strong>Solicitudes de expedientes</strong>
+        <strong id="requestsListTitle">Bandeja de solicitudes</strong>
         <span id="requestsCount">0</span>
       </div>
       <div id="requestsTable"><div class="empty">Cargando solicitudes...</div></div>
@@ -1287,28 +1309,55 @@
   </section>
 
   <section id="tab-cargos" class="hidden">
-    <div class="card filters">
-      <div class="field">
-        <label>Buscar cargos</label>
-        <input id="cargoSearch" placeholder="Cargo, asunto o solicitante..." oninput="debounceCargos()">
+    <div class="workflow-intro">
+      <div>
+        <strong>Elaboración, impresión y entrega de cargos</strong>
+        <div class="note" style="margin-top:5px;padding:0;border:0;background:transparent">
+          El cargo se genera desde una solicitud PENDIENTE POR ATENDER. Imprimir no equivale a entregar físicamente.
+        </div>
+        <div class="cargo-flow-bar">
+          <div class="cargo-flow-step"><b>1. Generar cargo</b>Desde Solicitudes → Pendiente por atender.</div>
+          <div class="cargo-flow-step"><b>2. Imprimir / reimprimir</b>El número queda fijo y no se duplica.</div>
+          <div class="cargo-flow-step"><b>3. Confirmar entrega física</b>Recién aquí pasa a EN PRÉSTAMO.</div>
+        </div>
       </div>
-      <div class="note">Seleccione un cargo de la relación para visualizarlo o imprimirlo.</div>
-      <div></div>
+    </div>
+
+    <div class="cargo-kpis">
+      <div class="card kpi" onclick="goToPendingCargoRequests()">
+        <div class="label">PENDIENTES POR GENERAR CARGO</div>
+        <div class="value" id="cargoPendingGenerateCount">0</div>
+        <div class="note-mini">Solicitudes aceptadas que aún deben atenderse.</div>
+      </div>
+      <div class="card kpi warn" data-cargo-filter="PENDIENTE DE ENTREGA" onclick="setCargoStatusFilter('PENDIENTE DE ENTREGA')">
+        <div class="label">CARGOS PENDIENTES DE ENTREGA</div>
+        <div class="value" id="cargoPendingDeliveryCount">0</div>
+        <div class="note-mini">Generados, sin entrega física confirmada.</div>
+      </div>
+      <div class="card kpi" data-cargo-filter="ENTREGA PARCIAL" onclick="setCargoStatusFilter('ENTREGA PARCIAL')">
+        <div class="label">ENTREGA PARCIAL</div>
+        <div class="value" id="cargoPartialCount">0</div>
+        <div class="note-mini">Parte del cargo ya fue entregada.</div>
+      </div>
+      <div class="card kpi" data-cargo-filter="ENTREGADO" onclick="setCargoStatusFilter('ENTREGADO')">
+        <div class="label">CARGOS ENTREGADOS</div>
+        <div class="value" id="cargoDeliveredCount">0</div>
+        <div class="note-mini">Entrega física completada.</div>
+      </div>
+    </div>
+
+    <div class="card filters">
+      <div class="field"><label>Buscar cargo</label><input id="cargoSearch" placeholder="Cargo, solicitante, asunto, quien atiende..." oninput="debounceCargos()"></div>
+      <div class="field"><label>Estado de entrega</label><select id="cargoStatusFilter" onchange="renderCargos()"><option value="">TODOS</option><option value="PENDIENTE DE ENTREGA">PENDIENTE DE ENTREGA</option><option value="ENTREGA PARCIAL">ENTREGA PARCIAL</option><option value="ENTREGADO">ENTREGADO</option><option value="SIN FLUJO DE ENTREGA">SIN FLUJO DE ENTREGA</option></select></div>
+      <div style="display:flex;align-items:flex-end"><button class="btn secondary" onclick="setCargoStatusFilter('')">Ver todos</button></div>
     </div>
 
     <div class="card" style="margin-bottom:12px">
       <div class="cargo-toolbar">
-        <div>
-          <strong>Cargo seleccionado:</strong>
-          <span id="selectedCargoLabel">Ninguno</span>
-        </div>
+        <div><strong>Cargo seleccionado:</strong> <span id="selectedCargoLabel">Ninguno</span></div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn secondary" id="confirmSelectedCargoBtn" onclick="confirmSelectedCargoDelivery()" disabled>
-            ✓ Confirmar entrega física
-          </button>
-          <button class="btn" id="printSelectedCargoBtn" onclick="printSelectedCargo()" disabled>
-            🖨 Imprimir / reimprimir cargo
-          </button>
+          <button class="btn secondary" id="confirmSelectedCargoBtn" onclick="confirmSelectedCargoDelivery()" disabled>✓ Confirmar entrega física</button>
+          <button class="btn" id="printSelectedCargoBtn" onclick="printSelectedCargo()" disabled>🖨 Imprimir / reimprimir cargo</button>
         </div>
       </div>
     </div>
@@ -6784,7 +6833,7 @@ async function loadRequestsByLawyer(){
     if(!map.has(name)){
       map.set(name,{
         solicitante:name,total:0,solicitado:0,aceptado:0,cargo_pendiente:0,
-        en_prestamo:0,por_recibir:0,devuelto:0,
+        entrega_parcial:0,entrega_total:0,por_recibir:0,devuelto:0,
         origen_admin:0,origen_usuario:0,origen_archivo:0,origen_otro:0
       });
     }
@@ -6796,7 +6845,8 @@ async function loadRequestsByLawyer(){
     if(st==='REGISTRADA')x.solicitado++;
     if(st==='REGISTRADA POR ARCHIVO')x.aceptado++;
     if(st==='CARGO PENDIENTE DE ENTREGA')x.cargo_pendiente++;
-    if(st==='ENTREGA PARCIAL'||st==='ENTREGA TOTAL')x.en_prestamo++;
+    if(st==='ENTREGA PARCIAL')x.entrega_parcial++;
+    if(st==='ENTREGA TOTAL')x.entrega_total++;
     if(st==='CERRADA POR ARCHIVO')x.devuelto++;
     x.por_recibir+=Number(r.devoluciones_pendientes||0);
 
@@ -6831,18 +6881,22 @@ function renderRequestsByLawyer(){
       <div class="note">solicitudes registradas</div>
 
       <div class="lawyer-stats">
-        <div>SOLICITADO<b>${Number(x.solicitado||0)}</b></div>
+        <div>POR ACEPTAR<b>${Number(x.solicitado||0)}</b></div>
         <div>PEND. POR ATENDER<b>${Number(x.aceptado||0)}</b></div>
         <div>CARGO PEND. ENTREGA<b>${Number(x.cargo_pendiente||0)}</b></div>
-        <div>EN PRÉSTAMO<b>${Number(x.en_prestamo||0)}</b></div>
+        <div>ENTREGA PARCIAL<b>${Number(x.entrega_parcial||0)}</b></div>
+        <div>ENTREGA TOTAL<b>${Number(x.entrega_total||0)}</b></div>
         <div>POR RECIBIR<b>${Number(x.por_recibir||0)}</b></div>
-        <div>DEVUELTO<b>${Number(x.devuelto||0)}</b></div>
+        <div>CERRADAS<b>${Number(x.devuelto||0)}</b></div>
       </div>
 
       <div class="lawyer-actions">
-        <button class="btn secondary small" onclick="openLawyerRequests('${x.solicitante.replace(/'/g,"\\'")}')">Ver solicitudes</button>
-        ${Number(x.solicitado||0)>0?`<button class="btn small" onclick="openLawyerRequests('${x.solicitante.replace(/'/g,"\\'")}','REGISTRADA')">Pendientes (${Number(x.solicitado||0)})</button>`:''}
+        <button class="btn secondary small" onclick="openLawyerRequests('${x.solicitante.replace(/'/g,"\\'")}')">Ver todas (${Number(x.total||0)})</button>
+        ${Number(x.solicitado||0)>0?`<button class="btn small" onclick="openLawyerRequests('${x.solicitante.replace(/'/g,"\\'")}','REGISTRADA')">Por aceptar (${Number(x.solicitado||0)})</button>`:''}
+        ${Number(x.aceptado||0)>0?`<button class="btn small" onclick="openLawyerRequests('${x.solicitante.replace(/'/g,"\\'")}','REGISTRADA POR ARCHIVO')">Por atender (${Number(x.aceptado||0)})</button>`:''}
         ${Number(x.cargo_pendiente||0)>0?`<button class="btn secondary small" onclick="openLawyerRequests('${x.solicitante.replace(/'/g,"\\'")}','CARGO PENDIENTE DE ENTREGA')">Cargo pendiente (${Number(x.cargo_pendiente||0)})</button>`:''}
+        ${Number(x.entrega_parcial||0)>0?`<button class="btn secondary small" onclick="openLawyerRequests('${x.solicitante.replace(/'/g,"\\'")}','ENTREGA PARCIAL')">Parcial (${Number(x.entrega_parcial||0)})</button>`:''}
+        ${Number(x.entrega_total||0)>0?`<button class="btn secondary small" onclick="openLawyerRequests('${x.solicitante.replace(/'/g,"\\'")}','ENTREGA TOTAL')">Entrega total (${Number(x.entrega_total||0)})</button>`:''}
         ${Number(x.por_recibir||0)>0?`<button class="btn secondary small" onclick="openLawyerRequests('${x.solicitante.replace(/'/g,"\\'")}','PENDIENTE DE CIERRE')">Por recibir (${Number(x.por_recibir||0)})</button>`:''}
       </div>
     </div>
@@ -6897,6 +6951,39 @@ async function selectMyRequestCard(estado){
   }
 }
 
+async function selectAdminRequestCard(estado){
+  if(!hasFullAccess())return;
+  if(el('requestStateFilter'))el('requestStateFilter').value=estado||'';
+  updateAdminRequestCards();
+  await loadRequests();
+  el('requestsTable')?.scrollIntoView({behavior:'smooth',block:'start'});
+}
+function updateAdminRequestCards(){
+  if(!hasFullAccess())return;
+  const state=el('requestStateFilter')?.value||'';
+  document.querySelectorAll('#fullRequestKpis [data-rq-state]').forEach(card=>{
+    card.classList.toggle('selected',(card.dataset.rqState||'')===state);
+  });
+}
+async function clearRequestWorkflowFilter(){
+  if(el('requestSearch'))el('requestSearch').value='';
+  if(el('requestStateFilter'))el('requestStateFilter').value='';
+  if(el('requestOriginFilter'))el('requestOriginFilter').value='';
+  await loadRequests();
+}
+function requestWorkflowAction(r){
+  const st=r.estado_atencion||r.estado||'';
+  if(!hasFullAccess())return `<button class="btn secondary small" onclick="openRequestDetail('${r.id}')">Ver solicitud</button>`;
+  if(st==='REGISTRADA')return `<button class="btn small" onclick="openRequestDetail('${r.id}')">Revisar / aceptar</button>`;
+  if(st==='REGISTRADA POR ARCHIVO')return `<button class="btn small" onclick="openEditRequest('${r.id}')">Atender solicitud</button>`;
+  if(st==='CARGO PENDIENTE DE ENTREGA')return `<button class="btn small" onclick="openRequestDetail('${r.id}')">Cargo / confirmar entrega</button>`;
+  if(st==='ENTREGA PARCIAL')return `<button class="btn small" onclick="openRequestDetail('${r.id}')">Continuar atención</button>`;
+  if(st==='ENTREGA TOTAL')return `<button class="btn secondary small" onclick="openRequestDetail('${r.id}')">Ver entrega</button>`;
+  if(st==='PENDIENTE DE CIERRE')return `<button class="btn small" onclick="openRequestDetail('${r.id}')">Recibir devolución</button>`;
+  if(st==='CERRADA POR ARCHIVO')return `<button class="btn secondary small" onclick="openRequestDetail('${r.id}')">Ver historial</button>`;
+  return `<button class="btn secondary small" onclick="openRequestDetail('${r.id}')">Gestionar</button>`;
+}
+
 async function loadRequests(){
   if(!sb||!session)return;
 
@@ -6945,17 +7032,11 @@ async function loadRequests(){
   if(el('rqSolicitado'))el('rqSolicitado').textContent=counts['REGISTRADA'];
   if(el('rqAceptado'))el('rqAceptado').textContent=counts['REGISTRADA POR ARCHIVO'];
   if(el('rqCargoPendiente'))el('rqCargoPendiente').textContent=counts['CARGO PENDIENTE DE ENTREGA'];
-  if(el('rqPrestamo')){
-    el('rqPrestamo').textContent=
-      counts['ENTREGA PARCIAL']+counts['ENTREGA TOTAL'];
-  }
-  if(el('rqPendienteRecepcion')){
-    el('rqPendienteRecepcion').textContent=
-      allRequestRows.reduce((a,x)=>a+Number(x.devoluciones_pendientes||0),0);
-  }
-  if(el('rqDevuelto')){
-    el('rqDevuelto').textContent=counts['CERRADA POR ARCHIVO'];
-  }
+  if(el('rqEntregaParcial'))el('rqEntregaParcial').textContent=counts['ENTREGA PARCIAL'];
+  if(el('rqEntregaTotal'))el('rqEntregaTotal').textContent=counts['ENTREGA TOTAL'];
+  if(el('rqPendienteRecepcion'))el('rqPendienteRecepcion').textContent=allRequestRows.reduce((a,x)=>a+Number(x.devoluciones_pendientes||0),0);
+  if(el('rqDevuelto'))el('rqDevuelto').textContent=counts['CERRADA POR ARCHIVO'];
+  if(el('rqTodas'))el('rqTodas').textContent=allRequestRows.length;
 
   // Tarjetas exclusivas del USUARIO
   if(el('uRqTotalSolicitudes'))el('uRqTotalSolicitudes').textContent=allRequestRows.length;
@@ -7006,6 +7087,10 @@ async function loadRequests(){
   }
 
   updateMyRequestCards();
+  updateAdminRequestCards();
+  if(el('requestsListTitle')&&hasFullAccess()){
+    el('requestsListTitle').textContent=state?`Bandeja de solicitudes · ${requestStateDisplayName(state)}`:'Bandeja de solicitudes';
+  }
   renderRequests();
 }
 
@@ -7101,17 +7186,7 @@ function renderRequests(){
         <td>${r.fecha_atencion?fmtDate(r.fecha_atencion):'—'}</td>
         <td><b>${r.hora_atencion?fmtTime(r.hora_atencion):'—'}</b></td>
         <td><b>${requestDeliveryText(r)}</b></td>
-        <td>
-          <div style="display:flex;gap:6px;flex-wrap:wrap">
-            ${canEditRequestBeforeCargo(r)
-              ?`<button class="btn small" onclick="openEditRequest('${r.id}')">
-                  Preparar entrega
-                </button>`
-              :`<button class="btn secondary small" onclick="openRequestDetail('${r.id}')">
-                  Gestionar
-                </button>`}
-          </div>
-        </td>
+        <td><div style="display:flex;gap:6px;flex-wrap:wrap">${requestWorkflowAction(r)}</div></td>
       </tr>`).join('')}
     </tbody>
   </table>`;
@@ -8411,6 +8486,24 @@ async function exportMasterResults(btn){
   }
 }
 
+async function goToPendingCargoRequests(){
+  switchTab('requests',document.querySelector('[data-tab="requests"]'));
+  if(el('requestStateFilter'))el('requestStateFilter').value='REGISTRADA POR ARCHIVO';
+  if(el('requestSearch'))el('requestSearch').value='';
+  if(el('requestOriginFilter'))el('requestOriginFilter').value='';
+  await loadRequests();
+}
+function setCargoStatusFilter(value){
+  if(el('cargoStatusFilter'))el('cargoStatusFilter').value=value||'';
+  renderCargos();
+}
+function updateCargoKpiSelection(){
+  const v=el('cargoStatusFilter')?.value||'';
+  document.querySelectorAll('[data-cargo-filter]').forEach(card=>{
+    card.classList.toggle('selected',(card.dataset.cargoFilter||'')===v);
+  });
+}
+
 async function loadCargos(){
   if(!sb||!session)return;
 
@@ -8494,6 +8587,17 @@ async function loadCargos(){
   if(isAdmin()){
     cargosRows=await enrichCargosWithRequestOrigin(cargosRows);
   }
+
+  const pendingDeliveryCount=cargosRows.filter(x=>x.estado_entrega==='PENDIENTE DE ENTREGA').length;
+  const partialCount=cargosRows.filter(x=>x.estado_entrega==='ENTREGA PARCIAL').length;
+  const deliveredCount=cargosRows.filter(x=>x.estado_entrega==='ENTREGADO').length;
+  if(el('cargoPendingDeliveryCount'))el('cargoPendingDeliveryCount').textContent=pendingDeliveryCount;
+  if(el('cargoPartialCount'))el('cargoPartialCount').textContent=partialCount;
+  if(el('cargoDeliveredCount'))el('cargoDeliveredCount').textContent=deliveredCount;
+
+  const {data:pendingReqData,error:pendingReqError}=await sb.rpc('listar_solicitudes_prestamo',{p_busqueda:null,p_estado:'REGISTRADA POR ARCHIVO'});
+  if(el('cargoPendingGenerateCount'))el('cargoPendingGenerateCount').textContent=pendingReqError?'—':(pendingReqData||[]).length;
+  updateCargoKpiSelection();
 
   // Si el cargo seleccionado desapareció del resultado del filtro,
   // limpiar la selección.
@@ -8585,10 +8689,15 @@ async function confirmSelectedCargoDelivery(){
 }
 
 function renderCargos(){
-  if(!cargosRows.length){
-    el('cargosTable').innerHTML='<div class="empty">No hay cargos registrados.</div>';
+  updateCargoKpiSelection();
+  const statusFilter=el('cargoStatusFilter')?.value||'';
+  const visibleRows=cargosRows.filter(c=>!statusFilter||c.estado_entrega===statusFilter);
+  if(!visibleRows.length){
+    el('cargosTable').innerHTML='<div class="empty">No hay cargos para el estado seleccionado.</div>';
+    if(el('cargosCount'))el('cargosCount').textContent='0 cargos';
     return;
   }
+  if(el('cargosCount'))el('cargosCount').textContent=visibleRows.length+' cargo'+(visibleRows.length===1?'':'s');
 
   el('cargosTable').innerHTML=`<table>
     <thead>
@@ -8607,7 +8716,7 @@ function renderCargos(){
       </tr>
     </thead>
     <tbody>
-      ${cargosRows.map(c=>{
+      ${visibleRows.map(c=>{
         const selected=c.numero===selectedCargoNumero;
 
         return `<tr class="${selected?'cargo-selected-row':''}">
