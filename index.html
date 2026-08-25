@@ -1751,7 +1751,7 @@
         </select>
       </div>
       <div class="field">
-        <label>Nuevo responsable (reasignación)</label>
+        <label>Nuevo responsable (reasignación de expedientes EN PRÉSTAMO)</label>
         <select id="rqDNuevoResponsable"></select>
       </div>
       <div class="field">
@@ -5226,10 +5226,10 @@ async function loadStateDetail(estado){
 
     el('stateDetailTable').innerHTML=`
       <div class="note" style="margin:8px 10px 10px">
-        <b>Gestionar</b> abre el flujo normal de la solicitud para cargo, entrega,
-        reasignación o devolución según corresponda. <b>Editar</b> abre directamente
-        el expediente para corregir sus datos; el perfil <b>Administrador</b> puede
-        modificar todos los campos del expediente.
+        <b>Preparar / gestionar</b> abre una sola pantalla para completar Extensión, R.D. y Último folio,
+        generar/imprimir el siguiente cargo y, cuando existan expedientes ya <b>EN PRÉSTAMO</b> dentro
+        de la misma solicitud, realizar su reasignación. <b>Editar</b> mantiene la edición directa
+        del expediente para el perfil Administrador.
       </div>
       <table>
       <thead>
@@ -5267,7 +5267,7 @@ async function loadStateDetail(estado){
               </button>
               ${hasFullAccess()?`<button class="btn small"
                 onclick="openPendingManageRequest(${i})">
-                Gestionar
+                Preparar / gestionar
               </button>`:''}
               ${hasFullAccess()?`<button class="btn secondary small"
                 onclick="editRecord('${x.expediente_id}')">
@@ -8219,7 +8219,7 @@ function renderRequestDetailItems(){
   el('rqDetailItems').innerHTML=`<table>
     <thead><tr>
       <th><input type="checkbox" ${selectableRows.length?'':'disabled'} ${allChecked?'checked':''} onchange="toggleAllRequestItems(this.checked)"></th>
-      <th>Expediente</th><th>Ext.</th><th>Estado solicitud</th><th>Estado físico</th>
+      <th>Expediente</th><th>Ext.</th><th>R.D.</th><th>Último folio</th><th>Estado solicitud</th><th>Estado físico</th>
       <th>Responsable actual</th><th>Cargo</th><th>F. entrega préstamo</th><th>F. sol. devolución</th><th>F. devolución</th>
     </tr></thead>
     <tbody>${data.map(x=>{
@@ -8229,7 +8229,24 @@ function renderRequestDetailItems(){
           ${requestSelectedIds.has(x.expediente_id)?'checked':''}
           onchange="toggleRequestItem('${x.expediente_id}',this.checked)"></td>
         <td><b>${esc(x.expediente)}</b></td>
-        <td>${x.extension?esc(x.extension):'—'}</td>
+        <td>${hasFullAccess() && x.estado_item==='ACEPTADO'
+          ?`<input class="request-item-edit extension"
+                   value="${esc(x.extension||'')}"
+                   placeholder="Ext."
+                   oninput="updateRequestDetailPendingField('${x.expediente_id}','extension',this.value)">`
+          :(x.extension?esc(x.extension):'—')}</td>
+        <td>${hasFullAccess() && x.estado_item==='ACEPTADO'
+          ?`<input class="request-item-edit rd"
+                   value="${esc(x.rd||'')}"
+                   placeholder="R.D."
+                   oninput="updateRequestDetailPendingField('${x.expediente_id}','rd',this.value)">`
+          :esc(x.rd||'—')}</td>
+        <td>${hasFullAccess() && x.estado_item==='ACEPTADO'
+          ?`<input class="request-item-edit folio"
+                   value="${esc(x.ultimo_folio||'')}"
+                   placeholder="Último folio"
+                   oninput="updateRequestDetailPendingField('${x.expediente_id}','ultimo_folio',this.value)">`
+          :esc(x.ultimo_folio||'—')}</td>
         <td>${reqStatePill(x.estado_item)}</td>
         <td>${esc(x.estado_fisico||'')}</td>
         <td>${esc(x.responsable_actual||x.ubicacion_actual||'')}</td>
@@ -8250,6 +8267,61 @@ function toggleAllRequestItems(checked){
       :requestSelectedIds.delete(x.expediente_id));
   renderRequestDetailItems();
 }
+function updateRequestDetailPendingField(expedienteId,field,value){
+  const row=(requestDetailRows||[]).find(x=>String(x.expediente_id)===String(expedienteId));
+  if(!row || row.estado_item!=='ACEPTADO')return;
+  if(!['extension','rd','ultimo_folio'].includes(field))return;
+  row[field]=value;
+}
+
+async function savePendingRequestDetailData(silent=false){
+  if(!hasFullAccess())return false;
+
+  const pending=(requestDetailRows||[])
+    .filter(x=>x.estado_item==='ACEPTADO')
+    .map(x=>({
+      id:x.expediente_id,
+      expediente:x.expediente,
+      extension:x.extension||null,
+      rd:x.rd||null,
+      ultimo_folio:x.ultimo_folio||null
+    }));
+
+  if(!pending.length){
+    if(!silent && el('rqActionStatus')){
+      el('rqActionStatus').textContent='No hay expedientes pendientes por atender para actualizar.';
+    }
+    return true;
+  }
+
+  if(!currentRequestId){
+    if(el('rqActionStatus'))el('rqActionStatus').textContent='No se pudo identificar la solicitud.';
+    return false;
+  }
+
+  if(el('rqActionStatus'))el('rqActionStatus').textContent='Guardando Extensión, R.D. y Último folio...';
+
+  const {data,error}=await sb.rpc('actualizar_datos_pendientes_solicitud',{
+    p_solicitud_id:currentRequestId,
+    p_items:pending
+  });
+
+  if(error){
+    if(el('rqActionStatus'))el('rqActionStatus').textContent=error.message;
+    return false;
+  }
+
+  if(!silent){
+    showToast(`${Number(data?.actualizados||0)} expediente(s) actualizado(s)`);
+    await Promise.all([loadStates(),loadAll(),loadHistory()]);
+    await refreshRequestDetail();
+  }else if(el('rqActionStatus')){
+    el('rqActionStatus').textContent='Datos guardados. Generando cargo...';
+  }
+
+  return true;
+}
+
 function renderRequestMovements(){
   if(!requestMovementRows.length){
     el('rqMovements').innerHTML='<div class="empty">Sin movimientos registrados.</div>';
@@ -8322,14 +8394,15 @@ function renderRequestActions(){
       <span class="note">Antes de aceptar seleccione quién atenderá el requerimiento. El sistema guardará por separado quién aceptó y quién quedó asignado. NO genera cargo y NO cambia la ubicación física.</span>`;
   }
 
-  if(r.estado==='ACEPTADO'){
+  const hasPendingAccepted=requestDetailRows.some(x=>x.estado_item==='ACEPTADO');
+
+  if(hasPendingAccepted){
     if(el('rqDAtiende'))el('rqDAtiende').disabled=true;
-    if(requestDetailRows.some(x=>x.estado_item==='ACEPTADO')){
-      actions += `
-        <button class="btn" onclick="assignNewCargoToAccepted()">Generar e imprimir cargo</button>
-        <button class="btn secondary" onclick="assignExistingCargoToAccepted()">Vincular a cargo existente</button>
-        <span class="note">Al generar e imprimir el cargo, los expedientes seleccionados pasarán directamente a EN PRÉSTAMO.</span>`;
-    }
+    actions += `
+      <button class="btn secondary" onclick="savePendingRequestDetailData()">Guardar Extensión / R.D. / folio</button>
+      <button class="btn" onclick="assignNewCargoToAccepted()">Guardar, generar e imprimir cargo</button>
+      <button class="btn secondary" onclick="assignExistingCargoToAccepted()">Vincular a cargo existente</button>
+      <span class="note">Los campos editables corresponden únicamente a expedientes PENDIENTES POR ATENDER. Al generar e imprimir el cargo, los seleccionados pasan directamente a EN PRÉSTAMO.</span>`;
   }
 
   if(requestDetailRows.some(x=>x.cargo_numero && ['EN PRÉSTAMO','DEVOLUCIÓN SOLICITADA','DEVUELTO','CARGO GENERADO'].includes(x.estado_item))){
@@ -8339,7 +8412,10 @@ function renderRequestActions(){
 
   if(requestDetailRows.some(x=>x.estado_item==='EN PRÉSTAMO')){
     actions += `
-      <button class="btn secondary" onclick="reassignRequestItems()">Reasignar seleccionados</button>`;
+      <button class="btn secondary" onclick="reassignRequestItems()">Reasignar expedientes EN PRÉSTAMO</button>
+      <span class="note">Para reasignar, seleccione uno o más expedientes que ya estén EN PRÉSTAMO y elija el nuevo responsable en la parte superior.</span>`;
+  }else if(hasPendingAccepted){
+    actions += `<span class="note">La reasignación se habilitará aquí cuando alguno de los expedientes de esta solicitud ya se encuentre EN PRÉSTAMO.</span>`;
   }
 
   if(requestDetailRows.some(x=>x.estado_item==='DEVOLUCIÓN SOLICITADA')){
@@ -8445,7 +8521,10 @@ async function assignNewCargoToAccepted(){
     return;
   }
 
-  if(!confirm(`¿Generar un cargo nuevo para ${accepted.length} expediente(s) seleccionado(s)?`))return;
+  if(!confirm(`¿Guardar los datos y generar un cargo nuevo para ${accepted.length} expediente(s) seleccionado(s)?`))return;
+
+  const saved=await savePendingRequestDetailData(true);
+  if(!saved)return;
 
   el('rqActionStatus').textContent='Generando cargo y registrando préstamo...';
 
@@ -8540,12 +8619,14 @@ async function deliverRequest(){
 }
 
 async function reassignRequestItems(){
-  const ids=[...requestSelectedIds];
+  const ids=(requestDetailRows||[])
+    .filter(x=>requestSelectedIds.has(x.expediente_id) && requestItemCanReassign(x))
+    .map(x=>x.expediente_id);
   const nuevo=el('rqDNuevoResponsable').value.trim();
   const obs=el('rqDObservacion').value.trim();
 
   if(!ids.length){
-    el('rqActionStatus').textContent='Seleccione uno o más expedientes EN PRÉSTAMO.';
+    el('rqActionStatus').textContent='Seleccione uno o más expedientes que ya estén EN PRÉSTAMO.';
     return;
   }
   if(!nuevo){
