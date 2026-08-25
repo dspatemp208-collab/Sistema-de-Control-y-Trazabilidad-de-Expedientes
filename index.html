@@ -3182,14 +3182,20 @@ async function openArchiveDeliveryReturnInRequest(id){
     requestSelectedIds.add(target.expediente_id);
   }
 
+  // Esta gestión nace por requerimiento de Archivo: mostrarlo claramente
+  // como estado operativo sin alterar el estado físico EN PRÉSTAMO de la base.
+  if(el('rqDState')){
+    el('rqDState').innerHTML='<span class="req-state req-devolucion-solicitada">SOLICITADO POR EL ARCHIVO</span>';
+  }
+
   renderRequestDetailItems();
   renderRequestActions();
   syncUserReturnButtonState();
 
   if(el('rqActionStatus')){
     el('rqActionStatus').textContent=
-      `Archivo solicitó la devolución de ${target.expediente||'este expediente'}. `+
-      'Actualice la R.D. si corresponde e ingrese obligatoriamente el Último folio. Luego puede Reasignar o Devolver el expediente.';
+      `SOLICITADO POR EL ARCHIVO · ${target.expediente||'Expediente'}. `+
+      'Actualice la R.D. si corresponde e ingrese obligatoriamente el Último folio. Después puede Reasignar o Devolver.';
   }
 
   setTimeout(()=>{
@@ -8707,7 +8713,9 @@ function renderRequestDetailItems(){
                      title="Dato obligatorio antes de reasignar o efectuar devolución"
                      oninput="updateUserCustodyReturnField('${x.expediente_id}','ultimo_folio',this.value)">`
             :esc(x.ultimo_folio||'—'))}</td>
-        <td>${reqStatePill(x.estado_item)}</td>
+        <td>${activeArchiveDeliveryRequestId && isArchiveRequestedReturnItem(x)
+          ?'<span class="req-state req-devolucion-solicitada">SOLICITADO POR EL ARCHIVO</span>'
+          :reqStatePill(x.estado_item)}</td>
         <td>${esc(x.estado_fisico||'')}</td>
         <td>${esc(x.responsable_actual||x.ubicacion_actual||'')}</td>
         <td><b>${esc(x.cargo_numero||'—')}</b></td>
@@ -8780,10 +8788,13 @@ function syncUserReturnButtonState(){
   const reassignBtn=el('btnEffectReassign');
   if(reassignBtn){
     const nuevo=String(el('rqDNuevoResponsable')?.value||'').trim();
-    reassignBtn.disabled=!ready || !nuevo;
+    // El requisito para habilitar la acción es haber verificado/ingresado el folio.
+    // El nuevo responsable se valida al pulsar Reasignar, para evitar un botón
+    // aparentemente bloqueado aunque el usuario ya haya cumplido el requisito del folio.
+    reassignBtn.disabled=!ready;
     reassignBtn.title=!ready
       ?'Ingrese el Último folio obligatorio para habilitar Reasignar'
-      :(!nuevo?'Seleccione el nuevo responsable':'Reasignar el expediente al nuevo responsable');
+      :(!nuevo?'Pulse Reasignar y seleccione el nuevo responsable':'Reasignar el expediente al nuevo responsable');
   }
 }
 
@@ -8968,7 +8979,7 @@ function renderRequestActions(){
 
     if(hasArchiveRequestedItem){
       actions += `
-        <span class="note"><b>Archivo solicitó este expediente.</b> Actualice la <b>R.D.</b> si corresponde e ingrese obligatoriamente el <b>Último folio</b>. Después puede <b>Reasignar</b> si el expediente pasó a otro usuario, o <b>Devolver</b> si será entregado a Archivo. Si se reasigna, la solicitud de Archivo seguirá activa para el nuevo responsable.</span>
+        <span class="note"><b>SOLICITADO POR EL ARCHIVO.</b> Actualice la <b>R.D.</b> si corresponde e ingrese obligatoriamente el <b>Último folio</b>. Con el folio registrado se habilitan las acciones. Para <b>Reasignar</b>, seleccione además el nuevo responsable; para <b>Devolver</b>, el expediente quedará pendiente de recepción por Archivo. Si se reasigna, la solicitud de Archivo seguirá activa para el nuevo responsable.</span>
         <button class="btn secondary" id="btnEffectReassign" onclick="userReassignSelectedItems()" disabled>Reasignar</button>
         <button class="btn" id="btnEffectReturn" onclick="requestReturnItems()" disabled>Devolver</button>`;
       setTimeout(syncUserReturnButtonState,0);
