@@ -4527,7 +4527,7 @@ async function loadStates(){
   el('statesTotalTypes').textContent=stateRows.length;
   el('statesTotalRecords').textContent=totalExpedientes;
   el('statesTopCount').textContent=top.total;
-  el('statesTopName').textContent=top.estado;
+  el('statesTopName').textContent=stateDisplayName(top.estado);
 
   renderStates();
 
@@ -4563,7 +4563,7 @@ function renderStates(){
     const buttonText='Ver expedientes';
 
     return `<div class="card state-card ${selectedState===x.estado?'selected':''}">
-      <div class="state-name">${esc(x.estado)}</div>
+      <div class="state-name">${esc(stateDisplayName(x.estado))}</div>
       <div class="state-count">${x.total}</div>
       <div class="state-meta">${meta}</div>
       <div class="state-progress"><span style="width:${x.estado==='REASIGNADO'?(x.total?100:0):Math.min(100,pct)}%"></span></div>
@@ -4691,7 +4691,7 @@ async function loadStateDetail(estado){
 
   if(estado==='PENDIENTE DE VERIFICACIÓN'){
     el('stateDetailTitle').textContent=
-      'Pendiente de verificación · Solicitud ya aceptada por Archivo';
+      'Pendientes por atender · Solicitud ya aceptada por Archivo';
     el('stateDetailTable').innerHTML=
       '<div class="empty">Cargando expedientes pendientes de verificación...</div>';
 
@@ -4893,7 +4893,7 @@ async function loadStateDetail(estado){
     return;
   }
 
-  el('stateDetailTitle').textContent=`Expedientes en estado: ${estado}`;
+  el('stateDetailTitle').textContent=`Expedientes en estado: ${stateDisplayName(estado)}`;
   el('stateDetailTable').innerHTML='<div class="empty">Cargando expedientes...</div>';
 
   let q=sb
