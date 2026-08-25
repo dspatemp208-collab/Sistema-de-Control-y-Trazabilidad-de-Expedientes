@@ -2047,6 +2047,15 @@ function stateDisplayName(estado){
   if(estado==='CARGO GENERADO')return 'EN PRÉSTAMO';
   return estado||'';
 }
+
+function movementActionDisplay(action){
+  const a=String(action||'').trim();
+  if(a==='DATOS DE EXPEDIENTE ACTUALIZADOS EN SOLICITUD'){
+    return 'ACTUALIZACIÓN DE DATOS DEL EXPEDIENTE';
+  }
+  return a;
+}
+
 function requestStateDisplayName(estado){
   if(estado==='REGISTRADA POR ARCHIVO')return 'PENDIENTE POR ATENDER';
   if(estado==='ACEPTADO')return 'PENDIENTE POR ATENDER';
@@ -5583,7 +5592,7 @@ async function openNewRequestModal(rowsOverride=null,preserveHeader=false){
       </tbody>
     </table>
     ${editMode
-      ?'<span class="request-edit-help">Puede completar o corregir Extensión, R.D. y Último folio antes de generar el cargo.</span>'
+      ?'<span class="request-edit-help">Puede completar o corregir Extensión, R.D. y Último folio antes de generar el cargo. No requiere observación: cada cambio queda registrado automáticamente en el Historial.</span>'
       :''}`;
   }
 
@@ -7835,7 +7844,7 @@ function renderRequestMovements(){
     <tbody>${requestMovementRows.map(m=>`<tr>
       <td><div class="datetime-cell"><span class="datetime-date">${fmtDate(m.created_at)}</span><span class="datetime-time">${fmtTime(m.created_at)}</span></div></td>
       <td>${esc(m.expediente||'')}</td>
-      <td>${esc(m.accion||'')}</td>
+      <td>${esc(movementActionDisplay(m.accion))}</td>
       <td>${esc(m.desde||'')}</td>
       <td>${esc(m.hacia||'')}</td>
       <td>${esc(requestStateDisplayName(stateDisplayName(m.estado||'')))}</td>
