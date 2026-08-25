@@ -702,6 +702,40 @@
   color:var(--muted)
 }
 
+
+.prepare-delivery-panel{
+  margin-top:12px;
+  padding:12px;
+  border:1px solid var(--line);
+  border-radius:10px;
+  background:#f8fafc
+}
+.prepare-delivery-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:10px
+}
+.prepare-delivery-title{
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+  align-items:center;
+  margin-bottom:9px
+}
+.prepare-delivery-title strong{color:var(--navy)}
+.cargo-select-count{
+  font-size:11px;
+  color:var(--muted);
+  white-space:nowrap
+}
+.request-cargo-check{
+  width:16px;
+  height:16px
+}
+@media(max-width:760px){
+  .prepare-delivery-grid{grid-template-columns:1fr}
+}
+
 </style>
 </head>
 <body>
@@ -1326,7 +1360,7 @@
       </div>
       <div class="field span2">
         <label>Modalidad *</label>
-        <select id="rqModalidad">
+        <select id="rqModalidad" onchange="updatePrepareDeliveryUI()">
           <option value="PRÉSTAMO">PRÉSTAMO</option>
           <option value="COPIA DIGITAL">COPIA DIGITAL</option>
           <option value="LECTURA EN SALA">LECTURA EN SALA</option>
@@ -1376,10 +1410,48 @@
       <div id="rqSelectedTable"></div>
     </div>
 
+    <div id="rqPrepareDeliveryPanel" class="prepare-delivery-panel hidden">
+      <div class="prepare-delivery-title">
+        <div>
+          <strong>Preparación de entrega y cargo</strong>
+          <div id="rqPrepareDeliveryNote" class="note" style="margin-top:3px"></div>
+        </div>
+        <span id="rqPrepareCargoCount" class="cargo-select-count"></span>
+      </div>
+
+      <div class="prepare-delivery-grid">
+        <div class="field">
+          <label>Atiende el requerimiento *</label>
+          <input id="rqPrepareAtiende"
+                 list="listaAtiendeRequerimiento"
+                 placeholder="Seleccione quién atiende">
+        </div>
+
+        <div class="field">
+          <label>Observación del cargo</label>
+          <input id="rqPrepareCargoObs"
+                 placeholder="Observación, si corresponde">
+        </div>
+      </div>
+    </div>
+
     <div class="modal-foot">
       <span id="rqSaveStatus" class="note"></span>
-      <div style="display:flex;gap:8px">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
         <button class="btn secondary" onclick="closeNewRequestModal()">Cancelar</button>
+
+        <button class="btn secondary hidden"
+                id="rqAcceptFromEditBtn"
+                onclick="saveAndAcceptFromEdit()">
+          Guardar y aceptar solicitud
+        </button>
+
+        <button class="btn hidden"
+                id="rqSavePrintCargoBtn"
+                onclick="saveAndPrintCargoFromEdit()">
+          Guardar, generar e imprimir cargo
+        </button>
+
         <button class="btn" id="rqSaveBtn" onclick="saveNewRequest()">Enviar solicitud</button>
       </div>
     </div>
@@ -4780,6 +4852,16 @@ function closeNewRequestModal(){
   window.__newRequestHeaderDraft=null;
   window.__editingRequestId=null;
   window.__editingRequestNumero=null;
+  window.__editingRequestState=null;
+  window.__editingRequestModalidad=null;
+  window.__editingRequestAtiende=null;
+  window.__editCargoSelectedKeys=null;
+
+  if(el('rqPrepareAtiende'))el('rqPrepareAtiende').value='';
+  if(el('rqPrepareCargoObs'))el('rqPrepareCargoObs').value='';
+  el('rqPrepareDeliveryPanel')?.classList.add('hidden');
+  el('rqAcceptFromEditBtn')?.classList.add('hidden');
+  el('rqSavePrintCargoBtn')?.classList.add('hidden');
 
   if(el('rqModalTitle')){
     el('rqModalTitle').textContent='Nueva solicitud de expedientes';
@@ -4979,13 +5061,13 @@ async function openNewRequestModal(rowsOverride=null,preserveHeader=false){
 
   if(el('rqModalTitle')){
     el('rqModalTitle').textContent=editMode
-      ?`Editar solicitud ${window.__editingRequestNumero||''}`
+      ?`Preparar entrega ${window.__editingRequestNumero||''}`
       :'Nueva solicitud de expedientes';
   }
 
   if(el('rqModalNote')){
     el('rqModalNote').textContent=editMode
-      ?'Puede corregir la solicitud antes de generar el cargo o entregar expedientes. Los cambios quedarán registrados en el historial.'
+      ?'Complete y verifique los datos del expediente. Desde esta misma pantalla podrá aceptar la solicitud y generar/imprimir el cargo cuando corresponda.'
       :'La solicitud no cambia la ubicación física. Archivo acepta y verifica la solicitud sin generar cargo. Luego decide si cada expediente se atiende con un cargo nuevo o con un cargo ya existente.';
   }
 
@@ -5094,10 +5176,24 @@ async function openNewRequestModal(rowsOverride=null,preserveHeader=false){
   }else{
     const editMode=!!window.__editingRequestId;
 
+    const cargoMode=
+      editMode &&
+      norm(window.__editingRequestState||'')==='ACEPTADO' &&
+      (el('rqModalidad')?.value||window.__editingRequestModalidad)==='PRÉSTAMO';
+
     el('rqSelectedTable').innerHTML=`<table>
       <thead>
         <tr>
           <th>N°</th>
+          ${cargoMode
+            ?`<th>
+                <input class="request-cargo-check"
+                       type="checkbox"
+                       checked
+                       title="Seleccionar todos para el cargo"
+                       onchange="toggleAllEditCargoItems(this.checked)">
+              </th>`
+            :''}
           <th>Expediente</th>
           <th>Ext.</th>
           <th>R.D.</th>
@@ -5110,6 +5206,14 @@ async function openNewRequestModal(rowsOverride=null,preserveHeader=false){
       <tbody>
         ${rows.map((r,i)=>`<tr>
           <td>${i+1}</td>
+          ${cargoMode
+            ?`<td>
+                <input class="request-cargo-check"
+                       type="checkbox"
+                       ${cargoItemSelected(r)?'checked':''}
+                       onchange="toggleEditCargoItem(${i},this.checked)">
+              </td>`
+            :''}
           <td><b>${esc(expBase(r.expediente))}</b></td>
 
           <td>
@@ -5163,15 +5267,239 @@ async function openNewRequestModal(rowsOverride=null,preserveHeader=false){
     rd:r.rd||null,
     ultimo_folio:r.ultimo_folio||null,
     observacion:r.observacion||null,
+    estado:r.estado||null,
+    estado_item:r.estado_item||null,
+    cargo_numero:r.cargo_numero||null,
     nuevo:!!(r._nuevo||r.nuevo)
   }));
 
   el('newRequestModal').dataset.items=JSON.stringify(normalized);
   el('newRequestModal').dataset.ids='';
   el('newRequestModal').dataset.newExp='';
+  updatePrepareDeliveryUI();
   el('newRequestModal').classList.add('show');
+  updatePrepareCargoCount();
 }
 
+
+
+function requestCargoKeys(r){
+  const keys=[];
+  if(r?.id)keys.push('ID:'+String(r.id));
+
+  const exp=norm(r?.expediente||'');
+  const ext=norm(r?.extension||'');
+  if(exp)keys.push('EXP:'+exp+'|'+ext);
+
+  return keys;
+}
+
+function cargoItemSelected(r){
+  const set=window.__editCargoSelectedKeys;
+  if(!(set instanceof Set))return false;
+  return requestCargoKeys(r).some(k=>set.has(k));
+}
+
+function setCargoItemSelected(r,checked){
+  if(!(window.__editCargoSelectedKeys instanceof Set)){
+    window.__editCargoSelectedKeys=new Set();
+  }
+
+  requestCargoKeys(r).forEach(k=>{
+    if(checked)window.__editCargoSelectedKeys.add(k);
+    else window.__editCargoSelectedKeys.delete(k);
+  });
+}
+
+function toggleEditCargoItem(index,checked){
+  let items=[];
+  try{
+    items=JSON.parse(el('newRequestModal')?.dataset.items||'[]');
+  }catch(_){items=[]}
+
+  if(index<0||index>=items.length)return;
+  setCargoItemSelected(items[index],checked);
+  updatePrepareCargoCount();
+}
+
+function toggleAllEditCargoItems(checked){
+  let items=[];
+  try{
+    items=JSON.parse(el('newRequestModal')?.dataset.items||'[]');
+  }catch(_){items=[]}
+
+  items.forEach(r=>setCargoItemSelected(r,checked));
+  renderNewRequestSelected();
+}
+
+function updatePrepareCargoCount(){
+  const box=el('rqPrepareCargoCount');
+  if(!box)return;
+
+  let items=[];
+  try{
+    items=JSON.parse(el('newRequestModal')?.dataset.items||'[]');
+  }catch(_){items=[]}
+
+  const n=items.filter(cargoItemSelected).length;
+  box.textContent=n
+    ?`${n} expediente${n===1?'':'s'} para el cargo`
+    :'Ningún expediente seleccionado para el cargo';
+}
+
+function buildCurrentRequestPayload(){
+  const status=el('rqSaveStatus');
+
+  const solicitante=(el('rqSolicitante')?.value||'').trim();
+  const asunto=(el('rqAsunto')?.value||'').trim();
+  const modalidad=(el('rqModalidad')?.value||'').trim();
+  const observacion=(el('rqObservacion')?.value||'').trim();
+
+  let items=[];
+  try{
+    items=JSON.parse(el('newRequestModal')?.dataset.items||'[]');
+  }catch(_){items=[]}
+
+  if(!solicitante){
+    if(status)status.textContent='Seleccione el solicitante.';
+    el('rqSolicitante')?.focus();
+    return null;
+  }
+
+  if(!asunto){
+    if(status)status.textContent='Seleccione el asunto.';
+    el('rqAsunto')?.focus();
+    return null;
+  }
+
+  if(!validarAsuntoActivo(asunto,'rqSaveStatus','rqAsunto')){
+    return null;
+  }
+
+  if(!['PRÉSTAMO','COPIA DIGITAL','LECTURA EN SALA'].includes(modalidad)){
+    if(status)status.textContent='Seleccione una modalidad válida.';
+    return null;
+  }
+
+  if(!items.length){
+    if(status)status.textContent='La solicitud debe contener al menos un expediente.';
+    return null;
+  }
+
+  const cleanItems=[];
+  const seen=new Set();
+
+  for(const raw of items){
+    const expediente=(raw?.expediente||'').trim();
+    if(!expediente)continue;
+
+    const key=[
+      expediente.toUpperCase(),
+      (raw?.extension||'').trim().toUpperCase()
+    ].join('|');
+
+    if(seen.has(key))continue;
+    seen.add(key);
+
+    cleanItems.push({
+      id:raw?.id||null,
+      expediente,
+      extension:raw?.extension||null,
+      rd:raw?.rd||null,
+      ultimo_folio:raw?.ultimo_folio||null,
+      observacion:raw?.observacion||null,
+      nuevo:!!raw?.nuevo
+    });
+  }
+
+  if(!cleanItems.length){
+    if(status)status.textContent='No hay expedientes válidos.';
+    return null;
+  }
+
+  return {
+    solicitante,
+    asunto,
+    modalidad,
+    observacion,
+    cleanItems
+  };
+}
+
+async function saveCurrentEditSilently(){
+  const editId=window.__editingRequestId;
+  if(!editId)throw new Error('No existe una solicitud en edición.');
+
+  const p=buildCurrentRequestPayload();
+  if(!p)return null;
+
+  const {data,error}=await sb.rpc(
+    'editar_solicitud_antes_cargo',
+    {
+      p_solicitud_id:editId,
+      p_solicitante:p.solicitante,
+      p_asunto:p.asunto,
+      p_observacion:p.observacion||null,
+      p_modalidad:p.modalidad,
+      p_items:p.cleanItems
+    }
+  );
+
+  if(error)throw error;
+  return {data,payload:p};
+}
+
+function updatePrepareDeliveryUI(){
+  const editMode=!!window.__editingRequestId;
+  const state=norm(window.__editingRequestState||'');
+  const modalidad=(el('rqModalidad')?.value||window.__editingRequestModalidad||'').trim();
+
+  const panel=el('rqPrepareDeliveryPanel');
+  const acceptBtn=el('rqAcceptFromEditBtn');
+  const printBtn=el('rqSavePrintCargoBtn');
+  const note=el('rqPrepareDeliveryNote');
+
+  if(panel)panel.classList.toggle('hidden',!editMode||!hasFullAccess());
+
+  if(!editMode||!hasFullAccess()){
+    acceptBtn?.classList.add('hidden');
+    printBtn?.classList.add('hidden');
+    return;
+  }
+
+  if(el('rqPrepareAtiende') && !el('rqPrepareAtiende').value){
+    el('rqPrepareAtiende').value=window.__editingRequestAtiende||'';
+  }
+
+  if(state==='SOLICITADO'){
+    acceptBtn?.classList.remove('hidden');
+    printBtn?.classList.add('hidden');
+    if(note){
+      note.textContent=
+        'Primero complete los datos y acepte la solicitud. Luego, desde esta misma opción, podrá generar e imprimir el cargo.';
+    }
+  }else if(state==='ACEPTADO' && modalidad==='PRÉSTAMO'){
+    acceptBtn?.classList.add('hidden');
+    printBtn?.classList.remove('hidden');
+    if(note){
+      note.textContent=
+        'Complete Extensión, R.D. y Último folio; marque los expedientes que formarán el cargo y genere la impresión.';
+    }
+  }else if(state==='ACEPTADO'){
+    acceptBtn?.classList.add('hidden');
+    printBtn?.classList.add('hidden');
+    if(note){
+      note.textContent=
+        'La solicitud está aceptada. La generación de cargo se habilita únicamente para modalidad PRÉSTAMO.';
+    }
+  }else{
+    acceptBtn?.classList.add('hidden');
+    printBtn?.classList.add('hidden');
+    if(note)note.textContent='La solicitud ya no admite preparación de cargo desde esta pantalla.';
+  }
+
+  updatePrepareCargoCount();
+}
 
 function updateNewRequestItemField(index,field,value){
   let items=[];
@@ -6514,13 +6842,12 @@ function renderRequests(){
         <td>
           <div style="display:flex;gap:6px;flex-wrap:wrap">
             ${canEditRequestBeforeCargo(r)
-              ?`<button class="btn secondary small" onclick="openEditRequest('${r.id}')">
-                  Editar
+              ?`<button class="btn small" onclick="openEditRequest('${r.id}')">
+                  Preparar entrega
                 </button>`
-              :''}
-            <button class="btn secondary small" onclick="openRequestDetail('${r.id}')">
-              Gestionar
-            </button>
+              :`<button class="btn secondary small" onclick="openRequestDetail('${r.id}')">
+                  Gestionar
+                </button>`}
           </div>
         </td>
       </tr>`).join('')}
@@ -6567,6 +6894,10 @@ async function openEditRequest(id){
 
   window.__editingRequestId=id;
   window.__editingRequestNumero=header.numero||'';
+  window.__editingRequestState=header.estado||'';
+  window.__editingRequestModalidad=header.modalidad||'PRÉSTAMO';
+  window.__editingRequestAtiende=header.atiende||'';
+
   window.__newRequestHeaderDraft={
     solicitante:header.solicitante||'',
     asunto:header.asunto||'',
@@ -6582,11 +6913,230 @@ async function openEditRequest(id){
     ultimo_folio:x.ultimo_folio||null,
     observacion:x.observacion||null,
     estado:x.estado_fisico||x.estado_item||null,
+    estado_item:x.estado_item||null,
+    cargo_numero:x.cargo_numero||null,
     _nuevo:false,
     nuevo:false
   }));
 
+  window.__editCargoSelectedKeys=new Set();
+
+  // Si la solicitud ya está aceptada, todos los expedientes se proponen
+  // inicialmente para el cargo; el usuario puede desmarcar los que no correspondan.
+  if(norm(header.estado||'')==='ACEPTADO'){
+    rows.forEach(r=>setCargoItemSelected(r,true));
+  }
+
   await openNewRequestModal(rows,true);
+}
+
+
+async function saveAndAcceptFromEdit(){
+  if(!hasFullAccess())return;
+
+  const id=window.__editingRequestId;
+  if(!id)return;
+
+  const atiende=(el('rqPrepareAtiende')?.value||'').trim();
+  const obs=(el('rqPrepareCargoObs')?.value||el('rqObservacion')?.value||'').trim();
+  const status=el('rqSaveStatus');
+  const btn=el('rqAcceptFromEditBtn');
+
+  if(!atiende){
+    if(status)status.textContent='Indique quién atiende / verifica el requerimiento.';
+    el('rqPrepareAtiende')?.focus();
+    return;
+  }
+
+  if(!confirm(
+    '¿Guardar los cambios y aceptar/verificar la solicitud? '+
+    'Todavía no se generará el cargo.'
+  ))return;
+
+  btn.disabled=true;
+  btn.textContent='Guardando y aceptando...';
+
+  try{
+    const saved=await saveCurrentEditSilently();
+    if(!saved)return;
+
+    const {error}=await sb.rpc(
+      'aceptar_solicitud_sin_cargo',
+      {
+        p_solicitud_id:id,
+        p_atiende:atiende,
+        p_observacion:obs||null
+      }
+    );
+
+    if(error)throw error;
+
+    closeNewRequestModal();
+
+    await loadRequests();
+    if(hasFullAccess())await loadRequestsByLawyer();
+
+    showToast('Solicitud aceptada. Ya puede preparar e imprimir el cargo.');
+
+    // Reabrir automáticamente la misma opción, ahora habilitada para cargo.
+    await openEditRequest(id);
+
+  }catch(err){
+    if(status)status.textContent=err?.message||String(err);
+  }finally{
+    btn.disabled=false;
+    btn.textContent='Guardar y aceptar solicitud';
+  }
+}
+
+async function saveAndPrintCargoFromEdit(){
+  if(!hasFullAccess())return;
+
+  const id=window.__editingRequestId;
+  const status=el('rqSaveStatus');
+  const btn=el('rqSavePrintCargoBtn');
+
+  if(!id)return;
+
+  const modalidad=(el('rqModalidad')?.value||'').trim();
+  if(modalidad!=='PRÉSTAMO'){
+    if(status)status.textContent='El cargo de préstamo solo corresponde a modalidad PRÉSTAMO.';
+    return;
+  }
+
+  const atiende=(el('rqPrepareAtiende')?.value||'').trim();
+  const obs=(el('rqPrepareCargoObs')?.value||el('rqObservacion')?.value||'').trim();
+
+  if(!atiende){
+    if(status)status.textContent='Indique quién atiende el requerimiento.';
+    el('rqPrepareAtiende')?.focus();
+    return;
+  }
+
+  if(!(window.__editCargoSelectedKeys instanceof Set) ||
+     !window.__editCargoSelectedKeys.size){
+    if(status)status.textContent='Seleccione al menos un expediente para el cargo.';
+    return;
+  }
+
+  if(!confirm(
+    '¿Guardar los datos, generar el cargo y abrir la impresión para los expedientes seleccionados?'
+  ))return;
+
+  // Abrir la ventana inmediatamente para evitar bloqueo de popups.
+  const w=window.open('','_blank','width=980,height=800');
+  if(!w){
+    alert('El navegador bloqueó la ventana de impresión. Permita ventanas emergentes para este sitio.');
+    return;
+  }
+
+  w.document.write(
+    '<!doctype html><html><body style="font-family:Arial;padding:30px">'+
+    '<p>Generando cargo...</p></body></html>'
+  );
+
+  btn.disabled=true;
+  btn.textContent='Generando cargo...';
+
+  try{
+    const saved=await saveCurrentEditSilently();
+    if(!saved){
+      w.close();
+      return;
+    }
+
+    // Volver a leer la solicitud para incluir IDs creados durante la edición.
+    const {data:detail,error:detailError}=await sb.rpc(
+      'detalle_solicitud_prestamo',
+      {p_solicitud_id:id}
+    );
+    if(detailError)throw detailError;
+
+    const accepted=(detail||[]).filter(x=>{
+      if(x.estado_item!=='ACEPTADO')return false;
+
+      const keys=[
+        'ID:'+String(x.expediente_id||''),
+        'EXP:'+norm(x.expediente||'')+'|'+norm(x.extension||'')
+      ];
+
+      return keys.some(k=>window.__editCargoSelectedKeys.has(k));
+    });
+
+    if(!accepted.length){
+      throw new Error('No hay expedientes ACEPTADOS seleccionados para generar el cargo.');
+    }
+
+    const ids=accepted.map(x=>x.expediente_id);
+
+    const {data:result,error}=await sb.rpc(
+      'atender_expedientes_cargo_nuevo',
+      {
+        p_solicitud_id:id,
+        p_expediente_ids:ids,
+        p_atiende:atiende,
+        p_observacion:obs||null
+      }
+    );
+    if(error)throw error;
+
+    const cargoId=result?.cargo_id;
+    const cargoNumero=String(result?.cargo_numero||'').trim();
+
+    if(!cargoId||!cargoNumero){
+      throw new Error('No se pudo obtener el cargo generado.');
+    }
+
+    const {data:header,error:headError}=await sb
+      .from('cargos')
+      .select('*')
+      .eq('id',cargoId)
+      .single();
+
+    if(headError)throw headError;
+
+    const {data:expRows,error:expError}=await sb
+      .from('expedientes')
+      .select('*')
+      .in('id',ids);
+
+    if(expError)throw expError;
+
+    const byId=new Map((expRows||[]).map(x=>[x.id,x]));
+    const printRows=ids.map(x=>byId.get(x)).filter(Boolean);
+
+    w.document.open();
+    w.document.write(
+      cargoPrintHtml(
+        header.numero,
+        header.solicitante,
+        header.asunto||saved.payload.asunto,
+        header.atiende_requerimiento||atiende,
+        header.fecha,
+        header.observacion||'',
+        printRows
+      )
+    );
+    w.document.close();
+
+    closeNewRequestModal();
+
+    showToast(
+      `Cargo ${cargoNumero} generado e impresión preparada`
+    );
+
+    await Promise.all([
+      loadSummary(),loadPanel(),loadAll(),loadStates(),
+      loadRequests(),loadRequestsByLawyer(),loadCargos(),loadHistory()
+    ]);
+
+  }catch(err){
+    try{w.close()}catch(_){}
+    if(status)status.textContent=err?.message||String(err);
+  }finally{
+    btn.disabled=false;
+    btn.textContent='Guardar, generar e imprimir cargo';
+  }
 }
 
 async function openRequestDetail(id){
