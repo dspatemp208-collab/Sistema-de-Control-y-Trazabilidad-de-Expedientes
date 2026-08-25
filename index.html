@@ -1097,7 +1097,7 @@
   <section id="tab-requests" class="hidden">
     <div class="req-kpis" id="fullRequestKpis">
       <div class="card kpi"><div class="label">Registradas</div><div class="value" id="rqSolicitado">0</div></div>
-      <div class="card kpi"><div class="label">Registradas por Archivo</div><div class="value" id="rqAceptado">0</div></div>
+      <div class="card kpi"><div class="label">Pendiente por atender</div><div class="value" id="rqAceptado">0</div></div>
       <div class="card kpi warn"><div class="label">Entregadas</div><div class="value" id="rqPrestamo">0</div></div>
       <div class="card kpi"><div class="label">Pendientes de cierre</div><div class="value" id="rqPendienteRecepcion">0</div></div>
       <div class="card kpi"><div class="label">Cerradas</div><div class="value" id="rqDevuelto">0</div></div>
@@ -1120,7 +1120,7 @@
 
       <div class="card kpi req-card-click" id="userRqArchivo"
            onclick="selectMyRequestCard('REGISTRADA POR ARCHIVO')">
-        <div class="label">Registradas por Archivo</div>
+        <div class="label">Pendiente por atender</div>
         <div class="value" id="uRqArchivo">0</div>
         <button class="kpi-view" type="button">Ver solicitudes</button>
       </div>
@@ -1150,7 +1150,7 @@
         <select id="requestStateFilter" onchange="loadRequests()">
           <option value="">TODOS</option>
           <option>REGISTRADA</option>
-          <option>REGISTRADA POR ARCHIVO</option>
+          <option value="REGISTRADA POR ARCHIVO">PENDIENTE POR ATENDER</option>
           <option>ENTREGA PARCIAL</option>
           <option>ENTREGA TOTAL</option>
           <option>PENDIENTE DE CIERRE</option>
@@ -2001,8 +2001,13 @@ function setVisible(id,visible){
 function norm(v){return String(v??'').trim().toUpperCase()}
 function stateDisplayName(estado){
   return estado==='PENDIENTE DE VERIFICACIÓN'
-    ?'PENDIENTES POR ATENDER'
+    ?'PENDIENTE POR ATENDER'
     :(estado||'');
+}
+function requestStateDisplayName(estado){
+  if(estado==='REGISTRADA POR ARCHIVO')return 'PENDIENTE POR ATENDER';
+  if(estado==='ACEPTADO')return 'PENDIENTE POR ATENDER';
+  return estado||'';
 }
 function esc(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
 function expBase(v){let s=String(v??'').trim().replace(/\s+/g,'');const m=s.match(/^(\d+)[-\/]([12]\d{3})$/);if(m){let n=m[1];if(n.length<4)n=n.padStart(4,'0');return n+'-'+m[2]}return s.replace('/','-')}
@@ -4562,7 +4567,7 @@ function renderStates(){
       :x.estado==='EN PRÉSTAMO'
         ?'Último estado: EN PRÉSTAMO'
         :x.estado==='PENDIENTE DE VERIFICACIÓN'
-          ?'Solicitud ya aceptada por Archivo'
+          ?'Solicitud aceptada por Archivo · Pendiente por atender'
           :`${pct.toFixed(1)}% del total`;
 
     const buttonText='Ver expedientes';
@@ -4671,7 +4676,7 @@ async function loadStateDetail(estado){
           <td><b>${esc(x.solicitud_numero||'—')}</b></td>
           <td>${esc(x.solicitante||'—')}</td>
           <td>${fmtDate(x.fecha_solicitud)}</td>
-          <td><span class="pill alert">${esc(x.estado_item||'SOLICITADO')}</span></td>
+          <td><span class="pill alert">${esc(requestStateDisplayName(x.estado_item||'SOLICITADO'))}</span></td>
           <td>${esc(x.origen_registro||'SOLICITUD')}</td>
           <td><span class="pill pending">PENDIENTE POR REGISTRAR</span></td>
           <td>${esc(x.observacion||'')}</td>
@@ -4696,7 +4701,7 @@ async function loadStateDetail(estado){
 
   if(estado==='PENDIENTE DE VERIFICACIÓN'){
     el('stateDetailTitle').textContent=
-      'Pendientes por atender · Solicitud ya aceptada por Archivo';
+      'Pendiente por atender · Solicitud aceptada por Archivo';
     el('stateDetailTable').innerHTML=
       '<div class="empty">Cargando expedientes pendientes de verificación...</div>';
 
@@ -4743,7 +4748,7 @@ async function loadStateDetail(estado){
 
     if(!rows.length){
       el('stateDetailTable').innerHTML=
-        '<div class="empty">No hay expedientes pendientes de verificación con solicitud aceptada por Archivo.</div>';
+        '<div class="empty">No hay expedientes pendientes por atender.</div>';
       return;
     }
 
@@ -4778,7 +4783,7 @@ async function loadStateDetail(estado){
           <td>${esc(x.ultimo_folio||'—')}</td>
           <td><b>${esc(x.solicitud_numero||'—')}</b></td>
           <td>${esc(x.solicitante||'—')}</td>
-          <td><span class="pill pending">${esc(x.estado_item||'ACEPTADO')}</span></td>
+          <td><span class="pill pending">${esc(requestStateDisplayName(x.estado_item||'ACEPTADO'))}</span></td>
           <td>${fmtDate(x.fecha_solicitud)}</td>
           <td>${x.fecha_atencion?fmtDate(x.fecha_atencion):'—'}</td>
           <td>${esc(x.observacion||'')}</td>
@@ -4945,7 +4950,7 @@ function reqStatePill(state){
     state==='EN PRÉSTAMO'?'req-prestamo':
     state==='DEVOLUCIÓN SOLICITADA'?'req-devolucion-solicitada':
     state==='DEVUELTO'?'req-devuelto':'req-cancelado';
-  return `<span class="req-state ${cls}">${esc(state||'')}</span>`;
+  return `<span class="req-state ${cls}">${esc(requestStateDisplayName(state||''))}</span>`;
 }
 
 
@@ -6726,7 +6731,7 @@ function renderRequestsByLawyer(){
 
       <div class="lawyer-stats">
         <div>SOLICITADO<b>${Number(x.solicitado||0)}</b></div>
-        <div>PEND. CARGO<b>${Number(x.aceptado||0)}</b></div>
+        <div>PEND. POR ATENDER<b>${Number(x.aceptado||0)}</b></div>
         <div>EN PRÉSTAMO<b>${Number(x.en_prestamo||0)}</b></div>
         <div>POR RECIBIR<b>${Number(x.por_recibir||0)}</b></div>
         <div>DEVUELTO<b>${Number(x.devuelto||0)}</b></div>
@@ -6884,7 +6889,7 @@ async function loadRequests(){
   }
 
   if(isLimitedUser()){
-    const label=state||'TODAS';
+    const label=requestStateDisplayName(state||'TODAS');
     const title=el('requestsTable')?.previousElementSibling?.querySelector('strong');
     if(title){
       title.textContent=state
@@ -6914,7 +6919,7 @@ function attentionStateClass(value){
 
 function attentionStatePill(value){
   const v=value||'—';
-  return `<span class="status-attn ${attentionStateClass(v)}">${esc(v)}</span>`;
+  return `<span class="status-attn ${attentionStateClass(v)}">${esc(requestStateDisplayName(v))}</span>`;
 }
 
 
@@ -7345,7 +7350,7 @@ async function saveAndPrintCargoFromEdit(){
     });
 
     if(!accepted.length){
-      throw new Error('No hay expedientes ACEPTADOS seleccionados para generar el cargo.');
+      throw new Error('No hay expedientes PENDIENTES POR ATENDER seleccionados para generar el cargo.');
     }
 
     const ids=accepted.map(x=>x.expediente_id);
@@ -7606,7 +7611,7 @@ function renderRequestMovements(){
       <td>${esc(m.accion||'')}</td>
       <td>${esc(m.desde||'')}</td>
       <td>${esc(m.hacia||'')}</td>
-      <td>${esc(m.estado||'')}</td>
+      <td>${esc(requestStateDisplayName(stateDisplayName(m.estado||'')))}</td>
       <td>${esc(m.cargo_numero||'')}</td>
       <td>${esc(m.observacion||'')}</td>
     </tr>`).join('')}</tbody>
@@ -7633,7 +7638,7 @@ function renderRequestActions(){
           ya no se puede modificar el asunto, modalidad, observación ni agregar o retirar expedientes.
         </span>`;
     }else if(r.estado==='ACEPTADO'){
-      actions='<span class="note">Solicitud aceptada por Archivo. La fecha de aceptación ya quedó registrada; la fecha de entrega en préstamo se registrará recién cuando se atienda cada expediente con un cargo.</span>';
+      actions='<span class="note">Solicitud pendiente por atender. Archivo ya registró la aceptación; la fecha de entrega en préstamo se registrará recién cuando se atienda cada expediente con un cargo.</span>';
     }
 
     if(hasMyLoan){
@@ -7667,7 +7672,7 @@ function renderRequestActions(){
     actions += `
       <button class="btn" onclick="assignNewCargoToAccepted()">Generar cargo nuevo para seleccionados</button>
       <button class="btn secondary" onclick="assignExistingCargoToAccepted()">Atender con cargo existente</button>
-      <span class="note">Seleccione uno o varios expedientes ACEPTADOS. Pueden ser atendidos con cargos distintos.</span>`;
+      <span class="note">Seleccione uno o varios expedientes PENDIENTES POR ATENDER. Pueden ser atendidos con cargos distintos.</span>`;
   }
 
   if(requestDetailRows.some(x=>x.estado_item==='EN PRÉSTAMO')){
@@ -7742,12 +7747,12 @@ async function assignNewCargoToAccepted(){
   const obs=el('rqDObservacion').value.trim();
 
   if(!ids.length){
-    el('rqActionStatus').textContent='Seleccione uno o más expedientes ACEPTADOS.';
+    el('rqActionStatus').textContent='Seleccione uno o más expedientes PENDIENTES POR ATENDER.';
     return;
   }
 
   if(accepted.length!==ids.length){
-    el('rqActionStatus').textContent='Para generar un cargo nuevo, seleccione únicamente expedientes con estado ACEPTADO.';
+    el('rqActionStatus').textContent='Para generar un cargo nuevo, seleccione únicamente expedientes PENDIENTES POR ATENDER.';
     return;
   }
 
@@ -7792,12 +7797,12 @@ async function assignExistingCargoToAccepted(){
   const obs=el('rqDObservacion').value.trim();
 
   if(!ids.length){
-    el('rqActionStatus').textContent='Seleccione uno o más expedientes ACEPTADOS.';
+    el('rqActionStatus').textContent='Seleccione uno o más expedientes PENDIENTES POR ATENDER.';
     return;
   }
 
   if(accepted.length!==ids.length){
-    el('rqActionStatus').textContent='Para usar un cargo existente, seleccione únicamente expedientes con estado ACEPTADO.';
+    el('rqActionStatus').textContent='Para usar un cargo existente, seleccione únicamente expedientes PENDIENTES POR ATENDER.';
     return;
   }
 
@@ -8019,7 +8024,7 @@ function populateMasterFilters(){
     state.innerHTML=
       '<option value="">TODOS LOS ESTADOS</option>'+
       masterStateOptions()
-        .map(x=>`<option value="${esc(x)}">${esc(x)}</option>`)
+        .map(x=>`<option value="${esc(x)}">${esc(stateDisplayName(x))}</option>`)
         .join('');
     state.value=[...state.options].some(o=>o.value===current)?current:'';
   }
@@ -8498,7 +8503,7 @@ function rowStatus(r){
     state==='DEVOLUCIÓN SOLICITADA'?'return-requested':
     state==='DEVUELTO'?'returned':'';
 
-  return `<span class="pill ${c}">${esc(state)}</span>`;
+  return `<span class="pill ${c}">${esc(stateDisplayName(state))}</span>`;
 }
 function recordTable(data,withOwner=false,source='panel'){
   if(!data.length)return '<div class="empty">No hay expedientes registrados para esta selección.</div>';
