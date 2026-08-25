@@ -1299,6 +1299,13 @@
         <button class="kpi-view" onclick="showUserCard('REASIGNADOS_A_MI')">Ver expedientes</button>
       </div>
 
+      <div class="card kpi" id="userKpiReturnRequestsCard">
+        <div class="label">Solicitudes de devolución</div>
+        <div class="value" id="uKReturnRequests">0</div>
+        <div class="note-mini">Pendientes de recepción por Archivo.</div>
+        <button class="kpi-view" onclick="showUserCard('DEVOLUCIONES_SOLICITADAS')">Ver expedientes</button>
+      </div>
+
       <div class="card kpi" id="userKpiReturnedCard">
         <div class="label">Devueltos</div>
         <div class="value" id="uKReturned">0</div>
@@ -2430,7 +2437,7 @@ let asuntosCatalogo=ASUNTOS_PREDETERMINADOS.map((nombre,i)=>({id:'fallback-asunt
 let selectedIds=new Set(), cargoRows=[];
 let recordMode='single', batchCargoHeader=null;
 const ALL_PAGE_SIZE=50;
-let selectedOwner='', selectedState='', panelQuickFilter='', ownerCardsRows=[], ownerUserKpiSummary={total_custodia:0,en_prestamo:0,reasignados:0,devoluciones_pendientes_aceptacion:0,devoluciones_realizadas:0,alertas_30:0}, userPanelMode='TODOS', userPanelSummary={todos:0,en_prestamo:0,reasignados_por_mi:0,reasignados_a_mi:0,devueltos:0,alertas_30:0}, operationalAlertRows=[], operationalAlertCount=0, archiveDeliveryRows=[], archiveDeliveryAlertCount=0, currentRequestId='', currentRequest=null, requestSelectedIds=new Set(), requestSearchSelectedIds=new Set(), requestDraftItems=[], addToExistingRequestId='', page=0, panelCount=0, allPage=0, allCountValue=0, allTotalGeneral=0, stateDetailCount=0, panelTimer=null, allTimer=null, historyTimer=null, cargosTimer=null, requestsTimer=null, returnRequestsTimer=null, notificationsPollTimer=null;
+let selectedOwner='', selectedState='', panelQuickFilter='', ownerCardsRows=[], ownerUserKpiSummary={total_custodia:0,en_prestamo:0,reasignados:0,devoluciones_pendientes_aceptacion:0,devoluciones_realizadas:0,alertas_30:0}, userPanelMode='TODOS', userPanelSummary={todos:0,en_prestamo:0,reasignados_por_mi:0,reasignados_a_mi:0,solicitudes_devolucion:0,devueltos:0,alertas_30:0}, operationalAlertRows=[], operationalAlertCount=0, archiveDeliveryRows=[], archiveDeliveryAlertCount=0, currentRequestId='', currentRequest=null, requestSelectedIds=new Set(), requestSearchSelectedIds=new Set(), requestDraftItems=[], addToExistingRequestId='', page=0, panelCount=0, allPage=0, allCountValue=0, allTotalGeneral=0, stateDetailCount=0, panelTimer=null, allTimer=null, historyTimer=null, cargosTimer=null, requestsTimer=null, returnRequestsTimer=null, notificationsPollTimer=null;
 
 function el(id){return document.getElementById(id)}
 
@@ -4160,11 +4167,22 @@ async function loadUserPersonalSummary(){
 
   const s=Array.isArray(data)?(data[0]||{}):(data||{});
 
+  // Las solicitudes de devolución son expedientes que el usuario ya pidió
+  // devolver y que todavía esperan confirmación de recepción por Archivo.
+  const {data:returnReqData,error:returnReqError}=await sb.rpc(
+    'listar_mis_solicitudes_devolucion_usuario',
+    {p_busqueda:null}
+  );
+  if(returnReqError){
+    console.warn('listar_mis_solicitudes_devolucion_usuario:',returnReqError.message);
+  }
+
   userPanelSummary={
     todos:Number(s.todos||0),
     en_prestamo:Number(s.en_prestamo||0),
     reasignados_por_mi:Number(s.reasignados_por_mi||0),
     reasignados_a_mi:Number(s.reasignados_a_mi||0),
+    solicitudes_devolucion:returnReqError?0:(returnReqData||[]).length,
     devueltos:Number(s.devueltos||0),
     alertas_30:Number(s.alertas_30||0),
     pendientes_por_atender:Number((ownerCardsRows.find(x=>x.nombre===name)||{}).pendientes_por_atender||0)
@@ -4174,6 +4192,7 @@ async function loadUserPersonalSummary(){
   if(el('uKLoan'))el('uKLoan').textContent=userPanelSummary.en_prestamo;
   if(el('uKReassignedBy'))el('uKReassignedBy').textContent=userPanelSummary.reasignados_por_mi;
   if(el('uKReassignedTo'))el('uKReassignedTo').textContent=userPanelSummary.reasignados_a_mi;
+  if(el('uKReturnRequests'))el('uKReturnRequests').textContent=userPanelSummary.solicitudes_devolucion;
   if(el('uKReturned'))el('uKReturned').textContent=userPanelSummary.devueltos;
   if(el('uKAlert'))el('uKAlert').textContent=userPanelSummary.alertas_30;
 
@@ -4953,6 +4972,7 @@ function userPanelLabel(){
     PRESTAMO:'En préstamo',
     REASIGNADOS_POR_MI:'Reasignados por mí',
     REASIGNADOS_A_MI:'Reasignados a mí',
+    DEVOLUCIONES_SOLICITADAS:'Solicitudes de devolución',
     DEVUELTOS:'Devueltos',
     ALERTAS_30:'Alertas > 30 días sin movimiento'
   };
@@ -4965,6 +4985,7 @@ function updateUserPersonalKpiUI(){
     PRESTAMO:'userKpiLoanCard',
     REASIGNADOS_POR_MI:'userKpiReassignedByCard',
     REASIGNADOS_A_MI:'userKpiReassignedToCard',
+    DEVOLUCIONES_SOLICITADAS:'userKpiReturnRequestsCard',
     DEVUELTOS:'userKpiReturnedCard',
     ALERTAS_30:'userKpiAlertCard'
   };
@@ -5115,13 +5136,18 @@ async function loadPanel(){
   if(isLimitedUser()){
     const search=cleanSearch(el('searchInput')?.value||'');
 
-    const {data,error}=await sb.rpc('listar_mis_expedientes_tarjeta',{
-      p_tipo:userPanelMode,
-      p_busqueda:search||null
-    });
+    const panelRpc=userPanelMode==='DEVOLUCIONES_SOLICITADAS'
+      ?'listar_mis_solicitudes_devolucion_usuario'
+      :'listar_mis_expedientes_tarjeta';
+
+    const panelArgs=userPanelMode==='DEVOLUCIONES_SOLICITADAS'
+      ?{p_busqueda:search||null}
+      :{p_tipo:userPanelMode,p_busqueda:search||null};
+
+    const {data,error}=await sb.rpc(panelRpc,panelArgs);
 
     if(error){
-      console.warn('listar_mis_expedientes_tarjeta:',error.message);
+      console.warn(panelRpc+':',error.message);
       el('panelTable').innerHTML=
         `<div class="empty">
           No se pudieron cargar los expedientes del usuario.<br>
