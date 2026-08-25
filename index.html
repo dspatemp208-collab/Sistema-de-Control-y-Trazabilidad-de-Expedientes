@@ -1504,7 +1504,7 @@
     <div id="rqPrepareDeliveryPanel" class="prepare-delivery-panel hidden">
       <div class="prepare-delivery-title">
         <div>
-          <strong>Preparación de entrega y cargo</strong>
+          <strong id="rqPrepareDeliveryTitle">Preparación de entrega y cargo</strong>
           <div id="rqPrepareDeliveryNote" class="note" style="margin-top:3px"></div>
         </div>
         <span id="rqPrepareCargoCount" class="cargo-select-count"></span>
@@ -1964,7 +1964,7 @@
     <div class="modal-head">
       <div>
         <h2>Generar cargo de préstamo</h2>
-        <div style="font-size:12px;color:#64748b;margin-top:3px">El cargo incluirá todos los expedientes vinculados al mismo número de cargo.</div>
+        <div style="font-size:12px;color:#64748b;margin-top:3px">El asunto y quien atiende se cargan automáticamente desde la solicitud aceptada. Imprimir el cargo no confirma la entrega física.</div>
       </div>
       <button class="btn secondary small" onclick="closeCargoModal()">Cerrar</button>
     </div>
@@ -5748,8 +5748,9 @@ function updatePrepareDeliveryUI(){
   const acceptBtn=el('rqAcceptFromEditBtn');
   const printBtn=el('rqSavePrintCargoBtn');
   const note=el('rqPrepareDeliveryNote');
+  const title=el('rqPrepareDeliveryTitle');
 
-  if(panel)panel.classList.toggle('hidden',!editMode||!hasFullAccess()||state==='SOLICITADO');
+  if(panel)panel.classList.toggle('hidden',!editMode||!hasFullAccess());
 
   if(!editMode||!hasFullAccess()){
     acceptBtn?.classList.add('hidden');
@@ -5775,11 +5776,13 @@ function updatePrepareDeliveryUI(){
   if(state==='SOLICITADO'){
     acceptBtn?.classList.remove('hidden');
     printBtn?.classList.add('hidden');
+    if(title)title.textContent='Aceptación y asignación de atención';
     if(note){
       note.textContent=
-        'Primero complete los datos y acepte la solicitud. Luego, desde esta misma opción, podrá generar e imprimir el cargo.';
+        'Antes de aceptar, seleccione obligatoriamente quién atenderá el requerimiento. La aceptación registrará por separado quién aceptó y quién quedó asignado para atender.';
     }
   }else if(state==='ACEPTADO' && modalidad==='PRÉSTAMO'){
+    if(title)title.textContent='Preparación de entrega y cargo';
     acceptBtn?.classList.add('hidden');
     printBtn?.classList.remove('hidden');
     if(note){
@@ -5787,6 +5790,7 @@ function updatePrepareDeliveryUI(){
         'Complete Extensión, R.D. y Último folio; marque los expedientes que formarán el cargo y genere la impresión.';
     }
   }else if(state==='ACEPTADO'){
+    if(title)title.textContent='Solicitud aceptada · responsable de atención asignado';
     acceptBtn?.classList.add('hidden');
     printBtn?.classList.add('hidden');
     if(note){
@@ -5794,6 +5798,7 @@ function updatePrepareDeliveryUI(){
         'La solicitud está aceptada. La generación de cargo se habilita únicamente para modalidad PRÉSTAMO.';
     }
   }else{
+    if(title)title.textContent='Preparación de entrega y cargo';
     acceptBtn?.classList.add('hidden');
     printBtn?.classList.add('hidden');
     if(note)note.textContent='La solicitud ya no admite preparación de cargo desde esta pantalla.';
@@ -7161,6 +7166,7 @@ function renderRequests(){
       <th>Por recibir</th>
       <th>Cargo</th>
       <th>Aceptado por</th>
+      <th>Atiende el requerimiento</th>
       <th>F. solicitud</th>
       <th>F. aceptación Archivo</th>
       <th>Hora aceptación</th>
@@ -7181,7 +7187,8 @@ function renderRequests(){
         <td>${Number(r.atendidos||0)} / ${Number(r.total_expedientes||0)}</td>
         <td>${Number(r.devoluciones_pendientes||0)}</td>
         <td>${esc(r.cargo_numero||'—')}</td>
-        <td>${esc(r.aceptado_por||r.atiende||'—')}</td>
+        <td>${esc(r.aceptado_por||'—')}</td>
+        <td><b>${esc(r.atiende||'—')}</b></td>
         <td>${fmtDate(r.fecha_solicitud)}</td>
         <td>${r.fecha_atencion?fmtDate(r.fecha_atencion):'—'}</td>
         <td><b>${r.hora_atencion?fmtTime(r.hora_atencion):'—'}</b></td>
@@ -7408,10 +7415,17 @@ async function saveAndAcceptFromEdit(){
   if(!id)return;
 
   const obs=(el('rqObservacion')?.value||'').trim();
+  const atiende=(el('rqPrepareAtiende')?.value||'').trim();
   const status=el('rqSaveStatus');
   const btn=el('rqAcceptFromEditBtn');
 
-  if(!confirm('¿Guardar los cambios y aceptar la solicitud? Se registrarán automáticamente usuario, fecha y hora. Todavía no se generará cargo.'))return;
+  if(!atiende){
+    if(status)status.textContent='Seleccione quién atenderá el requerimiento antes de aceptar la solicitud.';
+    el('rqPrepareAtiende')?.focus();
+    return;
+  }
+
+  if(!confirm(`¿Aceptar la solicitud y asignar su atención a ${atiende}? Se registrarán automáticamente quién acepta, fecha y hora. Todavía no se generará cargo.`))return;
 
   btn.disabled=true;
   btn.textContent='Guardando y aceptando...';
@@ -7425,7 +7439,7 @@ async function saveAndAcceptFromEdit(){
       'aceptar_solicitud_sin_cargo',
       {
         p_solicitud_id:id,
-        p_atiende:acceptedBy,
+        p_atiende:atiende,
         p_observacion:obs||null
       }
     );
@@ -7437,7 +7451,7 @@ async function saveAndAcceptFromEdit(){
     await loadRequests();
     if(hasFullAccess())await loadRequestsByLawyer();
 
-    showToast(`Solicitud aceptada por ${data?.aceptado_por||acceptedBy} · pendiente por atender`);
+    showToast(`Solicitud aceptada por ${data?.aceptado_por||acceptedBy} · atención asignada a ${data?.atiende||atiende}`);
 
     await openEditRequest(id);
 
@@ -7658,7 +7672,7 @@ async function openRequestDetail(id){
   el('rqDSolicitante').textContent=r.solicitante||'—';
   if(el('rqDOrigen'))el('rqDOrigen').innerHTML=requestOriginPill(r.origen_registro);
   if(el('rqDRegistradoPor'))el('rqDRegistradoPor').textContent=r.registrado_por||'—';
-  setArchiveStaffValue('rqDAtiende','');
+  setArchiveStaffValue('rqDAtiende',(r.atiende||'').trim());
 
   // Valor de retorno por defecto: primera ubicación que contenga ARCHIVO.
   const retornoOpts=[...el('rqDRetorno').options].map(o=>o.value);
@@ -7843,13 +7857,15 @@ function renderRequestActions(){
   let actions='';
 
   if(r.estado==='SOLICITADO'){
+    if(el('rqDAtiende'))el('rqDAtiende').disabled=false;
     actions=`
       <button class="btn secondary" onclick="openAddItemsToExistingRequest()">+ Agregar expedientes</button>
-      <button class="btn" onclick="acceptRequestWithoutCargo()">Aceptar solicitud</button>
-      <span class="note">Aceptar registra automáticamente quién aceptó, fecha y hora. NO genera cargo y NO cambia la ubicación física.</span>`;
+      <button class="btn" onclick="acceptRequestWithoutCargo()">Aceptar y asignar atención</button>
+      <span class="note">Antes de aceptar seleccione quién atenderá el requerimiento. El sistema guardará por separado quién aceptó y quién quedó asignado. NO genera cargo y NO cambia la ubicación física.</span>`;
   }
 
   if(r.estado==='ACEPTADO'){
+    if(el('rqDAtiende'))el('rqDAtiende').disabled=true;
     if(requestDetailRows.some(x=>x.estado_item==='ACEPTADO')){
       actions += `
         <button class="btn" onclick="assignNewCargoToAccepted()">Generar e imprimir cargo</button>
@@ -7883,21 +7899,28 @@ function renderRequestActions(){
 }
 async function acceptRequestWithoutCargo(){
   const obs=el('rqDObservacion').value.trim();
+  const atiende=(el('rqDAtiende')?.value||'').trim();
 
   if(!hasFullAccess()){
     el('rqActionStatus').textContent='Solo Archivo o Administrador puede aceptar solicitudes.';
     return;
   }
 
-  if(!confirm('¿Aceptar esta solicitud? Se registrarán automáticamente usuario, fecha y hora. Todavía NO se generará cargo ni entrega.'))return;
+  if(!atiende){
+    el('rqActionStatus').textContent='Seleccione quién atenderá el requerimiento antes de aceptar.';
+    el('rqDAtiende')?.focus();
+    return;
+  }
 
-  el('rqActionStatus').textContent='Aceptando solicitud...';
+  if(!confirm(`¿Aceptar esta solicitud y asignar la atención a ${atiende}? Se registrarán automáticamente quién acepta, fecha y hora. Todavía NO se generará cargo ni entrega.`))return;
+
+  el('rqActionStatus').textContent='Aceptando y asignando solicitud...';
 
   const acceptedBy=currentProfile?.nombre_personal||currentProfile?.email||session?.user?.email||'ARCHIVO';
 
   const {data,error}=await sb.rpc('aceptar_solicitud_sin_cargo',{
     p_solicitud_id:currentRequestId,
-    p_atiende:acceptedBy,
+    p_atiende:atiende,
     p_observacion:obs||null
   });
 
@@ -7906,7 +7929,7 @@ async function acceptRequestWithoutCargo(){
     return;
   }
 
-  showToast(`Solicitud aceptada por ${data?.aceptado_por||acceptedBy}`);
+  showToast(`Solicitud aceptada por ${data?.aceptado_por||acceptedBy} · atención asignada a ${data?.atiende||atiende}`);
 
   await Promise.all([
     loadSummary(),loadPanel(),loadAll(),loadStates(),loadRequests(),
@@ -7996,7 +8019,7 @@ async function assignNewCargoToAccepted(){
 
   const ids=[...requestSelectedIds];
   const accepted=selectedAcceptedIds();
-  const atiende=el('rqDAtiende').value.trim();
+  const atiende=((currentRequest?.atiende||el('rqDAtiende')?.value||'')).trim();
   const obs=el('rqDObservacion').value.trim();
 
   if(!ids.length){
@@ -8010,7 +8033,7 @@ async function assignNewCargoToAccepted(){
   }
 
   if(!atiende){
-    el('rqActionStatus').textContent='Indique quién atiende el requerimiento.';
+    el('rqActionStatus').textContent='La solicitud no tiene responsable de atención asignado. Vuelva a la aceptación o solicite corrección al Administrador.';
     return;
   }
 
@@ -9019,7 +9042,11 @@ async function loadCargoHeaderByNumber(){
   if(data.fecha)el('cFecha').value=data.fecha;
   el('cAsunto').value=(data.asunto||'').trim();
   el('cAsunto').dataset.originalAsunto=(data.asunto||'').trim();
+  el('cAsunto').readOnly=true;
+  el('cAsunto').title='Asunto cargado automáticamente desde la solicitud vinculada al cargo.';
   setArchiveStaffValue('cAtiende',(data.atiende_requerimiento||'').trim());
+  el('cAtiende').disabled=true;
+  el('cAtiende').title='Responsable de atención definido al aceptar la solicitud.';
   if(data.observacion)el('cObservacion').value=data.observacion;
 
   if(solicitante){
@@ -9117,7 +9144,11 @@ async function openCargoModal(){
   el('cFecha').value=new Date().toISOString().slice(0,10);
   el('cAsunto').value='';
   el('cAsunto').dataset.originalAsunto='';
+  el('cAsunto').readOnly=false;
+  el('cAsunto').title='';
   setArchiveStaffValue('cAtiende','');
+  el('cAtiende').disabled=false;
+  el('cAtiende').title='';
   el('cObservacion').value='';
   el('cargoStatus').textContent='';
 
