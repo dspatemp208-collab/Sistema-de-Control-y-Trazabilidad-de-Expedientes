@@ -8566,6 +8566,7 @@ function closeRequestDetail(){
 function toggleRequestItem(id,checked){
   if(checked)requestSelectedIds.add(id);else requestSelectedIds.delete(id);
   renderRequestDetailItems();
+  syncUserReturnButtonState();
 }
 
 function toggleAllRequestItems(checked){
@@ -8629,7 +8630,7 @@ function renderRequestDetailItems(){
   el('rqDetailItems').innerHTML=`<table>
     <thead><tr>
       <th><input type="checkbox" ${selectableRows.length?'':'disabled'} ${allChecked?'checked':''} onchange="toggleAllRequestItems(this.checked)"></th>
-      <th>Expediente</th><th>Ext.</th><th>R.D.</th><th>Último folio</th><th>Estado solicitud</th><th>Estado físico</th>
+      <th>Expediente</th><th>Ext.</th><th>${isLimitedUser()?'R.D. (opcional)':'R.D.'}</th><th>${isLimitedUser()?'Último folio *':'Último folio'}</th><th>Estado solicitud</th><th>Estado físico</th>
       <th>Responsable actual</th><th>Cargo</th><th>F. entrega préstamo</th><th>F. sol. devolución</th><th>F. devolución</th>
     </tr></thead>
     <tbody>${data.map(x=>{
@@ -8650,7 +8651,14 @@ function renderRequestDetailItems(){
                    value="${esc(x.rd||'')}"
                    placeholder="R.D."
                    oninput="updateRequestDetailPendingField('${x.expediente_id}','rd',this.value)">`
-          :esc(x.rd||'—')}</td>
+          :(isLimitedUser() && requestItemCanRequestReturn(x)
+            ?`<input class="request-item-edit rd user-return-rd"
+                     data-user-rd-id="${x.expediente_id}"
+                     value="${esc(x.rd||'')}"
+                     placeholder="R.D. (opcional)"
+                     title="Puede actualizar la R.D. antes de efectuar la devolución"
+                     oninput="updateUserCustodyReturnField('${x.expediente_id}','rd',this.value)">`
+            :esc(x.rd||'—'))}</td>
         <td>${hasFullAccess() && x.estado_item==='ACEPTADO'
           ?`<input class="request-item-edit folio"
                    value="${esc(x.ultimo_folio||'')}"
@@ -8661,8 +8669,8 @@ function renderRequestDetailItems(){
                      data-user-folio-id="${x.expediente_id}"
                      value="${esc(x.ultimo_folio||'')}"
                      placeholder="Último folio *"
-                     title="Dato obligatorio antes de reasignar o solicitar devolución"
-                     oninput="updateUserCustodyFolioField('${x.expediente_id}',this.value)">`
+                     title="Dato obligatorio antes de reasignar o efectuar devolución"
+                     oninput="updateUserCustodyReturnField('${x.expediente_id}','ultimo_folio',this.value)">`
             :esc(x.ultimo_folio||'—'))}</td>
         <td>${reqStatePill(x.estado_item)}</td>
         <td>${esc(x.estado_fisico||'')}</td>
@@ -8683,6 +8691,7 @@ function toggleAllRequestItems(checked){
       ?requestSelectedIds.add(x.expediente_id)
       :requestSelectedIds.delete(x.expediente_id));
   renderRequestDetailItems();
+  syncUserReturnButtonState();
 }
 function updateRequestDetailPendingField(expedienteId,field,value){
   const row=(requestDetailRows||[]).find(x=>String(x.expediente_id)===String(expedienteId));
@@ -8691,11 +8700,79 @@ function updateRequestDetailPendingField(expedienteId,field,value){
   row[field]=value;
 }
 
-function updateUserCustodyFolioField(expedienteId,value){
+function updateUserCustodyReturnField(expedienteId,field,value){
   const row=(requestDetailRows||[]).find(x=>String(x.expediente_id)===String(expedienteId));
   if(!row || !isLimitedUser())return;
   if(!requestItemCanReassign(row) && !requestItemCanRequestReturn(row))return;
-  row.ultimo_folio=value;
+  if(!['rd','ultimo_folio'].includes(field))return;
+  row[field]=value;
+  syncUserReturnButtonState();
+}
+
+function updateUserCustodyFolioField(expedienteId,value){
+  updateUserCustodyReturnField(expedienteId,'ultimo_folio',value);
+}
+
+function userReturnSelectionReady(){
+  if(!isLimitedUser())return false;
+  const ids=[...requestSelectedIds];
+  if(!ids.length)return false;
+  const rows=(requestDetailRows||[]).filter(x=>ids.includes(x.expediente_id));
+  if(!rows.length || rows.some(x=>!requestItemCanRequestReturn(x)))return false;
+  return rows.every(x=>String(x.ultimo_folio||'').trim());
+}
+
+function syncUserReturnButtonState(){
+  const btn=el('btnEffectReturn');
+  if(!btn)return;
+  const ready=userReturnSelectionReady();
+  btn.disabled=!ready;
+  btn.title=ready
+    ?'Registrar la devolución y dejarla pendiente de recepción por Archivo'
+    :'Seleccione el expediente e ingrese el Último folio obligatorio';
+}
+
+async function saveUserReturnDataBeforeReturn(expedienteIds){
+  if(!isLimitedUser())return true;
+
+  const ids=[...new Set((expedienteIds||[]).filter(Boolean))];
+  if(!ids.length)return true;
+
+  const rows=(requestDetailRows||[]).filter(x=>ids.includes(x.expediente_id));
+  const missing=rows.filter(x=>!String(x.ultimo_folio||'').trim());
+
+  if(missing.length){
+    const names=missing.map(x=>x.expediente).filter(Boolean).join(', ');
+    if(el('rqActionStatus')){
+      el('rqActionStatus').textContent=`Último folio obligatorio. Ingrese el dato antes de efectuar la devolución${names?' para: '+names:''}.`;
+    }
+    document.querySelector(`[data-user-folio-id="${missing[0]?.expediente_id||''}"]`)?.focus();
+    syncUserReturnButtonState();
+    return false;
+  }
+
+  if(el('rqActionStatus')){
+    el('rqActionStatus').textContent='Guardando R.D. y Último folio antes de la devolución...';
+  }
+
+  const {data,error}=await sb.rpc('actualizar_datos_devolucion_mi_custodia',{
+    p_solicitud_id:currentRequestId,
+    p_items:rows.map(x=>({
+      id:x.expediente_id,
+      rd:String(x.rd||'').trim()||null,
+      ultimo_folio:String(x.ultimo_folio||'').trim()
+    }))
+  });
+
+  if(error){
+    if(el('rqActionStatus'))el('rqActionStatus').textContent=error.message;
+    return false;
+  }
+
+  if(el('rqActionStatus')){
+    el('rqActionStatus').textContent=`Datos verificados para ${Number(data?.actualizados||rows.length)} expediente(s). Registrando devolución...`;
+  }
+  return true;
 }
 
 async function saveRequiredUserFoliosBeforeMovement(expedienteIds){
@@ -8835,9 +8912,10 @@ function renderRequestActions(){
 
     if(hasMyLoan){
       actions += `
-        <span class="note"><b>Requisito:</b> antes de reasignar o solicitar devolución debe verificar/actualizar el <b>Último folio</b> de cada expediente seleccionado. No se requiere observación; el registro queda automáticamente en el Historial.</span>
+        <span class="note"><b>Para devolver:</b> puede actualizar la <b>R.D.</b> y debe ingresar obligatoriamente el <b>Último folio</b>. Luego seleccione <b>Efectuar devolución</b>. Los cambios quedan registrados automáticamente en el Historial y no requieren observación.</span>
         <button class="btn secondary" onclick="reassignRequestItems()">Reasignar seleccionados</button>
-        <button class="btn" onclick="requestReturnItems()">Solicitar devolución</button>`;
+        <button class="btn" id="btnEffectReturn" onclick="requestReturnItems()" disabled>Efectuar devolución</button>`;
+      setTimeout(syncUserReturnButtonState,0);
     }
 
     if(r.estado==='DEVUELTO'){
@@ -9189,12 +9267,12 @@ async function requestReturnItems(){
     return;
   }
 
-  if(!confirm(`¿Solicitar la devolución de ${ids.length} expediente(s)? Antes de registrar la devolución se guardará el Último folio actualizado.`))return;
+  if(!confirm(`¿Efectuar la devolución de ${ids.length} expediente(s)? Se guardarán la R.D. (si fue actualizada) y el Último folio. La devolución quedará pendiente de recepción por Archivo.`))return;
 
-  const foliosOk=await saveRequiredUserFoliosBeforeMovement(ids);
-  if(!foliosOk)return;
+  const datosOk=await saveUserReturnDataBeforeReturn(ids);
+  if(!datosOk)return;
 
-  el('rqActionStatus').textContent='Registrando solicitud de devolución...';
+  el('rqActionStatus').textContent='Registrando devolución pendiente de recepción por Archivo...';
 
   const {data,error}=await sb.rpc('solicitar_devolucion_expedientes',{
     p_solicitud_id:currentRequestId,
@@ -9208,7 +9286,7 @@ async function requestReturnItems(){
   }
 
   requestSelectedIds.clear();
-  showToast(`${data?.solicitados||ids.length} expediente(s) pendientes de recepción en Archivo`);
+  showToast(`${data?.solicitados||ids.length} expediente(s) devuelto(s), pendiente(s) de recepción por Archivo`);
 
   if(hasFullAccess()){
     await Promise.all([
