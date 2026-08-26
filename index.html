@@ -142,6 +142,7 @@
 
 .pill.reassigned{background:#f4eaff;color:#6b2c91}
 .pill.return-requested{background:#fee8d5;color:#8a4100}
+.pill.archive-requested{background:#fff0e8;color:#984514;border:1px solid #f1c7ae}
 .pill.returned-archive{background:#e6f5ea;color:#21613a}
 
 
@@ -1065,9 +1066,14 @@
 .bulk-return-summary{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
 .bulk-return-summary .mini{padding:6px 9px;border:1px solid var(--line);border-radius:8px;background:#f8fafc;font-size:11px;color:var(--muted)}
 
+
+/* Seguridad visual por rol: ningún perfil USUARIO muestra Gestionar en filas */
+.app.limited-user .user-manage-action{display:none!important}
 </style>
 </head>
 <body>
+<!-- Confirmaciones nativas del navegador eliminadas: las acciones se ejecutan directamente; se conservan validaciones y errores. -->
+
 <div class="app">
 <aside class="sidebar">
   <div class="brand">CONTROL DE EXPEDIENTES<small>Base de datos en línea · multiusuario</small></div>
@@ -1085,6 +1091,7 @@
       <button class="btn secondary" id="requestBtn" onclick="openNewRequestModal()" disabled>📥 Solicitar seleccionados</button>
       <button class="btn secondary" id="searchRequestBtn" onclick="openRequestSearchModal()">🔎 Buscar para solicitar</button>
       <span class="sel-count" id="selectedCount">0 seleccionados</span>
+      <button class="btn secondary hidden-by-role" id="bulkReassignBtn" onclick="openBulkReassignModal()" disabled>↪ Reasignar seleccionados</button>
       <button class="btn secondary hidden-by-role" id="bulkReturnBtn" onclick="openBulkReturnModal()" disabled>↩ Devolver seleccionados</button>
       <button class="btn secondary" id="importCsvBtn" onclick="document.getElementById('csvFile').click()">Importar registro CSV</button>
       <input class="hidden" id="csvFile" type="file" accept=".csv,text/csv" onchange="importCSV(event)">
@@ -1099,7 +1106,7 @@
       <button class="btn secondary" onclick="logout()">Cerrar sesión</button>
     </div>
   </div>
-  <div class="statusbar">Base: <b>Supabase / PostgreSQL</b> · Usuario: <b id="currentUser">—</b> · Perfil: <b id="currentRole">—</b> · Los permisos se controlan desde Supabase.</div>
+  <div class="statusbar">Base: <b>Supabase / PostgreSQL</b> · Usuario: <b id="currentUser">—</b> · Perfil: <b id="currentRole">—</b> · <b style="color:#1f4e78">REASIGNACIÓN MÚLTIPLE ACTIVA</b> · <b style="color:#8a4100">CARGO AUTOSELECCIÓN ACTIVA</b> · <b style="margin-left:8px;color:#5b21b6">SQL/UI REASIGNACIÓN USUARIO</b> · Los permisos se controlan desde Supabase.<b style="margin-left:8px;color:#21613a">DEVOLUCIÓN USUARIO NUEVA</b></div>
 
   <div class="tabs">
     <button class="tab active" id="tabBtnPanel" data-tab="panel" onclick="switchTab('panel',this)">Panel por personal</button>
@@ -1285,6 +1292,12 @@
         <div class="label">En préstamo</div>
         <div class="value" id="uKLoan">0</div>
         <button class="kpi-view" onclick="showUserCard('PRESTAMO')">Ver expedientes</button>
+      </div>
+
+      <div class="card kpi warn" id="userKpiReturnRequestedCard">
+        <div class="label">Devolución solicitada</div>
+        <div class="value" id="uKReturnRequested">0</div>
+        <button class="kpi-view" onclick="showUserCard('DEVOLUCION_SOLICITADA')">Ver expedientes</button>
       </div>
 
       <div class="card kpi" id="userKpiReassignedByCard">
@@ -2381,6 +2394,54 @@
 </div>
 
 
+<!-- Reasignación múltiple del usuario -->
+<div class="modal" id="bulkReassignModal">
+  <div class="modal-box" style="max-width:1050px">
+    <div class="modal-head">
+      <div>
+        <h2>Reasignar expedientes seleccionados</h2>
+        <div style="font-size:12px;color:#64748b;margin-top:3px">
+          Seleccione el nuevo responsable y registre obligatoriamente el Último folio de cada expediente.
+        </div>
+      </div>
+      <button class="btn secondary small" onclick="closeBulkReassignModal()">Cerrar</button>
+    </div>
+
+    <div class="form-grid" style="margin-bottom:10px">
+      <div class="field span2">
+        <label>Nuevo responsable *</label>
+        <select id="bulkReassignTarget" onchange="syncBulkReassignState()">
+          <option value="">— SELECCIONE NUEVO RESPONSABLE —</option>
+        </select>
+      </div>
+      <div class="field span2">
+        <label>Observación</label>
+        <input id="bulkReassignObservation" placeholder="Opcional">
+      </div>
+    </div>
+
+    <div class="note">
+      Solo se reasignarán expedientes que actualmente estén <b>EN PRÉSTAMO</b> y bajo su responsabilidad.
+      Si Archivo ya había solicitado uno de ellos, la solicitud de entrega continuará activa para el nuevo responsable.
+    </div>
+
+    <div class="bulk-return-summary">
+      <div class="mini"><b id="bulkReassignCount">0</b> expedientes seleccionados</div>
+      <div class="mini"><b id="bulkReassignArchiveCount">0</b> solicitados por Archivo</div>
+    </div>
+
+    <div class="bulk-return-table" id="bulkReassignTable">
+      <div class="empty">Seleccione expedientes para reasignar.</div>
+    </div>
+
+    <div class="modal-foot">
+      <span id="bulkReassignStatus" style="margin-right:auto;font-size:12px;color:#64748b"></span>
+      <button class="btn secondary" onclick="closeBulkReassignModal()">Cancelar</button>
+      <button class="btn" id="bulkReassignSubmitBtn" onclick="submitBulkReassign()" disabled>REASIGNAR EXPEDIENTES</button>
+    </div>
+  </div>
+</div>
+
 <!-- Devolución múltiple del usuario -->
 <div class="modal" id="bulkReturnModal">
   <div class="modal-box" style="max-width:1050px">
@@ -2425,12 +2486,13 @@ const PAGE_SIZE=200;
 let sb=null, session=null, currentProfile=null, userProfiles=[], abogadoProfiles=[], reassignmentProfiles=[], reassignmentProfilesLoadedAt=0, returnRequestRows=[], pendingRegisterRows=[], pendingVerifyRows=[], notificationRows=[], notificationUnread=0, notificationsLoaded=false, requestExcelRows=[], requestExcelMissing=[], requestExcelDuplicates=0, summaryRows=[], panelRows=[], allRows=[], historyRows=[], cargosRows=[], selectedCargoNumero='', stateRows=[], stateDetailRows=[], requestRows=[], requestDetailRows=[], requestMovementRows=[], requestSearchRows=[], requestsByLawyerRows=[];
 let activeArchiveDeliveryRequestId='';
 let bulkReturnRows=[];
+let bulkReassignRows=[];
 let catalogo=MASTER.map(([nombre,tipo],i)=>({id:'fallback-'+i,nombre,tipo,activo:true}));
 let asuntosCatalogo=ASUNTOS_PREDETERMINADOS.map((nombre,i)=>({id:'fallback-asunto-'+i,nombre,activo:true}));
 let selectedIds=new Set(), cargoRows=[];
 let recordMode='single', batchCargoHeader=null;
 const ALL_PAGE_SIZE=50;
-let selectedOwner='', selectedState='', panelQuickFilter='', ownerCardsRows=[], ownerUserKpiSummary={total_custodia:0,en_prestamo:0,reasignados:0,devoluciones_pendientes_aceptacion:0,devoluciones_realizadas:0,alertas_30:0}, userPanelMode='TODOS', userPanelSummary={todos:0,en_prestamo:0,reasignados_por_mi:0,reasignados_a_mi:0,devueltos:0,alertas_30:0}, operationalAlertRows=[], operationalAlertCount=0, archiveDeliveryRows=[], archiveDeliveryAlertCount=0, currentRequestId='', currentRequest=null, requestSelectedIds=new Set(), requestSearchSelectedIds=new Set(), requestDraftItems=[], addToExistingRequestId='', page=0, panelCount=0, allPage=0, allCountValue=0, allTotalGeneral=0, stateDetailCount=0, panelTimer=null, allTimer=null, historyTimer=null, cargosTimer=null, requestsTimer=null, returnRequestsTimer=null, notificationsPollTimer=null;
+let selectedOwner='', selectedState='', panelQuickFilter='', ownerCardsRows=[], ownerUserKpiSummary={total_custodia:0,en_prestamo:0,reasignados:0,devoluciones_pendientes_aceptacion:0,devoluciones_realizadas:0,alertas_30:0}, userPanelMode='TODOS', userPanelSummary={todos:0,en_prestamo:0,devolucion_solicitada:0,reasignados_por_mi:0,reasignados_a_mi:0,devueltos:0,alertas_30:0}, operationalAlertRows=[], operationalAlertCount=0, archiveDeliveryRows=[], archiveDeliveryAlertCount=0, currentRequestId='', currentRequest=null, requestSelectedIds=new Set(), requestSearchSelectedIds=new Set(), requestDraftItems=[], addToExistingRequestId='', page=0, panelCount=0, allPage=0, allCountValue=0, allTotalGeneral=0, stateDetailCount=0, panelTimer=null, allTimer=null, historyTimer=null, cargosTimer=null, requestsTimer=null, returnRequestsTimer=null, notificationsPollTimer=null;
 
 function el(id){return document.getElementById(id)}
 
@@ -2844,7 +2906,7 @@ function isAdmin(){
     currentProfile.rol==='ADMINISTRADOR';
 }
 function isLimitedUser(){
-  return !!currentProfile && currentProfile.rol==='USUARIO';
+  return !!currentProfile && currentProfile.activo!==false && norm(currentProfile.rol)==='USUARIO';
 }
 
 async function loadMyProfile(){
@@ -2882,6 +2944,7 @@ function applyRoleUI(){
 
   setVisible('newRecordBtn',full);
   setVisible('cargoBtn',full);
+  setVisible('bulkReassignBtn',limited);
   setVisible('bulkReturnBtn',limited);
   setVisible('importCsvBtn',full);
   setVisible('exportCsvBtn',full);
@@ -3116,6 +3179,10 @@ function renderOperationalAlerts(){
 async function loadArchiveDeliveryRequests(silent=false){
   if(!sb||!session)return;
 
+  const previousSignature=(archiveDeliveryRows||[])
+    .map(x=>`${x.id||''}:${x.expediente_id||''}:${x.estado||''}`)
+    .sort().join('|');
+
   const {data,error}=await sb.rpc('listar_solicitudes_entrega_archivo_pendientes');
 
   if(error){
@@ -3134,6 +3201,18 @@ async function loadArchiveDeliveryRequests(silent=false){
   archiveDeliveryRows=data||[];
   archiveDeliveryAlertCount=archiveDeliveryRows.length;
   updateAlertsBadge();
+
+  const nextSignature=(archiveDeliveryRows||[])
+    .map(x=>`${x.id||''}:${x.expediente_id||''}:${x.estado||''}`)
+    .sort().join('|');
+
+  // Si Archivo crea, prepara o cierra una solicitud de devolución,
+  // actualizar de inmediato el estado visible en el panel sin esperar
+  // a que el usuario recargue la página.
+  if(previousSignature!==nextSignature && panelRows?.length &&
+     el('tab-panel') && !el('tab-panel').classList.contains('hidden')){
+    el('panelTable').innerHTML=recordTable(panelRows,false,'panel');
+  }
 
   if(el('alertsModal')?.classList.contains('show')){
     renderArchiveDeliveryRequests();
@@ -3268,8 +3347,6 @@ async function confirmArchiveDeliveryReceived(id){
     alert('Debe indicar la ubicación de retorno.');
     return;
   }
-
-  if(!confirm(`¿Confirmar que Archivo recibió físicamente el expediente y trasladar la custodia a ${ubicacion.trim()}?`))return;
 
   const {data,error}=await sb.rpc('confirmar_recepcion_entrega_archivo',{
     p_solicitud_entrega_id:id,
@@ -4089,11 +4166,9 @@ async function saveUserProfile(id){
   const activo=el(`user-active-${id}`).checked;
 
   if(rol==='USUARIO' && !nombre){
-    if(!confirm('Este USUARIO quedará sin personal asociado y no podrá ver ni crear solicitudes hasta que se le asigne un nombre. ¿Continuar?'))return;
   }
 
   if(id===session.user.id && (!activo || rol!=='ADMINISTRADOR')){
-    if(!confirm('Está modificando su propia cuenta administradora. Esto puede quitarle acceso a la administración. ¿Continuar?'))return;
   }
 
   const {error}=await sb
@@ -4160,18 +4235,32 @@ async function loadUserPersonalSummary(){
 
   const s=Array.isArray(data)?(data[0]||{}):(data||{});
 
+  // La devolución solicitada se consulta por una RPC NUEVA e independiente
+  // de los resúmenes antiguos para evitar inconsistencias del flujo anterior.
+  let requestedReturnCount=0;
+  const {data:returnRequested,error:returnRequestedError}=await sb.rpc(
+    'listar_mis_devoluciones_solicitadas_nuevo',
+    {p_busqueda:null}
+  );
+  if(returnRequestedError){
+    console.warn('listar_mis_devoluciones_solicitadas_nuevo:',returnRequestedError.message);
+  }else{
+    requestedReturnCount=(returnRequested||[]).length;
+  }
+
   userPanelSummary={
     todos:Number(s.todos||0),
     en_prestamo:Number(s.en_prestamo||0),
+    devolucion_solicitada:Number(requestedReturnCount||0),
     reasignados_por_mi:Number(s.reasignados_por_mi||0),
     reasignados_a_mi:Number(s.reasignados_a_mi||0),
     devueltos:Number(s.devueltos||0),
-    alertas_30:Number(s.alertas_30||0),
-    pendientes_por_atender:Number((ownerCardsRows.find(x=>x.nombre===name)||{}).pendientes_por_atender||0)
+    alertas_30:Number(s.alertas_30||0)
   };
 
   if(el('uKAll'))el('uKAll').textContent=userPanelSummary.todos;
   if(el('uKLoan'))el('uKLoan').textContent=userPanelSummary.en_prestamo;
+  if(el('uKReturnRequested'))el('uKReturnRequested').textContent=userPanelSummary.devolucion_solicitada;
   if(el('uKReassignedBy'))el('uKReassignedBy').textContent=userPanelSummary.reasignados_por_mi;
   if(el('uKReassignedTo'))el('uKReassignedTo').textContent=userPanelSummary.reasignados_a_mi;
   if(el('uKReturned'))el('uKReturned').textContent=userPanelSummary.devueltos;
@@ -4245,6 +4334,7 @@ function updateOwnerPanelVisibility(){
       el('ownerStateFilter').innerHTML=`
         <option value="TODOS">TODOS MIS EXPEDIENTES</option>
         <option value="PRESTAMO">EN PRÉSTAMO</option>
+        <option value="DEVOLUCION_SOLICITADA">DEVOLUCIÓN SOLICITADA</option>
         <option value="REASIGNADOS_POR_MI">REASIGNADOS POR MÍ</option>
         <option value="REASIGNADOS_A_MI">REASIGNADOS A MÍ</option>
         <option value="DEVUELTOS">DEVUELTOS</option>
@@ -4762,40 +4852,76 @@ async function attachLatestMovementToRecords(rows){
   const ids=rows.map(r=>r.id).filter(Boolean);
   if(!ids.length)return rows;
 
-  const {data,error}=await sb
-    .from('movimientos_prestamo')
-    .select('expediente_id,accion,desde,hacia,estado,cargo_numero,created_at')
-    .in('expediente_id',ids)
-    .order('created_at',{ascending:false})
-    .limit(1000);
+  // Se consultan en paralelo el último movimiento y el estado operativo
+  // vigente dentro de solicitud_expedientes. Esto evita que una devolución
+  // recién registrada por el USUARIO siga viéndose como EN PRÉSTAMO si el
+  // estado físico de expedientes todavía no cambia hasta la recepción de Archivo.
+  const [movementResult,itemResult]=await Promise.all([
+    sb.from('movimientos_prestamo')
+      .select('expediente_id,accion,desde,hacia,estado,cargo_numero,created_at')
+      .in('expediente_id',ids)
+      .order('created_at',{ascending:false})
+      .limit(1000),
+    sb.from('solicitud_expedientes')
+      .select('expediente_id,estado,updated_at')
+      .in('expediente_id',ids)
+      .order('updated_at',{ascending:false})
+      .limit(1000)
+  ]);
 
-  if(error){
-    console.warn('No se pudo cargar último movimiento:',error.message);
-    return rows;
+  if(movementResult.error){
+    console.warn('No se pudo cargar último movimiento:',movementResult.error.message);
+  }
+  if(itemResult.error){
+    console.warn('No se pudo cargar estado operativo de la solicitud:',itemResult.error.message);
   }
 
   const latest=new Map();
+  (movementResult.data||[]).forEach(m=>{
+    if(!latest.has(m.expediente_id))latest.set(m.expediente_id,m);
+  });
 
-  (data||[]).forEach(m=>{
-    if(!latest.has(m.expediente_id)){
-      latest.set(m.expediente_id,m);
-    }
+  const latestItem=new Map();
+  (itemResult.data||[]).forEach(x=>{
+    if(!latestItem.has(x.expediente_id))latestItem.set(x.expediente_id,x);
   });
 
   return rows.map(r=>{
     const m=latest.get(r.id);
+    const item=latestItem.get(r.id);
     return {
       ...r,
       ultimo_movimiento:m?.accion||'',
       ultimo_movimiento_desde:m?.desde||'',
       ultimo_movimiento_hacia:m?.hacia||'',
       ultimo_movimiento_estado:m?.estado||'',
-      ultimo_movimiento_fecha:m?.created_at||null
+      ultimo_movimiento_fecha:m?.created_at||null,
+      estado_solicitud_item:item?.estado||''
     };
   });
 }
 
+function archiveDeliveryVisualState(r){
+  const expedienteId=String(r?.id||r?.expediente_id||'');
+  if(!expedienteId)return '';
+
+  const req=(archiveDeliveryRows||[]).find(x=>
+    String(x.expediente_id||'')===expedienteId
+  );
+  if(!req)return '';
+
+  const state=norm(req.estado||'');
+  if(state==='SOLICITADA')return 'SOLICITADO POR EL ARCHIVO';
+  if(state==='PREPARADA')return 'DEVOLUCIÓN SOLICITADA';
+  return '';
+}
+
 function movementLabel(r){
+  const archiveState=archiveDeliveryVisualState(r);
+  if(archiveState==='SOLICITADO POR EL ARCHIVO'){
+    return 'SOLICITUD DE DEVOLUCIÓN · ARCHIVO';
+  }
+
   const action=(r.ultimo_movimiento||'').trim();
   if(!action)return '—';
 
@@ -4951,6 +5077,7 @@ function userPanelLabel(){
   const labels={
     TODOS:'Todos mis expedientes',
     PRESTAMO:'En préstamo',
+    DEVOLUCION_SOLICITADA:'Devolución solicitada',
     REASIGNADOS_POR_MI:'Reasignados por mí',
     REASIGNADOS_A_MI:'Reasignados a mí',
     DEVUELTOS:'Devueltos',
@@ -4963,6 +5090,7 @@ function updateUserPersonalKpiUI(){
   const map={
     TODOS:'userKpiAllCard',
     PRESTAMO:'userKpiLoanCard',
+    DEVOLUCION_SOLICITADA:'userKpiReturnRequestedCard',
     REASIGNADOS_POR_MI:'userKpiReassignedByCard',
     REASIGNADOS_A_MI:'userKpiReassignedToCard',
     DEVUELTOS:'userKpiReturnedCard',
@@ -5030,7 +5158,7 @@ async function changeOwnerStateFilter(value){
 
   if(isLimitedUser()){
     const valid=[
-      'TODOS','PRESTAMO','REASIGNADOS_POR_MI',
+      'TODOS','PRESTAMO','DEVOLUCION_SOLICITADA','REASIGNADOS_POR_MI',
       'REASIGNADOS_A_MI','DEVUELTOS','ALERTAS_30'
     ];
     userPanelMode=valid.includes(value)?value:'TODOS';
@@ -5115,10 +5243,14 @@ async function loadPanel(){
   if(isLimitedUser()){
     const search=cleanSearch(el('searchInput')?.value||'');
 
-    const {data,error}=await sb.rpc('listar_mis_expedientes_tarjeta',{
-      p_tipo:userPanelMode,
-      p_busqueda:search||null
-    });
+    const panelRpc=userPanelMode==='DEVOLUCION_SOLICITADA'
+      ?'listar_mis_devoluciones_solicitadas_nuevo'
+      :'listar_mis_expedientes_tarjeta';
+    const panelArgs=userPanelMode==='DEVOLUCION_SOLICITADA'
+      ?{p_busqueda:search||null}
+      :{p_tipo:userPanelMode,p_busqueda:search||null};
+
+    const {data,error}=await sb.rpc(panelRpc,panelArgs);
 
     if(error){
       console.warn('listar_mis_expedientes_tarjeta:',error.message);
@@ -7452,8 +7584,6 @@ async function continueRequestFromSearch(){
   if(addToExistingRequestId){
     const solicitudId=addToExistingRequestId;
 
-    if(!confirm(`¿Agregar ${items.length} expediente(s) a la solicitud ${currentRequest?.numero||''}?`))return;
-
     el('requestLookupContinueBtn').disabled=true;
     el('requestLookupContinueBtn').textContent='Agregando...';
 
@@ -8369,8 +8499,6 @@ async function saveAndAcceptFromEdit(){
     return;
   }
 
-  if(!confirm(`¿Aceptar la solicitud y asignar su atención a ${atiende}? Se registrarán automáticamente quién acepta, fecha y hora. Todavía no se generará cargo.`))return;
-
   btn.disabled=true;
   btn.textContent='Guardando y aceptando...';
 
@@ -8436,10 +8564,6 @@ async function saveAndPrintCargoFromEdit(){
     if(status)status.textContent='Seleccione al menos un expediente para el cargo.';
     return;
   }
-
-  if(!confirm(
-    '¿Guardar los datos, generar el cargo y abrir la impresión para los expedientes seleccionados?'
-  ))return;
 
   // Abrir la ventana inmediatamente para evitar bloqueo de popups.
   const w=window.open('','_blank','width=980,height=800');
@@ -8593,6 +8717,15 @@ async function openRequestDetail(id){
   requestDetailRows=detailResult.data||[];
   requestMovementRows=movementResult.error?[]:(movementResult.data||[]);
 
+  // ARCHIVO / ADMINISTRADOR: al abrir una solicitud con expedientes
+  // PENDIENTES POR ATENDER, dejarlos seleccionados automáticamente
+  // para poder guardar, generar e imprimir el cargo sin un paso extra.
+  if(hasFullAccess()){
+    requestDetailRows
+      .filter(x=>x.estado_item==='ACEPTADO')
+      .forEach(x=>requestSelectedIds.add(x.expediente_id));
+  }
+
   if(!currentRequest){
     const {data:list}=await sb.rpc('listar_solicitudes_prestamo',{p_busqueda:null,p_estado:null});
     requestRows=await enrichRequestAttentionTimes(list||[]);
@@ -8646,10 +8779,13 @@ function toggleRequestItem(id,checked){
 }
 
 function toggleAllRequestItems(checked){
+  // Seleccionar todos los expedientes que realmente pueden gestionarse
+  // en la etapa actual (cargo, préstamo, devolución, etc.).
   requestDetailRows
-    .filter(x=>requestItemCanReassign(x))
+    .filter(x=>requestItemSelectable(x))
     .forEach(x=>checked?requestSelectedIds.add(x.expediente_id):requestSelectedIds.delete(x.expediente_id));
   renderRequestDetailItems();
+  syncUserReturnButtonState();
 }
 
 function requestItemCanAssignCargo(x){
@@ -8682,7 +8818,7 @@ function requestItemCanConfirmReturn(x){
 function requestItemCanManageArchiveDelivery(x){
   if(!isLimitedUser() || !activeArchiveDeliveryRequestId)return false;
   if(!isArchiveRequestedReturnItem(x))return false;
-  if(!['DEVOLUCIÓN SOLICITADA','EN PRÉSTAMO'].includes(x.estado_item))return false;
+  if(x.estado_item!=='EN PRÉSTAMO')return false;
 
   const mine=currentProfile?.nombre_personal||'';
   return !!mine && norm(x.responsable_actual||x.ubicacion_actual||'')===norm(mine);
@@ -9115,8 +9251,6 @@ async function acceptRequestWithoutCargo(){
     return;
   }
 
-  if(!confirm(`¿Aceptar esta solicitud y asignar la atención a ${atiende}? Se registrarán automáticamente quién acepta, fecha y hora. Todavía NO se generará cargo ni entrega.`))return;
-
   el('rqActionStatus').textContent='Aceptando y asignando solicitud...';
 
   const acceptedBy=currentProfile?.nombre_personal||currentProfile?.email||session?.user?.email||'ARCHIVO';
@@ -9192,8 +9326,6 @@ async function assignNewCargoToAccepted(){
     return;
   }
 
-  if(!confirm(`¿Guardar los datos y generar un cargo nuevo para ${accepted.length} expediente(s) seleccionado(s)?`))return;
-
   const saved=await savePendingRequestDetailData(true);
   if(!saved)return;
 
@@ -9247,8 +9379,6 @@ async function assignExistingCargoToAccepted(){
     el('rqDCargoExistente').focus();
     return;
   }
-
-  if(!confirm(`¿Atender ${accepted.length} expediente(s) con el Cargo N.° ${cargo}?`))return;
 
   el('rqActionStatus').textContent='Vinculando al cargo y registrando préstamo...';
 
@@ -9326,8 +9456,6 @@ async function reassignArchiveRequestedItem(){
     return;
   }
 
-  if(!confirm(`¿Reasignar ${row.expediente} a ${nuevo}? La solicitud de entrega de Archivo seguirá activa y pasará al nuevo responsable.`))return;
-
   el('rqActionStatus').textContent='Actualizando datos y reasignando expediente...';
 
   const {data,error}=await sb.rpc('gestionar_entrega_archivo_usuario',{
@@ -9372,8 +9500,6 @@ async function reassignRequestItems(){
     return;
   }
 
-  if(!confirm(`¿Reasignar ${ids.length} expediente(s) a ${nuevo}? Antes de la reasignación se registrará el Último folio actualizado.`))return;
-
   const foliosOk=await saveRequiredUserFoliosBeforeMovement(ids);
   if(!foliosOk)return;
 
@@ -9417,8 +9543,6 @@ async function requestArchiveDeliveryItems(){
     return;
   }
 
-  if(!confirm(`¿Solicitar al responsable actual la entrega de ${ids.length} expediente(s) a Archivo? La custodia no cambiará hasta confirmar la recepción.`))return;
-
   el('rqActionStatus').textContent='Registrando solicitud de entrega a Archivo...';
 
   const {data,error}=await sb.rpc('solicitar_entrega_archivo',{
@@ -9444,99 +9568,90 @@ async function requestArchiveDeliveryItems(){
 }
 
 async function requestReturnItems(){
+  if(!isLimitedUser()){
+    if(el('rqActionStatus'))el('rqActionStatus').textContent='Esta acción corresponde al perfil USUARIO.';
+    return;
+  }
+
   const ids=[...requestSelectedIds];
-  const obs=el('rqDObservacion').value.trim();
-
   if(!ids.length){
-    el('rqActionStatus').textContent='Seleccione uno o más expedientes.';
+    el('rqActionStatus').textContent='Seleccione uno o más expedientes EN PRÉSTAMO.';
     return;
   }
 
-  // Caso especial: Archivo solicitó expresamente este expediente.
-  if(activeArchiveDeliveryRequestId){
-    const req=currentArchiveDeliveryRequest();
-    if(!req || ids.length!==1 || String(ids[0])!==String(req.expediente_id)){
-      el('rqActionStatus').textContent='Seleccione únicamente el expediente solicitado por Archivo.';
-      return;
-    }
-
-    const row=(requestDetailRows||[]).find(x=>String(x.expediente_id)===String(req.expediente_id));
-    if(!row || !requestItemCanManageArchiveDelivery(row)){
-      el('rqActionStatus').textContent='Este expediente ya no está disponible para esta gestión.';
-      return;
-    }
-
-    if(!String(row.ultimo_folio||'').trim()){
-      el('rqActionStatus').textContent='Ingrese obligatoriamente el Último folio antes de devolver.';
-      document.querySelector(`[data-user-folio-id="${row.expediente_id}"]`)?.focus();
-      return;
-    }
-
-    if(!confirm(`¿Devolver ${row.expediente} a Archivo? Se guardarán la R.D. y el Último folio y quedará pendiente la confirmación de recepción.`))return;
-
-    el('rqActionStatus').textContent='Actualizando datos y registrando devolución a Archivo...';
-
-    const {data,error}=await sb.rpc('gestionar_entrega_archivo_usuario',{
-      p_solicitud_entrega_id:activeArchiveDeliveryRequestId,
-      p_accion:'DEVOLVER',
-      p_rd:String(row.rd||'').trim()||null,
-      p_ultimo_folio:String(row.ultimo_folio||'').trim(),
-      p_nuevo_responsable:null
-    });
-
-    if(error){
-      el('rqActionStatus').textContent=error.message;
-      return;
-    }
-
-    const expedienteNombre=row.expediente||'Expediente';
-    activeArchiveDeliveryRequestId='';
-    requestSelectedIds.clear();
-    showToast(`${expedienteNombre}: devolución registrada. Archivo debe confirmar la recepción.`);
-
-    await Promise.all([
-      loadArchiveDeliveryRequests(true),loadOperationalAlerts(true),loadNotifications(true),
-      loadPanel(),loadRequests(),loadHistory()
-    ]);
-
-    closeRequestDetail();
+  const selected=(requestDetailRows||[]).filter(x=>ids.includes(x.expediente_id));
+  if(selected.length!==ids.length){
+    el('rqActionStatus').textContent='No se pudo identificar uno de los expedientes seleccionados.';
     return;
   }
 
-  // Devolución normal iniciada por el usuario.
-  const selected=requestDetailRows.filter(x=>ids.includes(x.expediente_id));
-  if(selected.some(x=>!requestItemCanRequestReturn(x))){
-    el('rqActionStatus').textContent='Solo puede devolver expedientes EN PRÉSTAMO que actualmente están bajo su responsabilidad.';
+  // La devolución NUEVA solo parte de EN PRÉSTAMO.
+  const invalid=selected.filter(x=>x.estado_item!=='EN PRÉSTAMO');
+  if(invalid.length){
+    el('rqActionStatus').textContent='Solo se pueden devolver expedientes cuyo estado sea EN PRÉSTAMO.';
     return;
   }
 
-  if(!confirm(`¿Devolver ${ids.length} expediente(s)? Se guardarán la R.D. (si fue actualizada) y el Último folio. La devolución quedará pendiente de recepción por Archivo.`))return;
+  const mine=String(currentProfile?.nombre_personal||'').trim();
+  const notMine=selected.filter(x=>
+    mine && norm(x.responsable_actual||x.ubicacion_actual||'')!==norm(mine)
+  );
+  if(notMine.length){
+    el('rqActionStatus').textContent='Uno de los expedientes ya no está bajo su responsabilidad.';
+    return;
+  }
 
-  const datosOk=await saveUserReturnDataBeforeReturn(ids);
-  if(!datosOk)return;
+  const missing=selected.filter(x=>!String(x.ultimo_folio||'').trim());
+  if(missing.length){
+    el('rqActionStatus').textContent='Ingrese obligatoriamente el Último folio antes de devolver.';
+    document.querySelector(`[data-user-folio-id="${missing[0].expediente_id}"]`)?.focus();
+    syncUserReturnButtonState();
+    return;
+  }
 
+  if(!currentRequestId){
+    el('rqActionStatus').textContent='No se pudo identificar la solicitud actual.';
+    return;
+  }
+
+  const archiveReq=currentArchiveDeliveryRequest();
+  const items=selected.map(x=>({
+    solicitud_id:currentRequestId,
+    expediente_id:x.expediente_id,
+    solicitud_entrega_archivo_id:
+      archiveReq && String(archiveReq.expediente_id||'')===String(x.expediente_id)
+        ?archiveReq.id:null,
+    rd:String(x.rd||'').trim()||null,
+    ultimo_folio:String(x.ultimo_folio||'').trim(),
+    observacion:String(el('rqDObservacion')?.value||'').trim()||null
+  }));
+
+  const btn=el('btnEffectReturn');
+  if(btn)btn.disabled=true;
   el('rqActionStatus').textContent='Registrando devolución...';
 
-  const {error}=await sb.rpc('solicitar_devolucion_solicitud_expedientes',{
-    p_solicitud_id:currentRequestId,
-    p_expediente_ids:ids,
-    p_observacion:obs||null
-  });
+  const {data,error}=await sb.rpc('devolver_expedientes_usuario_nuevo',{p_items:items});
 
   if(error){
-    el('rqActionStatus').textContent=error.message;
+    el('rqActionStatus').textContent='NO SE REGISTRÓ LA DEVOLUCIÓN: '+error.message;
+    syncUserReturnButtonState();
     return;
   }
 
-  requestSelectedIds.clear();
-  showToast('Devolución registrada. Archivo debe confirmar la recepción.');
-
-  if(hasFullAccess()){
-    await Promise.all([loadSummary(),loadPanel(),loadAll(),loadStates(),loadRequestsByLawyer(),loadHistory()]);
-  }else{
-    await Promise.all([loadSummary(),loadPanel(),loadRequests(),loadHistory()]);
+  if(norm(data?.estado||'')!=='DEVOLUCIÓN SOLICITADA'){
+    el('rqActionStatus').textContent='Supabase no confirmó el estado DEVOLUCIÓN SOLICITADA.';
+    syncUserReturnButtonState();
+    return;
   }
 
+  activeArchiveDeliveryRequestId='';
+  requestSelectedIds.clear();
+  showToast(`${Number(data?.total||selected.length)} expediente(s) en DEVOLUCIÓN SOLICITADA`);
+
+  await Promise.all([
+    loadSummary(),loadPanel(),loadRequests(),
+    loadArchiveDeliveryRequests(true),loadOperationalAlerts(true),loadNotifications(true)
+  ]);
   await refreshRequestDetail();
 }
 
@@ -9565,8 +9680,6 @@ async function confirmReturnItems(){
     el('rqActionStatus').textContent='Seleccione la ubicación física de retorno.';
     return;
   }
-
-  if(!confirm(`¿Confirmar que Archivo recibió físicamente ${ids.length} expediente(s)?`))return;
 
   el('rqActionStatus').textContent='Confirmando recepción física y cerrando devolución...';
 
@@ -10117,6 +10230,7 @@ function updateSelectionUI(){
   el('selectedCount').textContent=n+' seleccionado'+(n===1?'':'s');
   el('cargoBtn').disabled=n===0;
   if(el('requestBtn'))el('requestBtn').disabled=n===0;
+  if(el('bulkReassignBtn'))el('bulkReassignBtn').disabled=n===0;
   if(el('bulkReturnBtn'))el('bulkReturnBtn').disabled=n===0;
 }
 function toggleSelect(id,checked){
@@ -10132,6 +10246,255 @@ function toggleAllRows(checked,source){
   else el('panelTable').innerHTML=recordTable(panelRows,false,'panel');
 }
 
+
+function closeBulkReassignModal(){
+  el('bulkReassignModal')?.classList.remove('show');
+  bulkReassignRows=[];
+}
+
+function updateBulkReassignField(id,value){
+  const row=bulkReassignRows.find(x=>String(x.id)===String(id));
+  if(!row)return;
+  row.ultimo_folio=String(value??'').trim();
+  syncBulkReassignState();
+}
+
+function syncBulkReassignState(){
+  const rows=bulkReassignRows||[];
+  const target=String(el('bulkReassignTarget')?.value||'').trim();
+  const missing=rows.filter(x=>!String(x.ultimo_folio||'').trim());
+  const btn=el('bulkReassignSubmitBtn');
+  if(btn){
+    btn.disabled=!rows.length||!target||missing.length>0;
+    btn.textContent=rows.length
+      ?`REASIGNAR ${rows.length} EXPEDIENTE${rows.length===1?'':'S'}`
+      :'REASIGNAR EXPEDIENTES';
+  }
+  if(el('bulkReassignStatus')){
+    el('bulkReassignStatus').textContent=!target
+      ?'Seleccione el nuevo responsable.'
+      :(missing.length
+        ?`Falta ingresar el Último folio en ${missing.length} expediente${missing.length===1?'':'s'}.`
+        :'Datos completos. Puede efectuar la reasignación.');
+  }
+}
+
+function renderBulkReassignRows(){
+  if(el('bulkReassignCount'))el('bulkReassignCount').textContent=bulkReassignRows.length;
+  if(el('bulkReassignArchiveCount')){
+    el('bulkReassignArchiveCount').textContent=bulkReassignRows.filter(x=>x.archive_request_id).length;
+  }
+
+  if(!bulkReassignRows.length){
+    el('bulkReassignTable').innerHTML='<div class="empty">No hay expedientes válidos para reasignar.</div>';
+    syncBulkReassignState();
+    return;
+  }
+
+  el('bulkReassignTable').innerHTML=`<table>
+    <thead><tr>
+      <th>N°</th><th>Expediente</th><th>Ext.</th><th>Cargo</th><th>Estado</th><th>Origen</th><th>Último folio *</th>
+    </tr></thead>
+    <tbody>${bulkReassignRows.map((r,i)=>`<tr>
+      <td>${i+1}</td>
+      <td><b>${esc(r.expediente||'—')}</b></td>
+      <td>${esc(r.extension||'—')}</td>
+      <td>${esc(r.cargo||r.cargo_numero||'—')}</td>
+      <td><span class="pill loan">EN PRÉSTAMO</span></td>
+      <td><span class="bulk-return-source ${r.archive_request_id?'archive':''}">${r.archive_request_id?'SOLICITADO POR EL ARCHIVO':'CUSTODIA DEL USUARIO'}</span></td>
+      <td><input class="bulk-return-input required" value="${esc(r.ultimo_folio||'')}" placeholder="Último folio" required
+        oninput="updateBulkReassignField('${r.id}',this.value)"></td>
+    </tr>`).join('')}</tbody>
+  </table>`;
+
+  syncBulkReassignState();
+}
+
+async function openBulkReassignModal(){
+  if(!isLimitedUser()){
+    showToast('La reasignación múltiple está disponible en el perfil USUARIO.');
+    return;
+  }
+
+  const ids=[...selectedIds];
+  if(!ids.length){
+    showToast('Seleccione uno o más expedientes.');
+    return;
+  }
+
+  const nombre=String(currentProfile?.nombre_personal||'').trim();
+  if(!nombre){
+    showToast('La cuenta no tiene personal asociado.');
+    return;
+  }
+
+  await loadReassignmentProfiles();
+  const targets=reassignmentNames().filter(x=>norm(x)!==norm(nombre));
+  const select=el('bulkReassignTarget');
+  if(select){
+    select.innerHTML='<option value="">— SELECCIONE NUEVO RESPONSABLE —</option>'+targets.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');
+    select.value='';
+  }
+  if(el('bulkReassignObservation'))el('bulkReassignObservation').value='';
+  if(el('bulkReassignStatus'))el('bulkReassignStatus').textContent='Verificando expedientes seleccionados...';
+  el('bulkReassignModal')?.classList.add('show');
+
+  const [{data:expData,error:expError},{data:linkData,error:linkError},{data:archiveData,error:archiveError}]=await Promise.all([
+    sb.from('expedientes')
+      .select('id,expediente,extension,ultimo_folio,responsable,estado,cargo,modalidad')
+      .in('id',ids),
+    sb.from('solicitud_expedientes')
+      .select('id,solicitud_id,expediente_id,estado,responsable_actual,cargo_numero,updated_at')
+      .in('expediente_id',ids)
+      .eq('estado','EN PRÉSTAMO')
+      .order('updated_at',{ascending:false}),
+    sb.rpc('listar_solicitudes_entrega_archivo_pendientes')
+  ]);
+
+  if(expError||linkError){
+    el('bulkReassignTable').innerHTML=`<div class="empty">${esc((expError||linkError).message)}</div>`;
+    if(el('bulkReassignStatus'))el('bulkReassignStatus').textContent='No se pudo preparar la reasignación.';
+    return;
+  }
+
+  const archiveRows=archiveError?[]:(archiveData||[]);
+  const archiveMap=new Map(
+    archiveRows
+      .filter(x=>String(x.estado||'').toUpperCase()==='SOLICITADA')
+      .map(x=>[String(x.expediente_id),x])
+  );
+
+  const links=linkData||[];
+  const invalid=[];
+  const rows=[];
+
+  for(const e of (expData||[])){
+    const mine=norm(e.responsable)===norm(nombre);
+    if(!mine || String(e.modalidad||'').toUpperCase()==='COPIA DIGITAL'){
+      invalid.push(e.expediente||e.id);
+      continue;
+    }
+
+    const link=links.find(x=>
+      String(x.expediente_id)===String(e.id) &&
+      norm(x.responsable_actual)===norm(nombre) &&
+      norm(x.estado)==='EN PRÉSTAMO'
+    );
+
+    if(!link){
+      invalid.push(e.expediente||e.id);
+      continue;
+    }
+
+    const archiveReq=archiveMap.get(String(e.id))||null;
+    rows.push({
+      ...e,
+      solicitud_id:link.solicitud_id,
+      solicitud_expediente_id:link.id,
+      cargo_numero:link.cargo_numero,
+      archive_request_id:archiveReq?.id||null,
+      ultimo_folio:String(e.ultimo_folio||'').trim()
+    });
+  }
+
+  const returnedIds=new Set((expData||[]).map(x=>String(x.id)));
+  ids.filter(id=>!returnedIds.has(String(id))).forEach(id=>invalid.push(id));
+
+  if(invalid.length){
+    bulkReassignRows=[];
+    el('bulkReassignTable').innerHTML=`<div class="empty">
+      La selección contiene expedientes que no pueden reasignarse.<br><br>
+      <b>${esc(invalid.join(', '))}</b><br><br>
+      Seleccione únicamente expedientes EN PRÉSTAMO que actualmente estén bajo su responsabilidad.
+    </div>`;
+    if(el('bulkReassignCount'))el('bulkReassignCount').textContent='0';
+    if(el('bulkReassignArchiveCount'))el('bulkReassignArchiveCount').textContent='0';
+    if(el('bulkReassignStatus'))el('bulkReassignStatus').textContent='Corrija la selección y vuelva a intentar.';
+    if(el('bulkReassignSubmitBtn'))el('bulkReassignSubmitBtn').disabled=true;
+    return;
+  }
+
+  bulkReassignRows=rows.sort((a,b)=>String(a.expediente||'').localeCompare(String(b.expediente||''),'es',{numeric:true}));
+  renderBulkReassignRows();
+}
+
+async function submitBulkReassign(){
+  if(!isLimitedUser()||!bulkReassignRows.length)return;
+
+  const nuevo=String(el('bulkReassignTarget')?.value||'').trim();
+  const obs=String(el('bulkReassignObservation')?.value||'').trim();
+  if(!nuevo){
+    if(el('bulkReassignStatus'))el('bulkReassignStatus').textContent='Seleccione el nuevo responsable.';
+    return;
+  }
+
+  const missing=bulkReassignRows.filter(x=>!String(x.ultimo_folio||'').trim());
+  if(missing.length){
+    if(el('bulkReassignStatus'))el('bulkReassignStatus').textContent='El Último folio es obligatorio para todos los expedientes.';
+    return;
+  }
+
+  const btn=el('bulkReassignSubmitBtn');
+  if(btn)btn.disabled=true;
+  if(el('bulkReassignStatus'))el('bulkReassignStatus').textContent='Registrando reasignación...';
+
+  try{
+    // 1) Expedientes solicitados expresamente por Archivo: mantener activa la solicitud de entrega.
+    const archiveRows=bulkReassignRows.filter(x=>x.archive_request_id);
+    for(const row of archiveRows){
+      const {error}=await sb.rpc('gestionar_entrega_archivo_usuario',{
+        p_solicitud_entrega_id:row.archive_request_id,
+        p_accion:'REASIGNAR',
+        p_rd:null,
+        p_ultimo_folio:String(row.ultimo_folio||'').trim(),
+        p_nuevo_responsable:nuevo
+      });
+      if(error)throw error;
+    }
+
+    // 2) Reasignaciones normales: agrupar por solicitud para usar la función estable ya existente.
+    const normalRows=bulkReassignRows.filter(x=>!x.archive_request_id);
+    const groups=new Map();
+    normalRows.forEach(row=>{
+      const key=String(row.solicitud_id||'');
+      if(!groups.has(key))groups.set(key,[]);
+      groups.get(key).push(row);
+    });
+
+    for(const [solicitudId,rows] of groups.entries()){
+      const {error:folioError}=await sb.rpc('actualizar_ultimos_folios_mi_custodia',{
+        p_solicitud_id:solicitudId,
+        p_items:rows.map(x=>({
+          id:x.id,
+          ultimo_folio:String(x.ultimo_folio||'').trim()
+        }))
+      });
+      if(folioError)throw folioError;
+
+      const {error:reasignError}=await sb.rpc('reasignar_solicitud_expedientes',{
+        p_solicitud_id:solicitudId,
+        p_expediente_ids:rows.map(x=>x.id),
+        p_nuevo_responsable:nuevo,
+        p_observacion:obs||null
+      });
+      if(reasignError)throw reasignError;
+    }
+
+    const count=bulkReassignRows.length;
+    selectedIds.clear();
+    updateSelectionUI();
+    closeBulkReassignModal();
+    showToast(`${count} expediente${count===1?'':'s'} reasignado${count===1?'':'s'} a ${nuevo}`);
+
+    await Promise.all([
+      loadSummary(),loadPanel(),loadRequests(),
+      loadNotifications(true),loadArchiveDeliveryRequests(true),loadOperationalAlerts(true)
+    ]);
+  }catch(err){
+    if(el('bulkReassignStatus'))el('bulkReassignStatus').textContent=err?.message||String(err);
+    if(btn)btn.disabled=false;
+  }
+}
 
 function closeBulkReturnModal(){
   el('bulkReturnModal')?.classList.remove('show');
@@ -10253,7 +10616,7 @@ async function openBulkReturnModal(){
     }
 
     const archiveReq=archiveMap.get(String(e.id))||null;
-    const expectedState=archiveReq?'DEVOLUCIÓN SOLICITADA':'EN PRÉSTAMO';
+    const expectedState='EN PRÉSTAMO';
     const link=links.find(x=>
       String(x.expediente_id)===String(e.id) &&
       norm(x.responsable_actual)===norm(nombre) &&
@@ -10308,22 +10671,24 @@ async function submitBulkReturn(){
   }
 
   const count=bulkReturnRows.length;
-  if(!confirm(`¿Efectuar la devolución de ${count} expediente${count===1?'':'s'}? Archivo deberá confirmar posteriormente la recepción.`))return;
 
   const btn=el('bulkReturnSubmitBtn');
   if(btn)btn.disabled=true;
   if(el('bulkReturnStatus'))el('bulkReturnStatus').textContent='Actualizando datos y registrando devoluciones...';
 
-  const {data,error}=await sb.rpc('solicitar_devolucion_multiple_mi_custodia',{
+  const {data,error}=await sb.rpc('devolver_expedientes_usuario_nuevo',{
     p_items:bulkReturnRows.map(x=>({
-      id:x.id,
+      solicitud_id:x.solicitud_id,
+      expediente_id:x.id,
+      solicitud_entrega_archivo_id:x.archive_request_id||null,
       rd:String(x.rd||'').trim()||null,
-      ultimo_folio:String(x.ultimo_folio||'').trim()
+      ultimo_folio:String(x.ultimo_folio||'').trim(),
+      observacion:'Devolución múltiple registrada por el usuario.'
     }))
   });
 
   if(error){
-    if(el('bulkReturnStatus'))el('bulkReturnStatus').textContent=error.message;
+    if(el('bulkReturnStatus'))el('bulkReturnStatus').textContent='NO SE REGISTRÓ LA DEVOLUCIÓN: '+error.message;
     if(btn)btn.disabled=false;
     return;
   }
@@ -10344,12 +10709,28 @@ function operationalStatus(r){
   // La columna ESTADO muestra el último estado operativo
   // para Abogado, Archivo y Administrador.
   const action=norm(r.ultimo_movimiento||'');
+  const itemState=norm(r.estado_solicitud_item||'');
 
   // Último movimiento confirmado por Archivo.
   if(action.includes('DEVOLUCIÓN CONFIRMADA') ||
      action.includes('RECIBIDO EN ARCHIVO')){
     return 'DEVUELTO AL ARCHIVO';
   }
+
+  // Cuando el USUARIO pulsa Devolver (individual o múltiple), la relación
+  // solicitud_expedientes pasa inmediatamente a DEVOLUCIÓN SOLICITADA.
+  // Este estado operativo debe tener prioridad sobre el estado físico
+  // EN PRÉSTAMO hasta que Archivo confirme la recepción.
+  if(itemState==='DEVOLUCIÓN SOLICITADA'){
+    return 'DEVOLUCIÓN SOLICITADA';
+  }
+
+  // Una solicitud activa iniciada por Archivo tiene prioridad VISUAL.
+  // El expediente sigue físicamente bajo custodia del usuario hasta
+  // que se efectúe y confirme la devolución, pero ya no debe verse
+  // simplemente como EN PRÉSTAMO.
+  const archiveState=archiveDeliveryVisualState(r);
+  if(archiveState)return archiveState;
 
   // El abogado comunicó la devolución, pero Archivo aún no confirma.
   if(action.includes('DEVOLUCIÓN SOLICITADA')){
@@ -10382,6 +10763,7 @@ function rowStatus(r){
   const state=operationalStatus(r);
 
   const c=state==='EN PRÉSTAMO'?'loan':
+    state==='SOLICITADO POR EL ARCHIVO'?'archive-requested':
     state==='DEVUELTO AL ARCHIVO'?'returned-archive':
     state==='REASIGNADO'?'reassigned':
     state==='DEVOLUCIÓN SOLICITADA'?'return-requested':
@@ -10426,7 +10808,7 @@ function recordTable(data,withOwner=false,source='panel'){
     <td>${esc(r.observacion)}</td>
     <td><div style="display:flex;gap:5px;white-space:nowrap">
       <button class="btn secondary small" onclick="showExpHistory('${r.id}')">Historial</button>
-      <button class="btn small" onclick="manageExpedienteFromPanel('${r.id}',this)">Gestionar</button>
+      ${!limited?`<button class="btn small user-manage-action" onclick="manageExpedienteFromPanel('${r.id}',this)">Gestionar</button>`:''}
       ${hasFullAccess()?`<button class="btn secondary small" onclick="editRecord('${r.id}')">Editar</button>`:''}
     </div></td>
   </tr>`).join('');
