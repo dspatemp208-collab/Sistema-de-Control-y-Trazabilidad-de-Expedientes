@@ -3,6 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>Sistema de Control y Trazabilidad de Expedientes</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -676,6 +679,47 @@
   font-size:11px;
   color:var(--muted)
 }
+.master-date-summary{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  flex-wrap:wrap;
+  margin-top:10px;
+  padding:9px 10px;
+  border:1px solid var(--line);
+  border-radius:8px;
+  background:#f8fafc;
+  font-size:11px;
+  color:var(--muted)
+}
+.master-date-summary strong{color:var(--navy);margin-right:2px}
+.master-date-chip{
+  display:inline-flex;
+  gap:5px;
+  align-items:center;
+  padding:4px 7px;
+  border:1px solid #d9e2ec;
+  border-radius:999px;
+  background:#fff;
+  color:#334155;
+  white-space:nowrap
+}
+.master-date-chip b{color:var(--navy)}
+.master-state-field{position:relative}
+.master-multi-trigger{
+  width:100%;min-height:38px;display:flex;align-items:center;justify-content:space-between;gap:8px;
+  border:1px solid var(--line);border-radius:7px;padding:8px 10px;background:#fff;color:var(--text);
+  font:inherit;text-align:left;cursor:pointer
+}
+.master-multi-panel{
+  position:absolute;left:0;right:0;top:calc(100% + 5px);z-index:45;
+  padding:9px;border:1px solid var(--line);border-radius:9px;background:#fff;
+  box-shadow:0 12px 30px rgba(15,23,42,.16);max-height:320px;overflow:auto
+}
+.master-multi-tools{display:flex;gap:6px;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+.master-state-check{display:flex;align-items:center;gap:8px;padding:6px 4px;font-size:11px;cursor:pointer}
+.master-state-check input{width:15px;height:15px;flex:0 0 auto}
+.master-filter-count{font-size:10px;color:var(--muted);font-weight:700}
 @media(max-width:1000px){
   .master-advanced{grid-template-columns:repeat(2,1fr)}
 }
@@ -1106,7 +1150,7 @@
       <button class="btn secondary" onclick="logout()">Cerrar sesión</button>
     </div>
   </div>
-  <div class="statusbar">Base: <b>Supabase / PostgreSQL</b> · Usuario: <b id="currentUser">—</b> · Perfil: <b id="currentRole">—</b> · <b style="color:#1f4e78">REASIGNACIÓN MÚLTIPLE ACTIVA</b> · <b style="color:#8a4100">CARGO AUTOSELECCIÓN ACTIVA · ACEPTACIÓN MÚLTIPLE ACTIVA</b> · <b style="color:#0f766e">PENDIENTES INCLUYE DEVUELTOS ACTIVO</b> · <b style="margin-left:8px;color:#5b21b6">SQL/UI REASIGNACIÓN USUARIO</b> · Los permisos se controlan desde Supabase.<b style="margin-left:8px;color:#21613a">DEVOLUCIÓN USUARIO NUEVA</b></div>
+  <div class="statusbar">Base: <b>Supabase / PostgreSQL</b> · Usuario: <b id="currentUser">—</b> · Perfil: <b id="currentRole">—</b></div>
 
   <div class="tabs">
     <button class="tab active" id="tabBtnPanel" data-tab="panel" onclick="switchTab('panel',this)">Panel por personal</button>
@@ -1577,10 +1621,31 @@
       </div>
 
       <div id="allAdvancedFilters" class="master-advanced hidden">
+        <div class="field master-state-field">
+          <label>Estado del expediente <span class="master-filter-count" id="allStateCountLabel"></span></label>
+          <button class="master-multi-trigger" id="allStateMultiButton" type="button" onclick="toggleMasterStatePanel(event)">
+            <span id="allStateMultiText">TODOS LOS ESTADOS</span><span>▾</span>
+          </button>
+          <div id="allStateMultiPanel" class="master-multi-panel hidden" onclick="event.stopPropagation()">
+            <div class="master-multi-tools">
+              <button class="btn secondary small" type="button" onclick="selectAllMasterStates()">Seleccionar todos</button>
+              <button class="btn secondary small" type="button" onclick="clearAllMasterStates()">Limpiar</button>
+            </div>
+            <div id="allStateCheckboxes"></div>
+          </div>
+        </div>
+
         <div class="field">
-          <label>Estado</label>
-          <select id="allStateFilter" onchange="resetAllAndLoad()">
-            <option value="">TODOS LOS ESTADOS</option>
+          <label>Mes de solicitud</label>
+          <select id="allMonthFilter" onchange="changeMasterMonth()">
+            <option value="">TODOS LOS MESES</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label>Día de solicitud</label>
+          <select id="allDayFilter" onchange="resetAllAndLoad()" disabled>
+            <option value="">SELECCIONE UN MES</option>
           </select>
         </div>
 
@@ -1604,7 +1669,7 @@
         </div>
 
         <button class="btn secondary" type="button" onclick="clearMasterFilters()">
-          Limpiar
+          Limpiar filtros
         </button>
 
         <button class="btn" id="exportMasterResultsBtn" type="button"
@@ -1614,9 +1679,11 @@
       </div>
 
       <div class="master-summary">
-        Buscador global del sistema. La búsqueda se realiza directamente en Supabase
-        y la coincidencia exacta del número de expediente aparece primero.
+        Buscador global del sistema. Puede combinar búsqueda, varios estados, mes y día de solicitud,
+        responsable y modalidad. La cantidad de resultados se actualiza con los filtros seleccionados.
       </div>
+
+      <div id="allDateSummary" class="master-date-summary hidden"></div>
     </div>
 
     <div class="card table-wrap">
@@ -3014,10 +3081,7 @@ function applyRoleUI(){
   }
 
   if(el('currentRole')){
-    const label=currentProfile
-      ? `${currentProfile.rol}${currentProfile.nombre_personal?' · '+currentProfile.nombre_personal:''}${limited?' · ESPACIO PERSONAL':''}`
-      : '—';
-    el('currentRole').textContent=label;
+    el('currentRole').textContent=String(currentProfile?.rol||'—').trim().toUpperCase();
   }
 
   // Un usuario normal queda fijo a su propio nombre.
@@ -9937,19 +10001,90 @@ function masterStateOptions(){
   ];
 }
 
-function populateMasterFilters(){
-  const state=el('allStateFilter');
-  const owner=el('allOwnerFilter');
+let masterSelectedStates=new Set(masterStateOptions());
 
-  if(state){
-    const current=state.value||'';
-    state.innerHTML=
-      '<option value="">TODOS LOS ESTADOS</option>'+
-      masterStateOptions()
-        .map(x=>`<option value="${esc(x)}">${esc(stateDisplayName(x))}</option>`)
-        .join('');
-    state.value=[...state.options].some(o=>o.value===current)?current:'';
+function formatMasterMonth(value){
+  const m=String(value||'').match(/^(\d{4})-(\d{2})$/);
+  if(!m)return String(value||'');
+  const d=new Date(Number(m[1]),Number(m[2])-1,1);
+  return new Intl.DateTimeFormat('es-PE',{month:'long',year:'numeric'})
+    .format(d).toUpperCase();
+}
+
+function renderMasterStateFilter(){
+  const box=el('allStateCheckboxes');
+  if(!box)return;
+
+  const states=masterStateOptions();
+  // Si la variable quedó vacía al iniciar una versión anterior, empezar con todos.
+  if(!(masterSelectedStates instanceof Set))masterSelectedStates=new Set(states);
+
+  box.innerHTML=states.map(x=>`
+    <label class="master-state-check">
+      <input type="checkbox" value="${esc(x)}"
+             ${masterSelectedStates.has(x)?'checked':''}
+             onchange="changeMasterStateCheckbox(this)">
+      <span>${esc(stateDisplayName(x))}</span>
+    </label>`).join('');
+
+  updateMasterStateFilterText();
+}
+
+function updateMasterStateFilterText(){
+  const states=masterStateOptions();
+  const selected=states.filter(x=>masterSelectedStates.has(x));
+  const text=el('allStateMultiText');
+  const count=el('allStateCountLabel');
+
+  if(text){
+    if(selected.length===states.length)text.textContent='TODOS LOS ESTADOS';
+    else if(selected.length===0)text.textContent='NINGÚN ESTADO';
+    else if(selected.length===1)text.textContent=stateDisplayName(selected[0]);
+    else text.textContent=`${selected.length} ESTADOS SELECCIONADOS`;
   }
+  if(count)count.textContent=`(${selected.length}/${states.length})`;
+}
+
+function toggleMasterStatePanel(ev){
+  if(ev)ev.stopPropagation();
+  renderMasterStateFilter();
+  el('allStateMultiPanel')?.classList.toggle('hidden');
+}
+
+function closeMasterStatePanel(){
+  el('allStateMultiPanel')?.classList.add('hidden');
+}
+
+function changeMasterStateCheckbox(input){
+  const v=input.value;
+  if(input.checked)masterSelectedStates.add(v);
+  else masterSelectedStates.delete(v);
+  updateMasterStateFilterText();
+  resetAllAndLoad();
+}
+
+function selectAllMasterStates(){
+  masterSelectedStates=new Set(masterStateOptions());
+  renderMasterStateFilter();
+  resetAllAndLoad();
+}
+
+function clearAllMasterStates(){
+  masterSelectedStates=new Set();
+  renderMasterStateFilter();
+  resetAllAndLoad();
+}
+
+function masterStatesForRpc(){
+  const all=masterStateOptions();
+  const selected=all.filter(x=>masterSelectedStates.has(x));
+  if(selected.length===all.length)return null;
+  return selected;
+}
+
+function populateMasterFilters(){
+  renderMasterStateFilter();
+  const owner=el('allOwnerFilter');
 
   if(owner){
     const current=owner.value||'';
@@ -9963,8 +10098,7 @@ function populateMasterFilters(){
     ])].sort((a,b)=>a.localeCompare(b,'es'));
 
     owner.innerHTML=
-      '<option value="">TODOS</option>'+
-      names.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('');
+      '<option value="">TODOS</option>'+names.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('');
 
     owner.value=[...owner.options].some(o=>o.value===current)?current:'';
   }
@@ -9973,9 +10107,11 @@ function populateMasterFilters(){
 function masterParams(limit=ALL_PAGE_SIZE,offset=allPage*ALL_PAGE_SIZE){
   return {
     p_busqueda:cleanSearch(el('allSearch')?.value||'')||null,
-    p_estado:(el('allStateFilter')?.value||'').trim()||null,
+    p_estados:masterStatesForRpc(),
     p_responsable:(el('allOwnerFilter')?.value||'').trim()||null,
     p_modalidad:(el('allModeFilter')?.value||'').trim()||null,
+    p_mes:(el('allMonthFilter')?.value||'').trim()||null,
+    p_fecha_dia:(el('allDayFilter')?.value||'').trim()||null,
     p_limite:limit,
     p_offset:offset
   };
@@ -9991,11 +10127,23 @@ async function resetAllAndLoad(){
   await loadAll();
 }
 
+async function changeMasterMonth(){
+  if(el('allDayFilter'))el('allDayFilter').value='';
+  allPage=0;
+  await loadAll();
+}
+
 async function clearMasterFilters(){
   if(el('allSearch'))el('allSearch').value='';
-  if(el('allStateFilter'))el('allStateFilter').value='';
+  masterSelectedStates=new Set(masterStateOptions());
+  renderMasterStateFilter();
   if(el('allOwnerFilter'))el('allOwnerFilter').value='';
   if(el('allModeFilter'))el('allModeFilter').value='';
+  if(el('allMonthFilter'))el('allMonthFilter').value='';
+  if(el('allDayFilter')){
+    el('allDayFilter').value='';
+    el('allDayFilter').disabled=true;
+  }
   allPage=0;
   await loadAll();
 }
@@ -10008,13 +10156,68 @@ function masterNormalizeRow(r){
   };
 }
 
+function updateMasterMonthDayOptions(monthRows,dayRows){
+  const monthSel=el('allMonthFilter');
+  const daySel=el('allDayFilter');
+  if(!monthSel||!daySel)return;
+
+  const currentMonth=monthSel.value||'';
+  const currentDay=daySel.value||'';
+  const months=Array.isArray(monthRows)?monthRows:[];
+  const days=Array.isArray(dayRows)?dayRows:[];
+
+  monthSel.innerHTML='<option value="">TODOS LOS MESES</option>'+months.map(x=>
+    `<option value="${esc(x.mes||'')}">${esc(formatMasterMonth(x.mes))} (${Number(x.cantidad||0)})</option>`
+  ).join('');
+  monthSel.value=[...monthSel.options].some(o=>o.value===currentMonth)?currentMonth:'';
+
+  if(monthSel.value){
+    daySel.disabled=false;
+    daySel.innerHTML='<option value="">TODOS LOS DÍAS DEL MES</option>'+days.map(x=>
+      `<option value="${esc(x.fecha||'')}">${esc(fmtDate(x.fecha))} (${Number(x.cantidad||0)})</option>`
+    ).join('');
+    daySel.value=[...daySel.options].some(o=>o.value===currentDay)?currentDay:'';
+  }else{
+    daySel.disabled=true;
+    daySel.innerHTML='<option value="">SELECCIONE UN MES</option>';
+  }
+}
+
+function renderMasterDateSummary(monthRows,dayRows){
+  const box=el('allDateSummary');
+  if(!box)return;
+
+  const selectedMonth=el('allMonthFilter')?.value||'';
+  const list=selectedMonth
+    ?(Array.isArray(dayRows)?dayRows:[])
+    :(Array.isArray(monthRows)?monthRows:[]);
+
+  if(!list.length){
+    box.classList.add('hidden');
+    box.innerHTML='';
+    return;
+  }
+
+  const MAX=24;
+  const visible=list.slice(0,MAX);
+  const more=Math.max(0,list.length-MAX);
+  const title=selectedMonth?'Cantidad por día de solicitud:':'Cantidad por mes de solicitud:';
+  box.innerHTML=`<strong>${title}</strong> `+
+    visible.map(x=>{
+      const label=selectedMonth?fmtDate(x.fecha):formatMasterMonth(x.mes);
+      return `<span class="master-date-chip">${esc(label)} <b>${Number(x.cantidad||0)}</b></span>`;
+    }).join('')+
+    (more?`<span class="master-date-chip">+ ${more} opciones más</span>`:'');
+  box.classList.remove('hidden');
+}
+
 async function loadAll(){
   if(!sb||!session)return;
 
   populateMasterFilters();
 
   const {data,error}=await sb.rpc(
-    'buscar_registro_maestro_v2',
+    'buscar_registro_maestro_v4',
     masterParams()
   );
 
@@ -10025,6 +10228,8 @@ async function loadAll(){
 
   const result=data||{};
   const rows=Array.isArray(result.rows)?result.rows:[];
+  updateMasterMonthDayOptions(result.resumen_meses||[],result.resumen_dias||[]);
+  renderMasterDateSummary(result.resumen_meses||[],result.resumen_dias||[]);
 
   allRows=rows.map(masterNormalizeRow);
   allCountValue=Number(result.total_encontrados||0);
@@ -10083,7 +10288,7 @@ async function fetchMasterFilteredRows(){
 
   while(true){
     const {data,error}=await sb.rpc(
-      'buscar_registro_maestro_v2',
+      'buscar_registro_maestro_v4',
       masterParams(BATCH,offset)
     );
 
@@ -10103,6 +10308,15 @@ async function fetchMasterFilteredRows(){
 
   return all;
 }
+
+// Cerrar el selector de estados cuando se pulsa fuera de él.
+document.addEventListener('click',ev=>{
+  const panel=el('allStateMultiPanel');
+  const button=el('allStateMultiButton');
+  if(!panel||panel.classList.contains('hidden'))return;
+  if(panel.contains(ev.target)||button?.contains(ev.target))return;
+  closeMasterStatePanel();
+});
 
 async function exportMasterResults(btn){
   const old=btn.textContent;
