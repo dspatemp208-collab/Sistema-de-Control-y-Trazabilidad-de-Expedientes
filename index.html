@@ -41,7 +41,7 @@
 .cargo-list{max-height:260px;overflow:auto;border:1px solid var(--line);border-radius:9px;margin-top:10px}
 .cargo-list table{font-size:11px}.cargo-list th{position:sticky;top:0}
 
-.people-grid{display:grid;grid-template-columns:1.5fr 1fr .7fr auto;gap:8px;align-items:end}
+.people-grid{display:grid;grid-template-columns:1.4fr 1fr 1fr .7fr auto;gap:8px;align-items:end}
 .people-table{margin-top:14px;border:1px solid var(--line);border-radius:9px;overflow:auto;max-height:420px}
 .people-table table{font-size:12px}.people-actions{display:flex;gap:5px;white-space:nowrap}
 .status-active{color:#1f6b35;font-weight:800}.status-inactive{color:#9b1c1c;font-weight:800}
@@ -1106,7 +1106,7 @@
       <button class="btn secondary" onclick="logout()">Cerrar sesión</button>
     </div>
   </div>
-  <div class="statusbar">Base: <b>Supabase / PostgreSQL</b> · Usuario: <b id="currentUser">—</b> · Perfil: <b id="currentRole">—</b> · <b style="color:#1f4e78">REASIGNACIÓN MÚLTIPLE ACTIVA</b> · <b style="color:#8a4100">CARGO AUTOSELECCIÓN ACTIVA</b> · <b style="margin-left:8px;color:#5b21b6">SQL/UI REASIGNACIÓN USUARIO</b> · Los permisos se controlan desde Supabase.<b style="margin-left:8px;color:#21613a">DEVOLUCIÓN USUARIO NUEVA</b></div>
+  <div class="statusbar">Base: <b>Supabase / PostgreSQL</b> · Usuario: <b id="currentUser">—</b> · Perfil: <b id="currentRole">—</b> · <b style="color:#1f4e78">REASIGNACIÓN MÚLTIPLE ACTIVA</b> · <b style="color:#8a4100">CARGO AUTOSELECCIÓN ACTIVA · ACEPTACIÓN MÚLTIPLE ACTIVA</b> · <b style="color:#0f766e">PENDIENTES INCLUYE DEVUELTOS ACTIVO</b> · <b style="margin-left:8px;color:#5b21b6">SQL/UI REASIGNACIÓN USUARIO</b> · Los permisos se controlan desde Supabase.<b style="margin-left:8px;color:#21613a">DEVOLUCIÓN USUARIO NUEVA</b></div>
 
   <div class="tabs">
     <button class="tab active" id="tabBtnPanel" data-tab="panel" onclick="switchTab('panel',this)">Panel por personal</button>
@@ -1440,7 +1440,12 @@
     <div class="card table-wrap">
       <div class="table-head state-detail-head">
         <strong id="stateDetailTitle">Seleccione un estado para ver sus expedientes</strong>
-        <span id="stateDetailCount">0</span>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span id="stateDetailCount">0</span>
+          <span id="pendingRegisterSelectedCount" class="sel-count hidden">0 solicitudes seleccionadas</span>
+          <button class="btn small hidden" id="bulkAcceptRequestsBtn" type="button"
+                  onclick="openBulkAcceptRequestsModal()" disabled>✓ Aceptar solicitudes seleccionadas</button>
+        </div>
       </div>
       <div id="stateDetailTable">
         <div class="empty">Pulse “Ver expedientes” en uno de los estados.</div>
@@ -2117,12 +2122,13 @@
     </div>
     <div class="people-grid">
       <div class="field"><label>Nombre *</label><input id="pNombre" placeholder="Ej.: CARLOS PÉREZ"></div>
-      <div class="field"><label>Tipo *</label><select id="pTipo"><option>PERSONAL</option><option>ÁREA / UBICACIÓN</option><option>ETAPA / UBICACIÓN</option><option>UBICACIÓN</option></select></div>
+      <div class="field"><label>Tipo *</label><select id="pTipo" onchange="syncPeopleAreaField()"><option>PERSONAL</option><option>ÁREA / UBICACIÓN</option><option>ETAPA / UBICACIÓN</option><option>UBICACIÓN</option></select></div>
+      <div class="field" id="pAreaField"><label>Área de trabajo</label><select id="pArea"><option value="">— SIN ASIGNAR —</option></select></div>
       <div class="field"><label>Estado</label><select id="pActivo"><option value="true">ACTIVO</option><option value="false">INACTIVO</option></select></div>
       <button class="btn" onclick="savePerson()">+ Agregar</button>
     </div>
     <div id="peopleStatus" style="font-size:12px;color:#64748b;margin-top:9px"></div>
-    <div class="people-table"><table><thead><tr><th>Nombre</th><th>Tipo</th><th>Estado</th><th></th></tr></thead><tbody id="peopleBody"></tbody></table></div>
+    <div class="people-table"><table><thead><tr><th>Nombre</th><th>Tipo</th><th>Área de trabajo</th><th>Estado</th><th></th></tr></thead><tbody id="peopleBody"></tbody></table></div>
   </div>
 </div>
 
@@ -2476,6 +2482,35 @@
   </div>
 </div>
 
+<!-- Aceptación múltiple de solicitudes pendientes -->
+<div class="modal" id="bulkAcceptRequestsModal">
+  <div class="modal-box" style="max-width:720px">
+    <div class="modal-head">
+      <div>
+        <h2>Aceptar varias solicitudes</h2>
+        <div class="note">Las solicitudes seleccionadas pasarán a PENDIENTE POR ATENDER. Todavía no se genera cargo ni cambia la ubicación física del expediente.</div>
+      </div>
+      <button class="btn secondary small" type="button" onclick="closeBulkAcceptRequestsModal()">Cerrar</button>
+    </div>
+    <div class="form-grid" style="grid-template-columns:1fr">
+      <div class="field">
+        <label>Atiende el requerimiento *</label>
+        <select id="bulkAcceptAtiende"><option value="">— Seleccione personal de Archivo —</option></select>
+      </div>
+      <div class="field">
+        <label>Observación</label>
+        <input id="bulkAcceptObs" placeholder="Opcional">
+      </div>
+    </div>
+    <div id="bulkAcceptRequestList" class="note" style="margin-top:12px"></div>
+    <div class="modal-foot">
+      <span id="bulkAcceptStatus" class="note" style="margin-right:auto"></span>
+      <button class="btn secondary" type="button" onclick="closeBulkAcceptRequestsModal()">Cancelar</button>
+      <button class="btn" id="bulkAcceptSubmitBtn" type="button" onclick="submitBulkAcceptRequests()">Aceptar seleccionadas</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast">Guardado correctamente</div>
 
 <script>
@@ -2486,6 +2521,7 @@ const PAGE_SIZE=200;
 let sb=null, session=null, currentProfile=null, userProfiles=[], abogadoProfiles=[], reassignmentProfiles=[], reassignmentProfilesLoadedAt=0, returnRequestRows=[], pendingRegisterRows=[], pendingVerifyRows=[], notificationRows=[], notificationUnread=0, notificationsLoaded=false, requestExcelRows=[], requestExcelMissing=[], requestExcelDuplicates=0, summaryRows=[], panelRows=[], allRows=[], historyRows=[], cargosRows=[], selectedCargoNumero='', stateRows=[], stateDetailRows=[], requestRows=[], requestDetailRows=[], requestMovementRows=[], requestSearchRows=[], requestsByLawyerRows=[];
 let activeArchiveDeliveryRequestId='';
 let bulkReturnRows=[];
+let pendingRegisterSelectedRequestIds=new Set();
 let bulkReassignRows=[];
 let catalogo=MASTER.map(([nombre,tipo],i)=>({id:'fallback-'+i,nombre,tipo,activo:true}));
 let asuntosCatalogo=ASUNTOS_PREDETERMINADOS.map((nombre,i)=>({id:'fallback-asunto-'+i,nombre,activo:true}));
@@ -4029,47 +4065,110 @@ async function loadCatalogo(){
   const {data,error}=await sb.from('catalogo_responsables').select('*').order('tipo').order('nombre');
   if(error){
     console.warn('catalogo_responsables:',error.message);
-    catalogo=MASTER.map(([nombre,tipo],i)=>({id:'fallback-'+i,nombre,tipo,activo:true}));
+    catalogo=MASTER.map(([nombre,tipo],i)=>({id:'fallback-'+i,nombre,tipo,activo:true,area_trabajo:null}));
     return;
   }
-  catalogo=(data||[]).map(x=>({id:x.id,nombre:x.nombre,tipo:x.tipo,activo:x.activo}));
+  catalogo=(data||[]).map(x=>({
+    id:x.id,
+    nombre:x.nombre,
+    tipo:x.tipo,
+    activo:x.activo,
+    area_trabajo:x.area_trabajo||null
+  }));
+}
+function workAreaNames(){
+  return [...new Set(
+    (catalogo||[])
+      .filter(x=>x.activo!==false && norm(x.tipo)==='ÁREA / UBICACIÓN')
+      .map(x=>String(x.nombre||'').trim())
+      .filter(Boolean)
+  )].sort((a,b)=>a.localeCompare(b,'es'));
+}
+function renderPeopleAreaSelect(preferred=''){
+  const s=el('pArea');
+  if(!s)return;
+  const wanted=String(preferred||s.value||'').trim();
+  const areas=workAreaNames();
+  s.innerHTML='<option value="">— SIN ASIGNAR —</option>'+areas.map(a=>`<option value="${esc(a)}">${esc(a)}</option>`).join('');
+  if(wanted && !areas.some(a=>norm(a)===norm(wanted))){
+    s.insertAdjacentHTML('beforeend',`<option value="${esc(wanted)}">${esc(wanted)} (histórico)</option>`);
+  }
+  s.value=wanted||'';
+}
+function syncPeopleAreaField(){
+  const personal=norm(el('pTipo')?.value||'')==='PERSONAL';
+  if(el('pArea')){
+    el('pArea').disabled=!personal;
+    if(!personal)el('pArea').value='';
+  }
+  if(el('pAreaField'))el('pAreaField').style.opacity=personal?'1':'.55';
 }
 async function openPeopleModal(){
+  if(!isAdmin()){alert('Solo el ADMINISTRADOR puede administrar personal y áreas.');return}
   if(!sb||!session){alert('Debe iniciar sesión.');return}
   el('pNombre').value='';el('pTipo').value='PERSONAL';el('pActivo').value='true';
   el('peopleModal').classList.add('show');el('peopleStatus').textContent='Cargando...';
-  await loadCatalogo();renderPeople();el('peopleStatus').textContent='';
+  await loadCatalogo();renderPeopleAreaSelect('');syncPeopleAreaField();renderPeople();el('peopleStatus').textContent='';
 }
 function closePeopleModal(){el('peopleModal').classList.remove('show')}
+function areaOptionsForPerson(x){
+  const current=String(x?.area_trabajo||'').trim();
+  const areas=workAreaNames();
+  let html='<option value="">— SIN ASIGNAR —</option>';
+  if(current && !areas.some(a=>norm(a)===norm(current))){
+    html+=`<option value="${esc(current)}" selected>${esc(current)} (histórico)</option>`;
+  }
+  html+=areas.map(a=>`<option value="${esc(a)}" ${norm(a)===norm(current)?'selected':''}>${esc(a)}</option>`).join('');
+  return html;
+}
 function renderPeople(){
-  if(!catalogo.length){el('peopleBody').innerHTML='<tr><td colspan="4" class="empty">No hay registros.</td></tr>';return}
+  if(!catalogo.length){el('peopleBody').innerHTML='<tr><td colspan="5" class="empty">No hay registros.</td></tr>';return}
   el('peopleBody').innerHTML=catalogo.slice().sort((a,b)=>a.tipo.localeCompare(b.tipo)||a.nombre.localeCompare(b.nombre)).map(x=>`<tr>
     <td><b>${esc(x.nombre)}</b></td><td>${esc(x.tipo)}</td>
+    <td>${norm(x.tipo)==='PERSONAL'
+      ?`<select class="request-item-edit" onchange="savePersonArea('${x.id}',this.value)">${areaOptionsForPerson(x)}</select>`
+      :'—'}</td>
     <td class="${x.activo?'status-active':'status-inactive'}">${x.activo?'ACTIVO':'INACTIVO'}</td>
     <td><div class="people-actions"><button class="btn secondary small" onclick="editPerson('${x.id}')">Editar</button><button class="btn secondary small" onclick="togglePerson('${x.id}',${x.activo?'false':'true'})">${x.activo?'Inactivar':'Activar'}</button></div></td>
   </tr>`).join('');
 }
+async function savePersonArea(id,area){
+  if(!isAdmin())return;
+  const x=catalogo.find(p=>String(p.id)===String(id));
+  if(!x||norm(x.tipo)!=='PERSONAL')return;
+  const value=String(area||'').trim()||null;
+  const {error}=await sb.from('catalogo_responsables').update({area_trabajo:value}).eq('id',id);
+  if(error){alert(error.message);renderPeople();return}
+  x.area_trabajo=value;
+  showToast(value?`Área asignada: ${value}`:'Área retirada');
+}
 async function savePerson(){
+  if(!isAdmin())return;
   const nombre=el('pNombre').value.trim().toUpperCase(),tipo=el('pTipo').value,activo=el('pActivo').value==='true';
+  const area=norm(tipo)==='PERSONAL'?(el('pArea').value.trim()||null):null;
   if(!nombre){el('peopleStatus').textContent='Ingrese el nombre.';el('pNombre').focus();return}
   el('peopleStatus').textContent='Guardando...';
-  const {error}=await sb.from('catalogo_responsables').insert({nombre,tipo,activo});
+  const {error}=await sb.from('catalogo_responsables').insert({nombre,tipo,activo,area_trabajo:area});
   if(error){el('peopleStatus').textContent=String(error.message||'Error al guardar');return}
-  el('pNombre').value='';await refreshCatalogoUI();el('peopleStatus').textContent='Nombre agregado correctamente.';
+  el('pNombre').value='';el('pArea').value='';await refreshCatalogoUI();renderPeopleAreaSelect('');syncPeopleAreaField();el('peopleStatus').textContent='Nombre agregado correctamente.';
 }
 async function editPerson(id){
+  if(!isAdmin())return;
   const x=catalogo.find(p=>String(p.id)===String(id));if(!x)return;
   const nuevo=prompt('Editar nombre:',x.nombre);if(nuevo===null)return;
   const nombre=nuevo.trim().toUpperCase();if(!nombre){alert('El nombre no puede quedar vacío.');return}
   const tipo=prompt('Tipo: PERSONAL / ÁREA / UBICACIÓN / ETAPA / UBICACIÓN',x.tipo);if(tipo===null)return;
   const tipoNorm=tipo.trim().toUpperCase(),permitidos=['PERSONAL','ÁREA / UBICACIÓN','ETAPA / UBICACIÓN','UBICACIÓN'];
   if(!permitidos.includes(tipoNorm)){alert('Tipo no válido.');return}
-  const {error}=await sb.from('catalogo_responsables').update({nombre,tipo:tipoNorm}).eq('id',id);
-  if(error){alert(error.message);return}await refreshCatalogoUI();showToast('Registro actualizado');
+  const patch={nombre,tipo:tipoNorm};
+  if(tipoNorm!=='PERSONAL')patch.area_trabajo=null;
+  const {error}=await sb.from('catalogo_responsables').update(patch).eq('id',id);
+  if(error){alert(error.message);return}await refreshCatalogoUI();renderPeopleAreaSelect('');syncPeopleAreaField();showToast('Registro actualizado');
 }
 async function togglePerson(id,activo){
+  if(!isAdmin())return;
   const {error}=await sb.from('catalogo_responsables').update({activo}).eq('id',id);
-  if(error){alert(error.message);return}await refreshCatalogoUI();showToast(activo?'Registro activado':'Registro inactivado');
+  if(error){alert(error.message);return}await refreshCatalogoUI();renderPeopleAreaSelect(el('pArea')?.value||'');syncPeopleAreaField();showToast(activo?'Registro activado':'Registro inactivado');
 }
 async function refreshCatalogoUI(){
   await loadCatalogo();fillSelects();renderSidebar();renderSummary();renderPeople();
@@ -4387,7 +4486,7 @@ async function loadOwnerCards(){
   // No forman parte de la custodia física todavía.
   const pendingByUser=new Map();
   const {data:pendingAttentionData,error:pendingAttentionError}=await sb.rpc(
-    'listar_pendientes_verificacion_archivo'
+    'listar_pendientes_por_atender_inclusivo'
   );
 
   if(pendingAttentionError){
@@ -5287,7 +5386,7 @@ async function loadPanel(){
     // por usuario con el panel global de Estados.
     if(panelQuickFilter==='pending_attention'){
       const search=norm(el('searchInput')?.value||'');
-      const {data,error}=await sb.rpc('listar_pendientes_verificacion_archivo');
+      const {data,error}=await sb.rpc('listar_pendientes_por_atender_inclusivo');
 
       if(error){
         el('panelTable').innerHTML=`<div class="empty">${esc(error.message)}</div>`;
@@ -5519,7 +5618,7 @@ async function loadStates(){
     sb.rpc('resumen_reasignaciones'),
     sb.rpc('resumen_en_prestamo_ultimo_estado'),
     sb.rpc('listar_pendientes_por_registrar'),
-    sb.rpc('listar_pendientes_verificacion_archivo')
+    sb.rpc('listar_pendientes_por_atender_inclusivo')
   ]);
 
   if(error){
@@ -5540,7 +5639,7 @@ async function loadStates(){
   }
 
   if(pendingVerifyError){
-    console.warn('listar_pendientes_verificacion_archivo:',pendingVerifyError.message);
+    console.warn('listar_pendientes_por_atender_inclusivo:',pendingVerifyError.message);
   }
 
   pendingRegisterRows=pendingRegisterError?[]:(pendingRegisterData||[]);
@@ -5715,6 +5814,8 @@ function renderStates(){
 
 async function loadStateDetail(estado){
   selectedState=estado;
+  if(estado!=='PENDIENTES POR REGISTRAR')pendingRegisterSelectedRequestIds.clear();
+  updatePendingRegisterBulkUI();
   renderStates();
 
   if(estado==='PENDIENTES POR REGISTRAR'){
@@ -5741,9 +5842,15 @@ async function loadStateDetail(estado){
       return;
     }
 
+    pendingRegisterSelectedRequestIds.clear();
+
     el('stateDetailTable').innerHTML=`<table>
       <thead>
         <tr>
+          <th style="width:38px;text-align:center">
+            <input type="checkbox" id="pendingRegisterSelectAll" title="Seleccionar todas las solicitudes"
+                   onchange="toggleAllPendingRegisterRequests(this.checked)">
+          </th>
           <th>Expediente</th>
           <th>Extensión</th>
           <th>R.D.</th>
@@ -5759,6 +5866,11 @@ async function loadStateDetail(estado){
       </thead>
       <tbody>
         ${rows.map(x=>`<tr>
+          <td style="text-align:center">
+            <input type="checkbox" class="pending-register-request-check"
+                   data-request-id="${esc(x.solicitud_id||'')}"
+                   onchange="togglePendingRegisterRequest('${String(x.solicitud_id||'').replace(/'/g,"\\'")}',this.checked)">
+          </td>
           <td><b>${esc(x.expediente||'—')}</b></td>
           <td>${esc(x.extension||'—')}</td>
           <td>${esc(x.rd||'—')}</td>
@@ -5771,20 +5883,15 @@ async function loadStateDetail(estado){
           <td>${esc(x.observacion||'')}</td>
           <td>
             <div style="display:flex;gap:6px;white-space:nowrap">
-              <button class="btn secondary small"
-                onclick="showExpHistory('${x.expediente_id}')">
-                Historial
-              </button>
-              <button class="btn small"
-                onclick="manageExpedienteFromPanel('${x.expediente_id}')">
-                Gestionar
-              </button>
+              <button class="btn secondary small" onclick="showExpHistory('${x.expediente_id}')">Historial</button>
+              <button class="btn small" onclick="manageExpedienteFromPanel('${x.expediente_id}')">Gestionar</button>
             </div>
           </td>
         </tr>`).join('')}
       </tbody>
     </table>`;
 
+    updatePendingRegisterBulkUI();
     return;
   }
 
@@ -5794,7 +5901,7 @@ async function loadStateDetail(estado){
     el('stateDetailTable').innerHTML=
       '<div class="empty">Cargando expedientes pendientes de verificación...</div>';
 
-    const {data,error}=await sb.rpc('listar_pendientes_verificacion_archivo');
+    const {data,error}=await sb.rpc('listar_pendientes_por_atender_inclusivo');
 
     if(error){
       el('stateDetailTable').innerHTML=
@@ -8028,7 +8135,7 @@ async function loadRequests(){
   // con ENTREGA PARCIAL, por eso no depende solo del estado de la cabecera.
   let pendingAttentionItems=[];
   const {data:pendingAttentionData,error:pendingAttentionError}=await sb.rpc(
-    'listar_pendientes_verificacion_archivo'
+    'listar_pendientes_por_atender_inclusivo'
   );
 
   if(pendingAttentionError){
@@ -9236,6 +9343,102 @@ function renderRequestActions(){
 
   el('rqWorkflowActions').innerHTML=actions||'<span class="note">Sin acciones pendientes.</span>';
 }
+function pendingRegisterUniqueRequests(){
+  const map=new Map();
+  (pendingRegisterRows||[]).forEach(r=>{
+    const id=String(r.solicitud_id||'').trim();
+    if(!id)return;
+    if(!map.has(id))map.set(id,{id,numero:r.solicitud_numero||'—',solicitante:r.solicitante||'—',expedientes:0});
+    map.get(id).expedientes++;
+  });
+  return [...map.values()];
+}
+
+function updatePendingRegisterBulkUI(){
+  const visible=hasFullAccess() && selectedState==='PENDIENTES POR REGISTRAR';
+  const count=pendingRegisterSelectedRequestIds.size;
+  const countEl=el('pendingRegisterSelectedCount');
+  const btn=el('bulkAcceptRequestsBtn');
+  if(countEl){
+    countEl.classList.toggle('hidden',!visible);
+    countEl.textContent=`${count} solicitud${count===1?'':'es'} seleccionada${count===1?'':'s'}`;
+  }
+  if(btn){
+    btn.classList.toggle('hidden',!visible);
+    btn.disabled=!visible||count===0;
+  }
+  document.querySelectorAll('.pending-register-request-check').forEach(ch=>{
+    const id=String(ch.dataset.requestId||'');
+    ch.checked=!!id&&pendingRegisterSelectedRequestIds.has(id);
+  });
+  const all=el('pendingRegisterSelectAll');
+  if(all){
+    const ids=pendingRegisterUniqueRequests().map(x=>x.id);
+    const selected=ids.filter(id=>pendingRegisterSelectedRequestIds.has(id)).length;
+    all.checked=ids.length>0&&selected===ids.length;
+    all.indeterminate=selected>0&&selected<ids.length;
+  }
+}
+
+function togglePendingRegisterRequest(requestId,checked){
+  const id=String(requestId||'').trim();
+  if(!id)return;
+  if(checked)pendingRegisterSelectedRequestIds.add(id);
+  else pendingRegisterSelectedRequestIds.delete(id);
+  updatePendingRegisterBulkUI();
+}
+
+function toggleAllPendingRegisterRequests(checked){
+  pendingRegisterSelectedRequestIds.clear();
+  if(checked)pendingRegisterUniqueRequests().forEach(x=>pendingRegisterSelectedRequestIds.add(x.id));
+  updatePendingRegisterBulkUI();
+}
+
+function openBulkAcceptRequestsModal(){
+  if(!hasFullAccess())return;
+  const selected=pendingRegisterUniqueRequests().filter(x=>pendingRegisterSelectedRequestIds.has(x.id));
+  if(!selected.length)return;
+  fillArchiveStaffSelect('bulkAcceptAtiende');
+  el('bulkAcceptObs').value='';
+  el('bulkAcceptStatus').textContent='';
+  el('bulkAcceptSubmitBtn').disabled=false;
+  const totalExp=selected.reduce((a,x)=>a+Number(x.expedientes||0),0);
+  el('bulkAcceptRequestList').innerHTML=`<b>${selected.length}</b> solicitud${selected.length===1?'':'es'} · <b>${totalExp}</b> expediente${totalExp===1?'':'s'}<br>`+
+    selected.map(x=>`${esc(x.numero)} · ${esc(x.solicitante)} (${x.expedientes})`).join('<br>');
+  el('bulkAcceptRequestsModal').classList.add('show');
+}
+
+function closeBulkAcceptRequestsModal(){
+  el('bulkAcceptRequestsModal')?.classList.remove('show');
+}
+
+async function submitBulkAcceptRequests(){
+  if(!hasFullAccess())return;
+  const ids=[...pendingRegisterSelectedRequestIds];
+  const atiende=(el('bulkAcceptAtiende')?.value||'').trim();
+  const obs=(el('bulkAcceptObs')?.value||'').trim();
+  const status=el('bulkAcceptStatus');
+  const btn=el('bulkAcceptSubmitBtn');
+  if(!ids.length){status.textContent='Seleccione al menos una solicitud.';return;}
+  if(!atiende){status.textContent='Seleccione quién atenderá el requerimiento.';el('bulkAcceptAtiende')?.focus();return;}
+  btn.disabled=true;
+  const ok=[],failed=[];
+  for(let i=0;i<ids.length;i++){
+    status.textContent=`Aceptando ${i+1} de ${ids.length}...`;
+    const {data,error}=await sb.rpc('aceptar_solicitud_sin_cargo',{
+      p_solicitud_id:ids[i],p_atiende:atiende,p_observacion:obs||null
+    });
+    if(error)failed.push({id:ids[i],error:error.message}); else ok.push({id:ids[i],data});
+  }
+  if(failed.length)showToast(`${ok.length} aceptada(s) · ${failed.length} con error`);
+  else showToast(`${ok.length} solicitud${ok.length===1?'':'es'} aceptada${ok.length===1?'':'s'}`);
+  pendingRegisterSelectedRequestIds.clear();
+  await Promise.all([loadSummary(),loadPanel(),loadAll(),loadStates(),loadRequests(),loadRequestsByLawyer(),loadCargos(),loadHistory()]);
+  closeBulkAcceptRequestsModal();
+  await loadStateDetail('PENDIENTES POR REGISTRAR');
+  if(failed.length)alert(`No se pudieron aceptar ${failed.length} solicitud(es). Primer error: ${failed[0].error}`);
+}
+
 async function acceptRequestWithoutCargo(){
   const obs=el('rqDObservacion').value.trim();
   const atiende=(el('rqDAtiende')?.value||'').trim();
