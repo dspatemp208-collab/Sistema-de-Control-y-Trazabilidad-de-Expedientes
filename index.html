@@ -1104,7 +1104,7 @@
   <div class="tabs">
     <button class="tab active" id="tabBtnPanel" data-tab="panel" onclick="switchTab('panel',this)">Panel por personal</button>
     <button class="tab" data-tab="summary" onclick="switchTab('summary',this)">Resumen</button>
-    <button class="tab" data-tab="states" onclick="switchTab('states',this);loadStates();if(hasFullAccess())loadReturnRequests()">Estados</button>
+    <button class="tab" data-tab="states" onclick="switchTab('states',this);loadStates();if(isAdmin())loadReturnRequests()">Estados</button>
     <button class="tab" data-tab="requests" onclick="switchTab('requests',this);loadRequests()">Solicitudes</button>
     <button class="tab" id="tabBtnRequestsByLawyer" data-tab="requestsByLawyer" onclick="switchTab('requestsByLawyer',this);loadRequestsByLawyer()">Solicitudes por abogado</button>
     <button class="tab" data-tab="all" onclick="switchTab('all',this);loadAll()">Registro maestro</button>
@@ -1354,7 +1354,7 @@
       <div class="empty">Cargando estados...</div>
     </div>
 
-    <!-- ARCHIVO / ADMINISTRADOR: Solicitudes de devolución dentro de Estados -->
+    <!-- SOLO ADMINISTRADOR: Solicitudes de devolución dentro de Estados -->
     <div id="statesReturnAdminBox" class="hidden" style="margin-top:14px">
       <div class="card" style="margin-bottom:12px">
         <div class="table-head" style="padding:0">
@@ -1406,29 +1406,6 @@
       </div>
       <div style="display:flex;align-items:flex-end">
         <button class="btn secondary" onclick="clearReturnFilters()">Limpiar</button>
-      </div>
-    </div>
-
-    <div class="card" style="margin-bottom:12px">
-      <div style="display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap">
-        <div class="field" style="min-width:260px;flex:1">
-          <label>Ubicación de retorno</label>
-          <select id="returnBulkLocation" onchange="updateReturnBulkToolbar()">
-            <option value="">— Seleccione ubicación —</option>
-          </select>
-        </div>
-        <div style="min-width:180px">
-          <div class="note" style="padding:8px 10px">
-            <b id="returnBulkSelectedCount">0</b> expediente(s) seleccionado(s)
-          </div>
-        </div>
-        <button class="btn" id="returnBulkConfirmBtn" type="button"
-                onclick="confirmSelectedReturnRequests()" disabled>
-          Confirmar recepción seleccionados
-        </button>
-      </div>
-      <div class="note" id="returnBulkStatus" style="margin-top:8px">
-        Puede seleccionar expedientes de distintas solicitudes o cargos. La recepción se registrará individualmente en el historial de cada expediente.
       </div>
     </div>
 
@@ -2453,7 +2430,7 @@ let asuntosCatalogo=ASUNTOS_PREDETERMINADOS.map((nombre,i)=>({id:'fallback-asunt
 let selectedIds=new Set(), cargoRows=[];
 let recordMode='single', batchCargoHeader=null;
 const ALL_PAGE_SIZE=50;
-let returnSelectedIds=new Set(), selectedOwner='', selectedState='', panelQuickFilter='', ownerCardsRows=[], ownerUserKpiSummary={total_custodia:0,en_prestamo:0,reasignados:0,devoluciones_pendientes_aceptacion:0,devoluciones_realizadas:0,alertas_30:0}, userPanelMode='TODOS', userPanelSummary={todos:0,en_prestamo:0,reasignados_por_mi:0,reasignados_a_mi:0,devueltos:0,alertas_30:0}, operationalAlertRows=[], operationalAlertCount=0, archiveDeliveryRows=[], archiveDeliveryAlertCount=0, currentRequestId='', currentRequest=null, requestSelectedIds=new Set(), requestSearchSelectedIds=new Set(), requestDraftItems=[], addToExistingRequestId='', page=0, panelCount=0, allPage=0, allCountValue=0, allTotalGeneral=0, stateDetailCount=0, panelTimer=null, allTimer=null, historyTimer=null, cargosTimer=null, requestsTimer=null, returnRequestsTimer=null, notificationsPollTimer=null;
+let selectedOwner='', selectedState='', panelQuickFilter='', ownerCardsRows=[], ownerUserKpiSummary={total_custodia:0,en_prestamo:0,reasignados:0,devoluciones_pendientes_aceptacion:0,devoluciones_realizadas:0,alertas_30:0}, userPanelMode='TODOS', userPanelSummary={todos:0,en_prestamo:0,reasignados_por_mi:0,reasignados_a_mi:0,devueltos:0,alertas_30:0}, operationalAlertRows=[], operationalAlertCount=0, archiveDeliveryRows=[], archiveDeliveryAlertCount=0, currentRequestId='', currentRequest=null, requestSelectedIds=new Set(), requestSearchSelectedIds=new Set(), requestDraftItems=[], addToExistingRequestId='', page=0, panelCount=0, allPage=0, allCountValue=0, allTotalGeneral=0, stateDetailCount=0, panelTimer=null, allTimer=null, historyTimer=null, cargosTimer=null, requestsTimer=null, returnRequestsTimer=null, notificationsPollTimer=null;
 
 function el(id){return document.getElementById(id)}
 
@@ -3713,21 +3690,6 @@ function fillSelects(){
 
   if(el('rqDRetorno')){
     el('rqDRetorno').innerHTML=ubicaciones.map(x=>`<option>${esc(x.nombre)}</option>`).join('');
-  }
-
-  if(el('returnBulkLocation')){
-    const previous=el('returnBulkLocation').value||'';
-    el('returnBulkLocation').innerHTML=
-      '<option value="">— Seleccione ubicación —</option>'+
-      ubicaciones.map(x=>`<option value="${esc(x.nombre)}">${esc(x.nombre)}</option>`).join('');
-
-    const values=[...el('returnBulkLocation').options].map(o=>o.value);
-    if(previous && values.includes(previous)){
-      el('returnBulkLocation').value=previous;
-    }else{
-      const archivo=values.find(x=>norm(x).includes('ARCHIVO'));
-      if(archivo)el('returnBulkLocation').value=archivo;
-    }
   }
 
   if(currentProfile?.rol==='USUARIO' && el('rqSolicitante')){
@@ -5599,7 +5561,7 @@ function renderStates(){
     :'';
 
   const returnName='SOLICITUDES DE DEVOLUCIÓN';
-  const showReturnCard=hasFullAccess() && (!q || norm(returnName).includes(q));
+  const showReturnCard=isAdmin() && (!q || norm(returnName).includes(q));
 
   const returnCard=showReturnCard
     ? `<div class="card state-card">
@@ -7529,7 +7491,7 @@ async function continueRequestFromSearch(){
 
 
 function toggleReturnRequestsInStates(){
-  if(!hasFullAccess())return;
+  if(!isAdmin())return;
 
   const box=el('statesReturnAdminBox');
   const btn=el('statesReturnToggleBtn');
@@ -7579,113 +7541,8 @@ function returnBusinessDays(dateStr){
   return days;
 }
 
-function updateReturnBulkToolbar(){
-  const selectedRows=returnRequestRows.filter(x=>returnSelectedIds.has(String(x.expediente_id)));
-  const count=selectedRows.length;
-  const location=(el('returnBulkLocation')?.value||'').trim();
-
-  if(el('returnBulkSelectedCount'))el('returnBulkSelectedCount').textContent=count;
-  if(el('returnBulkConfirmBtn'))el('returnBulkConfirmBtn').disabled=!(count>0 && location);
-}
-
-function toggleReturnRequestSelection(expedienteId,checked){
-  const id=String(expedienteId||'');
-  if(!id)return;
-  if(checked)returnSelectedIds.add(id);
-  else returnSelectedIds.delete(id);
-  updateReturnBulkToolbar();
-}
-
-function toggleAllReturnRequests(checked){
-  returnRequestRows.forEach(x=>{
-    const id=String(x.expediente_id||'');
-    if(!id)return;
-    if(checked)returnSelectedIds.add(id);
-    else returnSelectedIds.delete(id);
-  });
-  renderReturnRequests();
-}
-
-async function confirmSelectedReturnRequests(){
-  if(!hasFullAccess())return;
-
-  const location=(el('returnBulkLocation')?.value||'').trim();
-  const rows=returnRequestRows.filter(x=>returnSelectedIds.has(String(x.expediente_id)));
-
-  if(!rows.length){
-    if(el('returnBulkStatus'))el('returnBulkStatus').textContent='Seleccione uno o más expedientes.';
-    return;
-  }
-
-  if(!location){
-    if(el('returnBulkStatus'))el('returnBulkStatus').textContent='Seleccione la ubicación física de retorno.';
-    return;
-  }
-
-  const withoutRequest=rows.filter(x=>!x.solicitud_id);
-  if(withoutRequest.length){
-    if(el('returnBulkStatus'))el('returnBulkStatus').textContent=
-      'Hay expedientes seleccionados sin una solicitud relacionada. Gestione esos expedientes de forma individual.';
-    return;
-  }
-
-  if(!confirm(`¿Confirmar la recepción de ${rows.length} expediente(s) en ${location}?`))return;
-
-  const btn=el('returnBulkConfirmBtn');
-  if(btn)btn.disabled=true;
-  if(el('returnBulkStatus'))el('returnBulkStatus').textContent='Confirmando recepciones...';
-
-  const groups=new Map();
-  rows.forEach(x=>{
-    const sid=String(x.solicitud_id);
-    if(!groups.has(sid))groups.set(sid,[]);
-    groups.get(sid).push(String(x.expediente_id));
-  });
-
-  const failed=[];
-  let confirmed=0;
-
-  for(const [solicitudId,ids] of groups.entries()){
-    const {data,error}=await sb.rpc('confirmar_devolucion_archivo',{
-      p_solicitud_id:solicitudId,
-      p_expediente_ids:ids,
-      p_ubicacion_retorno:location,
-      p_observacion:null
-    });
-
-    if(error){
-      failed.push({solicitudId,ids,error:error.message});
-    }else{
-      confirmed+=Number(data?.devueltos||ids.length);
-      ids.forEach(id=>returnSelectedIds.delete(String(id)));
-    }
-  }
-
-  if(failed.length){
-    if(el('returnBulkStatus'))el('returnBulkStatus').textContent=
-      `${confirmed} expediente(s) recibidos. ${failed.reduce((a,x)=>a+x.ids.length,0)} no pudieron confirmarse: ${failed[0].error}`;
-  }else{
-    if(el('returnBulkStatus'))el('returnBulkStatus').textContent=
-      `${confirmed} expediente(s) recibidos correctamente por Archivo.`;
-    showToast(`${confirmed} expediente(s) recibidos por Archivo`);
-  }
-
-  await loadReturnRequests();
-
-  if(hasFullAccess()){
-    await Promise.all([
-      loadSummary(),loadPanel(),loadAll(),loadStates(),
-      loadRequestsByLawyer(),loadHistory()
-    ]);
-  }else{
-    await Promise.all([loadSummary(),loadPanel(),loadRequests(),loadHistory()]);
-  }
-
-  updateReturnBulkToolbar();
-}
-
 async function loadReturnRequests(){
-  if(!hasFullAccess())return;
+  if(!isAdmin())return;
 
   const search=(el('returnSearch')?.value||'').trim();
   const responsible=(el('returnResponsible')?.value||'').trim();
@@ -7703,9 +7560,6 @@ async function loadReturnRequests(){
   }
 
   returnRequestRows=await enrichRowsWithRequestOrigin(data||[],'solicitud_id');
-
-  const validReturnIds=new Set(returnRequestRows.map(x=>String(x.expediente_id||'')));
-  [...returnSelectedIds].forEach(id=>{if(!validReturnIds.has(String(id)))returnSelectedIds.delete(String(id));});
 
   const solicitudCount=new Set(
     returnRequestRows.map(x=>x.solicitud_id).filter(Boolean)
@@ -7743,7 +7597,6 @@ async function loadReturnRequests(){
   }
 
   renderReturnRequests();
-  updateReturnBulkToolbar();
 
   // Refrescar la tarjeta dentro de Estados con la cantidad pendiente.
   if(el('stateGrid'))renderStates();
@@ -7751,20 +7604,14 @@ async function loadReturnRequests(){
 
 function renderReturnRequests(){
   if(!returnRequestRows.length){
-    returnSelectedIds.clear();
     el('returnRequestsTable').innerHTML=
       '<div class="empty">No hay solicitudes de devolución pendientes.</div>';
-    updateReturnBulkToolbar();
     return;
   }
 
   el('returnRequestsTable').innerHTML=`<table>
     <thead>
       <tr>
-        <th style="width:36px;text-align:center">
-          <input type="checkbox" title="Seleccionar todos"
-            onchange="toggleAllReturnRequests(this.checked)">
-        </th>
         <th>Expediente</th>
         <th>Ext.</th>
         <th>Solicitud</th>
@@ -7782,12 +7629,7 @@ function renderReturnRequests(){
     <tbody>
       ${returnRequestRows.map(x=>{
         const days=returnBusinessDays(x.fecha_solicitud_devolucion);
-        const checked=returnSelectedIds.has(String(x.expediente_id))?'checked':'';
         return `<tr>
-          <td style="text-align:center">
-            <input type="checkbox" ${checked}
-              onchange="toggleReturnRequestSelection('${x.expediente_id}',this.checked)">
-          </td>
           <td><b>${esc(x.expediente)}</b></td>
           <td>${esc(x.extension||'—')}</td>
           <td><b>${esc(x.solicitud_numero||'—')}</b></td>
