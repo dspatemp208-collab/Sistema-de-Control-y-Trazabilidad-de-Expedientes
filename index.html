@@ -1,11 +1,13 @@
 <!doctype html>
+<!-- FLUJO DIRECTO USUARIO A PENDIENTE POR ATENDER ACTIVO -->
+<!-- SELECCION QUIEN ATIENDE HABILITADA PARA ARCHIVO/ADMIN -->
 <!-- REGISTRO MAESTRO: SOLICITANTE PENDIENTE POR ATENDER ACTIVO -->
 
 <html lang="es">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="app-version" content="20260827-0732">
+<meta name="app-version" content="20260827-1005-listados">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -1116,6 +1118,28 @@
 
 /* Seguridad visual por rol: ningún perfil USUARIO muestra Gestionar en filas */
 .app.limited-user .user-manage-action{display:none!important}
+
+/* ===== LISTADOS DE EXPEDIENTES DEVUELTOS ===== */
+.returned-list-toolbar{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin:10px 0 12px;padding:12px;border:1px solid #dbe4ee;border-radius:12px;background:#f8fafc}
+.returned-list-toolbar .field{min-width:170px;flex:1}
+.returned-list-toolbar .field.search{min-width:240px;flex:2}
+.returned-list-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.dest-badge{display:inline-flex;align-items:center;padding:4px 8px;border-radius:999px;font-size:11px;font-weight:800;white-space:nowrap;border:1px solid #cbd5e1;background:#fff}
+.dest-badge.san-luis{background:#eef2ff;border-color:#c7d2fe;color:#3730a3}
+.dest-badge.barrenechea{background:#ecfdf5;border-color:#a7f3d0;color:#065f46}
+.dest-badge.revisar{background:#fff7ed;border-color:#fed7aa;color:#9a3412}
+.list-status{display:inline-flex;align-items:center;padding:4px 8px;border-radius:999px;font-size:11px;font-weight:800;white-space:nowrap}
+.list-status.unlisted{background:#f1f5f9;color:#475569}
+.list-status.prep{background:#fef3c7;color:#92400e}
+.list-status.generated{background:#dcfce7;color:#166534}
+.archive-list-summary{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 10px}
+.archive-list-summary .mini{padding:7px 10px;background:#fff;border:1px solid #e2e8f0;border-radius:9px;font-size:12px}
+.archive-list-modal-grid{display:grid;grid-template-columns:minmax(320px,0.8fr) minmax(520px,1.4fr);gap:12px}
+.archive-list-panel{border:1px solid #e2e8f0;border-radius:12px;overflow:auto;max-height:58vh}
+.archive-list-panel-head{position:sticky;top:0;background:#fff;padding:10px;border-bottom:1px solid #e2e8f0;z-index:1}
+@media(max-width:900px){.archive-list-modal-grid{grid-template-columns:1fr}.archive-list-panel{max-height:none}}
+/* ===== FIN LISTADOS DE EXPEDIENTES DEVUELTOS ===== */
+
 </style>
 </head>
 <body>
@@ -1285,7 +1309,7 @@
            onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();showKpiExpedientes('pending_attention')}">
         <div class="label">Pendientes por atender</div>
         <div class="value" id="kPendingAttention">0</div>
-        <div class="user-card-caption">Expedientes de solicitudes ya aceptadas por Archivo que todavía no han sido atendidos.</div>
+        <div class="user-card-caption">Expedientes solicitados que ya ingresaron a la bandeja de Archivo y todavía no han sido atendidos.</div>
         <div class="user-card-footer">
           <button class="kpi-view" type="button" onclick="event.stopPropagation();showKpiExpedientes('pending_attention')">Ver expedientes →</button>
         </div>
@@ -1506,12 +1530,12 @@
       <div>
         <strong>Bandeja operativa de solicitudes</strong>
         <div class="note" style="margin-top:5px;padding:0;border:0;background:transparent">
-          Cada etapa representa un hecho distinto: recibir, aceptar, preparar y generar/imprimir el cargo. Al generar el cargo, el expediente queda registrado EN PRÉSTAMO.
+          Las solicitudes registradas por un USUARIO ingresan automáticamente a PENDIENTE POR ATENDER. Archivo revisa, prepara y genera/imprime el cargo. Al generar el cargo, el expediente queda EN PRÉSTAMO.
         </div>
         <div class="workflow-steps">
-          <span class="workflow-step"><b>1</b> Registrada</span>
-          <span class="workflow-step"><b>2</b> Aceptar</span>
-          <span class="workflow-step"><b>3</b> Pendiente por atender</span>
+          <span class="workflow-step"><b>1</b> Usuario registra</span>
+          <span class="workflow-step"><b>2</b> Pendiente por atender</span>
+          <span class="workflow-step"><b>3</b> Archivo revisa / prepara</span>
           <span class="workflow-step"><b>4</b> Generar e imprimir cargo</span>
           <span class="workflow-step"><b>5</b> EN PRÉSTAMO</span>
           <span class="workflow-step"><b>6</b> Cerrar devolución</span>
@@ -1712,7 +1736,7 @@
       <div>
         <strong>Elaboración, impresión y entrega de cargos</strong>
         <div class="note" style="margin-top:5px;padding:0;border:0;background:transparent">
-          El cargo se genera desde una solicitud PENDIENTE POR ATENDER. Generar e imprimir el cargo registra la entrega y el expediente pasa a EN PRÉSTAMO.
+          El cargo se genera desde una solicitud PENDIENTE POR ATENDER. Archivo selecciona quién atiende, genera e imprime el cargo; la entrega registra el expediente EN PRÉSTAMO.
         </div>
         <div class="cargo-flow-bar">
           <div class="cargo-flow-step"><b>1. Generar cargo</b>Desde Solicitudes → Pendiente por atender.</div>
@@ -1820,7 +1844,7 @@
     <div class="modal-head">
       <div>
         <h2 id="rqModalTitle">Nueva solicitud de expedientes</h2>
-        <div id="rqModalNote" class="note">La solicitud no cambia la ubicación física. Archivo acepta y verifica la solicitud sin generar cargo. Luego decide si cada expediente se atiende con un cargo nuevo o con un cargo ya existente.</div>
+        <div id="rqModalNote" class="note">La solicitud no cambia la ubicación física. Al enviarla, los expedientes registrados ingresan automáticamente a PENDIENTE POR ATENDER en Archivo. Los expedientes nuevos o que requieran revisión permanecen PENDIENTES DE VERIFICACIÓN.</div>
       </div>
       <button class="btn secondary small" onclick="closeNewRequestModal()">Cerrar</button>
     </div>
@@ -2581,6 +2605,48 @@
   </div>
 </div>
 
+
+<!-- Listados de expedientes devueltos: ARCHIVO / ADMINISTRADOR -->
+<div class="modal" id="archiveListsModal">
+  <div class="modal-box" style="max-width:1220px">
+    <div class="modal-head">
+      <div>
+        <h2>Listados de expedientes devueltos</h2>
+        <div class="note">El destino se determina automáticamente por el año: SAN LUIS 1995–2016 · BARRENECHEA 2017–2026.</div>
+      </div>
+      <button class="btn secondary small" type="button" onclick="closeArchiveListsModal()">Cerrar</button>
+    </div>
+
+    <div class="archive-list-modal-grid">
+      <div class="archive-list-panel">
+        <div class="archive-list-panel-head" style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <b>Listados</b>
+          <button class="btn secondary small" type="button" onclick="loadArchiveLists()">Actualizar</button>
+        </div>
+        <div id="archiveListsTable"><div class="empty">Cargando listados...</div></div>
+      </div>
+
+      <div class="archive-list-panel">
+        <div class="archive-list-panel-head">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+            <div>
+              <b id="archiveListDetailTitle">Seleccione un listado</b>
+              <div class="note" id="archiveListDetailMeta"></div>
+            </div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap">
+              <button class="btn secondary small" id="archiveListExportBtn" type="button" onclick="exportCurrentArchiveListCSV()" disabled>Exportar CSV</button>
+              <button class="btn secondary small" id="archiveListPrintBtn" type="button" onclick="printCurrentArchiveList()" disabled>Imprimir</button>
+              <button class="btn small" id="archiveListGenerateBtn" type="button" onclick="generateCurrentArchiveList()" disabled>Generar listado</button>
+            </div>
+          </div>
+          <div id="archiveListStatus" class="note" style="margin-top:6px"></div>
+        </div>
+        <div id="archiveListDetailTable"><div class="empty">Seleccione un listado para revisar sus expedientes.</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast">Guardado correctamente</div>
 
 <script>
@@ -2593,6 +2659,11 @@ let activeArchiveDeliveryRequestId='';
 let bulkReturnRows=[];
 let pendingRegisterSelectedRequestIds=new Set();
 let bulkReassignRows=[];
+let returnedArchiveRows=[];
+let returnedArchiveSelectedIds=new Set();
+let archiveListsRows=[];
+let currentArchiveListId='';
+let currentArchiveListRows=[];
 let catalogo=MASTER.map(([nombre,tipo],i)=>({id:'fallback-'+i,nombre,tipo,activo:true}));
 let asuntosCatalogo=ASUNTOS_PREDETERMINADOS.map((nombre,i)=>({id:'fallback-asunto-'+i,nombre,activo:true}));
 let selectedIds=new Set(), cargoRows=[];
@@ -3005,11 +3076,11 @@ async function login(e){
 async function logout(){if(sb)await sb.auth.signOut();session=null;location.reload()}
 function hasFullAccess(){
   return !!currentProfile && currentProfile.activo!==false &&
-    ['ADMINISTRADOR','ARCHIVO'].includes(currentProfile.rol);
+    ['ADMINISTRADOR','ARCHIVO'].includes(norm(currentProfile.rol));
 }
 function isAdmin(){
   return !!currentProfile && currentProfile.activo!==false &&
-    currentProfile.rol==='ADMINISTRADOR';
+    norm(currentProfile.rol)==='ADMINISTRADOR';
 }
 function isLimitedUser(){
   return !!currentProfile && currentProfile.activo!==false && norm(currentProfile.rol)==='USUARIO';
@@ -6166,6 +6237,12 @@ async function loadStateDetail(estado){
     return;
   }
 
+
+  if(estado==='DEVUELTOS AL ARCHIVO' && hasFullAccess()){
+    await loadReturnedArchiveForLists();
+    return;
+  }
+
   el('stateDetailTitle').textContent=`Expedientes en estado: ${stateDisplayName(estado)}`;
   el('stateDetailTable').innerHTML='<div class="empty">Cargando expedientes...</div>';
 
@@ -6195,6 +6272,325 @@ async function loadStateDetail(estado){
   el('stateDetailCount').textContent=`${stateDetailCount} expedientes`;
   el('stateDetailTable').innerHTML=recordTable(stateDetailRows,true,'states');
 }
+
+
+// ============================================================
+// DEVUELTOS AL ARCHIVO -> PREPARACIÓN DE LISTADOS
+// Exclusivo para ARCHIVO y ADMINISTRADOR.
+// ============================================================
+function returnedDestinationClass(destino){
+  const d=norm(destino||'');
+  return d==='SAN LUIS'?'san-luis':(d==='BARRENECHEA'?'barrenechea':'revisar');
+}
+
+function returnedArchiveFilteredRows(){
+  const search=norm(el('returnedArchiveSearch')?.value||'');
+  const destino=String(el('returnedArchiveDestination')?.value||'').trim();
+  const listStatus=String(el('returnedArchiveListStatus')?.value||'').trim();
+
+  return (returnedArchiveRows||[]).filter(r=>{
+    const text=[r.expediente,r.extension,r.rd,r.ultimo_folio,r.devuelto_por,r.cargo,r.destino_archivo,r.listado_numero]
+      .map(x=>norm(x||'')).join(' ');
+    if(search && !text.includes(search))return false;
+    if(destino && r.destino_archivo!==destino)return false;
+    if(listStatus==='SIN LISTAR' && r.listado_numero)return false;
+    if(listStatus==='EN LISTADO' && !r.listado_numero)return false;
+    return true;
+  });
+}
+
+async function loadReturnedArchiveForLists(){
+  if(!hasFullAccess())return;
+  el('stateDetailTitle').textContent='DEVUELTOS AL ARCHIVO · Preparación de listados';
+  el('stateDetailTable').innerHTML='<div class="empty">Cargando expedientes devueltos...</div>';
+
+  const {data,error}=await sb.rpc('listar_devueltos_para_listado');
+  if(error){
+    returnedArchiveRows=[];
+    stateDetailRows=[];
+    el('stateDetailCount').textContent='0 expedientes';
+    el('stateDetailTable').innerHTML=`<div class="empty">
+      No se pudo cargar la preparación de listados.<br><b>${esc(error.message)}</b><br><br>
+      Ejecute en Supabase el archivo <b>HABILITAR_LISTADOS_DEVUELTOS_ARCHIVO.sql</b>.
+    </div>`;
+    return;
+  }
+
+  returnedArchiveRows=data||[];
+  stateDetailRows=returnedArchiveRows;
+  stateDetailCount=returnedArchiveRows.length;
+  returnedArchiveSelectedIds.clear();
+  el('stateDetailCount').textContent=`${stateDetailCount} expedientes`;
+  renderReturnedArchiveDetail();
+}
+
+function renderReturnedArchiveDetail(){
+  if(!hasFullAccess())return;
+  const rows=returnedArchiveFilteredRows();
+  const totalSan=(returnedArchiveRows||[]).filter(r=>r.destino_archivo==='SAN LUIS').length;
+  const totalBar=(returnedArchiveRows||[]).filter(r=>r.destino_archivo==='BARRENECHEA').length;
+  const totalSin=(returnedArchiveRows||[]).filter(r=>!r.listado_numero).length;
+  const selected=rows.filter(r=>returnedArchiveSelectedIds.has(r.id) && !r.listado_numero);
+  const selectedSan=selected.filter(r=>r.destino_archivo==='SAN LUIS').length;
+  const selectedBar=selected.filter(r=>r.destino_archivo==='BARRENECHEA').length;
+
+  const table=rows.length?`<table>
+    <thead><tr>
+      <th style="width:40px;text-align:center">
+        <input type="checkbox" id="returnedArchiveSelectAll" title="Seleccionar visibles sin listar"
+          onchange="toggleAllReturnedArchive(this.checked)">
+      </th>
+      <th>Expediente</th>
+      <th>Extensión</th>
+      <th>R.D.</th>
+      <th>Último folio</th>
+      <th>Fecha devolución</th>
+      <th>Devuelto por</th>
+      <th>Cargo</th>
+      <th>Destino automático</th>
+      <th>Listado</th>
+      <th></th>
+    </tr></thead>
+    <tbody>${rows.map(r=>{
+      const listed=!!r.listado_numero;
+      const selectable=!listed && ['SAN LUIS','BARRENECHEA'].includes(r.destino_archivo);
+      const checked=returnedArchiveSelectedIds.has(r.id);
+      const listPill=listed
+        ?`<span class="list-status ${r.listado_estado==='GENERADO'?'generated':'prep'}">${esc(r.listado_numero)} · ${esc(r.listado_estado||'')}</span>`
+        :'<span class="list-status unlisted">SIN LISTAR</span>';
+      return `<tr>
+        <td style="text-align:center"><input type="checkbox" ${checked?'checked':''} ${selectable?'':'disabled'}
+          onchange="toggleReturnedArchive('${r.id}',this.checked)"></td>
+        <td><b>${esc(r.expediente||'—')}</b></td>
+        <td>${esc(r.extension||'—')}</td>
+        <td>${esc(r.rd||'—')}</td>
+        <td>${esc(r.ultimo_folio||'—')}</td>
+        <td>${fmtDate(r.fecha_devolucion)}</td>
+        <td>${esc(r.devuelto_por||'—')}</td>
+        <td>${esc(r.cargo||'—')}</td>
+        <td><span class="dest-badge ${returnedDestinationClass(r.destino_archivo)}">${esc(r.destino_archivo||'REVISAR')}</span></td>
+        <td>${listPill}</td>
+        <td><div style="display:flex;gap:6px;white-space:nowrap">
+          <button class="btn secondary small" onclick="showExpHistory('${r.id}')">Historial</button>
+          <button class="btn small" onclick="manageExpedienteFromPanel('${r.id}')">Gestionar</button>
+        </div></td>
+      </tr>`;
+    }).join('')}</tbody>
+  </table>`:'<div class="empty">No hay expedientes para los filtros seleccionados.</div>';
+
+  el('stateDetailTable').innerHTML=`
+    <div class="returned-list-toolbar">
+      <div class="field search">
+        <label>Buscar expediente</label>
+        <input id="returnedArchiveSearch" placeholder="Expediente, R.D., cargo, persona..." oninput="rerenderReturnedArchive()" value="${esc(el('returnedArchiveSearch')?.value||'')}">
+      </div>
+      <div class="field">
+        <label>Grupo / destino</label>
+        <select id="returnedArchiveDestination" onchange="rerenderReturnedArchive()">
+          <option value="">TODOS</option>
+          <option value="SAN LUIS">SAN LUIS · 1995–2016</option>
+          <option value="BARRENECHEA">BARRENECHEA · 2017–2026</option>
+          <option value="REVISAR">REVISAR AÑO</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Situación en listado</label>
+        <select id="returnedArchiveListStatus" onchange="rerenderReturnedArchive()">
+          <option value="">TODOS</option>
+          <option value="SIN LISTAR">SIN LISTAR</option>
+          <option value="EN LISTADO">YA INCLUIDOS EN LISTADO</option>
+        </select>
+      </div>
+      <div class="returned-list-actions">
+        <button class="btn secondary" type="button" onclick="openArchiveListsModal()">Ver listados</button>
+        <button class="btn" id="addReturnedToListsBtn" type="button" onclick="addSelectedReturnedToLists()" ${selected.length?'':'disabled'}>
+          + Agregar seleccionados al listado
+        </button>
+      </div>
+    </div>
+    <div class="archive-list-summary">
+      <div class="mini"><b>${totalSan}</b> SAN LUIS</div>
+      <div class="mini"><b>${totalBar}</b> BARRENECHEA</div>
+      <div class="mini"><b>${totalSin}</b> SIN LISTAR</div>
+      <div class="mini"><b>${selected.length}</b> seleccionados · SL ${selectedSan} / BA ${selectedBar}</div>
+    </div>
+    ${table}`;
+
+  // Restaurar filtros luego de reconstruir el HTML.
+  if(window.__returnedFilterState){
+    const s=window.__returnedFilterState;
+    if(el('returnedArchiveSearch'))el('returnedArchiveSearch').value=s.search||'';
+    if(el('returnedArchiveDestination'))el('returnedArchiveDestination').value=s.destino||'';
+    if(el('returnedArchiveListStatus'))el('returnedArchiveListStatus').value=s.status||'';
+    window.__returnedFilterState=null;
+  }
+}
+
+function rememberReturnedArchiveFilters(){
+  window.__returnedFilterState={
+    search:el('returnedArchiveSearch')?.value||'',
+    destino:el('returnedArchiveDestination')?.value||'',
+    status:el('returnedArchiveListStatus')?.value||''
+  };
+}
+
+// En renderizaciones originadas por filtros, preservar los valores antes de reconstruir.
+function rerenderReturnedArchive(){rememberReturnedArchiveFilters();renderReturnedArchiveDetail()}
+
+function toggleReturnedArchive(id,checked){
+  if(checked)returnedArchiveSelectedIds.add(id);else returnedArchiveSelectedIds.delete(id);
+  rememberReturnedArchiveFilters();
+  renderReturnedArchiveDetail();
+}
+
+function toggleAllReturnedArchive(checked){
+  returnedArchiveFilteredRows().forEach(r=>{
+    if(!r.listado_numero && ['SAN LUIS','BARRENECHEA'].includes(r.destino_archivo)){
+      if(checked)returnedArchiveSelectedIds.add(r.id);else returnedArchiveSelectedIds.delete(r.id);
+    }
+  });
+  rememberReturnedArchiveFilters();
+  renderReturnedArchiveDetail();
+}
+
+async function addSelectedReturnedToLists(){
+  if(!hasFullAccess())return;
+  const ids=[...returnedArchiveSelectedIds];
+  if(!ids.length)return;
+  const btn=el('addReturnedToListsBtn');
+  if(btn){btn.disabled=true;btn.textContent='Agregando...'}
+
+  const {data,error}=await sb.rpc('agregar_devueltos_a_listados',{p_expediente_ids:ids});
+  if(error){
+    showToast(error.message||'No se pudo agregar a los listados.');
+    if(btn){btn.disabled=false;btn.textContent='+ Agregar seleccionados al listado'}
+    return;
+  }
+
+  const listados=Array.isArray(data?.listados)?data.listados:[];
+  const resumen=listados.filter(x=>Number(x.agregados||0)>0)
+    .map(x=>`${x.destino}: ${x.numero} (${x.agregados})`).join(' · ');
+  showToast(resumen?`Agregados · ${resumen}`:`No había expedientes nuevos por agregar.`);
+  returnedArchiveSelectedIds.clear();
+  await loadReturnedArchiveForLists();
+}
+
+function closeArchiveListsModal(){
+  el('archiveListsModal')?.classList.remove('show');
+  currentArchiveListId='';
+  currentArchiveListRows=[];
+}
+
+async function openArchiveListsModal(){
+  if(!hasFullAccess())return;
+  el('archiveListsModal')?.classList.add('show');
+  await loadArchiveLists();
+}
+
+async function loadArchiveLists(){
+  if(!hasFullAccess())return;
+  el('archiveListsTable').innerHTML='<div class="empty">Cargando listados...</div>';
+  const {data,error}=await sb.rpc('listar_listados_devolucion_archivo');
+  if(error){el('archiveListsTable').innerHTML=`<div class="empty">${esc(error.message)}</div>`;return}
+  archiveListsRows=data||[];
+  if(!archiveListsRows.length){
+    el('archiveListsTable').innerHTML='<div class="empty">Todavía no se han preparado listados.</div>';
+    return;
+  }
+  el('archiveListsTable').innerHTML=`<table><thead><tr><th>Listado</th><th>Destino</th><th>Estado</th><th>Total</th><th></th></tr></thead>
+    <tbody>${archiveListsRows.map(l=>`<tr class="${String(l.id)===String(currentArchiveListId)?'cargo-selected-row':''}">
+      <td><b>${esc(l.numero)}</b><div class="note">${fmtDate(l.created_at)}</div></td>
+      <td><span class="dest-badge ${returnedDestinationClass(l.destino)}">${esc(l.destino)}</span></td>
+      <td><span class="list-status ${l.estado==='GENERADO'?'generated':'prep'}">${esc(l.estado)}</span></td>
+      <td><b>${Number(l.total_expedientes||0)}</b></td>
+      <td><button class="btn secondary small" onclick="loadArchiveListDetail('${l.id}')">Ver</button></td>
+    </tr>`).join('')}</tbody></table>`;
+}
+
+async function loadArchiveListDetail(id){
+  currentArchiveListId=id;
+  el('archiveListDetailTable').innerHTML='<div class="empty">Cargando expedientes...</div>';
+  const {data,error}=await sb.rpc('detalle_listado_devolucion_archivo',{p_listado_id:id});
+  if(error){el('archiveListDetailTable').innerHTML=`<div class="empty">${esc(error.message)}</div>`;return}
+  currentArchiveListRows=data||[];
+  const header=archiveListsRows.find(x=>String(x.id)===String(id));
+  const numero=header?.numero||currentArchiveListRows[0]?.listado_numero||'Listado';
+  const destino=header?.destino||currentArchiveListRows[0]?.destino||'—';
+  const estado=header?.estado||currentArchiveListRows[0]?.estado_listado||'—';
+  el('archiveListDetailTitle').textContent=numero;
+  el('archiveListDetailMeta').textContent=`${destino} · ${estado} · ${currentArchiveListRows.length} expediente(s)`;
+  el('archiveListExportBtn').disabled=!currentArchiveListRows.length;
+  el('archiveListPrintBtn').disabled=!currentArchiveListRows.length;
+  el('archiveListGenerateBtn').disabled=!currentArchiveListRows.length||estado!=='EN PREPARACIÓN';
+  el('archiveListGenerateBtn').textContent=estado==='GENERADO'?'Listado generado':'Generar listado';
+  el('archiveListStatus').textContent=estado==='EN PREPARACIÓN'
+    ?'Puede retirar expedientes antes de generar el listado definitivo.'
+    :'Listado generado. Se conserva como histórico.';
+
+  el('archiveListDetailTable').innerHTML=currentArchiveListRows.length?`<table>
+    <thead><tr><th>N°</th><th>Expediente</th><th>Ext.</th><th>R.D.</th><th>Último folio</th><th>Fecha devolución</th><th>Devuelto por</th><th>Cargo</th>${estado==='EN PREPARACIÓN'?'<th></th>':''}</tr></thead>
+    <tbody>${currentArchiveListRows.map((r,i)=>`<tr>
+      <td>${i+1}</td><td><b>${esc(r.expediente)}</b></td><td>${esc(r.extension||'—')}</td><td>${esc(r.rd||'—')}</td>
+      <td>${esc(r.ultimo_folio||'—')}</td><td>${fmtDate(r.fecha_devolucion)}</td><td>${esc(r.devuelto_por||'—')}</td><td>${esc(r.cargo||'—')}</td>
+      ${estado==='EN PREPARACIÓN'?`<td><button class="btn secondary small" onclick="removeArchiveListItem('${id}','${r.expediente_id}')">Retirar</button></td>`:''}
+    </tr>`).join('')}</tbody></table>`:'<div class="empty">Este listado no contiene expedientes.</div>';
+  await loadArchiveLists();
+}
+
+async function removeArchiveListItem(listadoId,expedienteId){
+  if(!hasFullAccess())return;
+  const {error}=await sb.rpc('quitar_expediente_listado_devolucion',{
+    p_listado_id:listadoId,p_expediente_id:expedienteId
+  });
+  if(error){showToast(error.message);return}
+  showToast('Expediente retirado del listado.');
+  await loadArchiveListDetail(listadoId);
+  if(selectedState==='DEVUELTOS AL ARCHIVO')await loadReturnedArchiveForLists();
+}
+
+async function generateCurrentArchiveList(){
+  if(!currentArchiveListId)return;
+  const btn=el('archiveListGenerateBtn');
+  if(btn){btn.disabled=true;btn.textContent='Generando...'}
+  const {error}=await sb.rpc('generar_listado_devolucion_archivo',{p_listado_id:currentArchiveListId});
+  if(error){showToast(error.message);if(btn){btn.disabled=false;btn.textContent='Generar listado'}return}
+  showToast('Listado generado correctamente.');
+  await loadArchiveLists();
+  await loadArchiveListDetail(currentArchiveListId);
+  if(selectedState==='DEVUELTOS AL ARCHIVO')await loadReturnedArchiveForLists();
+}
+
+function exportCurrentArchiveListCSV(){
+  if(!currentArchiveListRows.length)return;
+  const header=archiveListsRows.find(x=>String(x.id)===String(currentArchiveListId));
+  const numero=header?.numero||currentArchiveListRows[0]?.listado_numero||'LISTADO';
+  const rows=currentArchiveListRows.map((r,i)=>[
+    i+1,r.expediente,r.extension,r.rd,r.ultimo_folio,r.fecha_devolucion,r.devuelto_por,r.cargo
+  ]);
+  const csv=[['N°','EXPEDIENTE','EXTENSIÓN','R.D.','ÚLTIMO FOLIO','FECHA DEVOLUCIÓN','DEVUELTO POR','CARGO'].join(';'),
+    ...rows.map(x=>x.map(csvEscape).join(';'))].join('\n');
+  downloadBlob(`${numero}.csv`,csv);
+}
+
+function printCurrentArchiveList(){
+  if(!currentArchiveListRows.length)return;
+  const header=archiveListsRows.find(x=>String(x.id)===String(currentArchiveListId));
+  const numero=header?.numero||currentArchiveListRows[0]?.listado_numero||'LISTADO';
+  const destino=header?.destino||currentArchiveListRows[0]?.destino||'—';
+  const estado=header?.estado||currentArchiveListRows[0]?.estado_listado||'—';
+  const w=window.open('','_blank');
+  if(!w)return;
+  const rows=currentArchiveListRows.map((r,i)=>`<tr><td>${i+1}</td><td><b>${esc(r.expediente)}</b></td><td>${esc(r.extension||'—')}</td><td>${esc(r.rd||'—')}</td><td>${esc(r.ultimo_folio||'—')}</td><td>${fmtDate(r.fecha_devolucion)}</td><td>${esc(r.devuelto_por||'—')}</td><td>${esc(r.cargo||'—')}</td></tr>`).join('');
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(numero)}</title><style>
+    body{font-family:Arial,sans-serif;padding:28px;color:#111}h2{margin:0 0 5px}p{margin:3px 0 16px;color:#444}table{border-collapse:collapse;width:100%;font-size:11px}th,td{border:1px solid #999;padding:6px;text-align:left}th{background:#eee}@media print{button{display:none}}
+    </style></head><body><h2>${esc(numero)}</h2><p><b>Destino:</b> ${esc(destino)} · <b>Estado:</b> ${esc(estado)} · <b>Total:</b> ${currentArchiveListRows.length}</p>
+    <table><thead><tr><th>N°</th><th>Expediente</th><th>Ext.</th><th>R.D.</th><th>Último folio</th><th>Fecha devolución</th><th>Devuelto por</th><th>Cargo</th></tr></thead><tbody>${rows}</tbody></table>
+    <script>window.onload=()=>setTimeout(()=>window.print(),250)<\/script></body></html>`);
+  w.document.close();
+}
+// ============================================================
+// FIN LISTADOS DE EXPEDIENTES DEVUELTOS
+// ============================================================
 
 function clearStateSelection(){
   selectedState='';
@@ -6287,7 +6683,7 @@ function closeNewRequestModal(){
   }
   if(el('rqModalNote')){
     el('rqModalNote').textContent=
-      'La solicitud no cambia la ubicación física. Archivo acepta y verifica la solicitud sin generar cargo. Luego decide si cada expediente se atiende con un cargo nuevo o con un cargo ya existente.';
+      'La solicitud no cambia la ubicación física. Al enviarla, los expedientes registrados ingresan automáticamente a PENDIENTE POR ATENDER en Archivo. Los expedientes nuevos o que requieran revisión permanecen PENDIENTES DE VERIFICACIÓN.';
   }
   if(el('rqSaveBtn')){
     el('rqSaveBtn').textContent='Enviar solicitud';
@@ -6493,7 +6889,7 @@ async function openNewRequestModal(rowsOverride=null,preserveHeader=false){
   if(el('rqModalNote')){
     el('rqModalNote').textContent=editMode
       ?'Complete y verifique los datos del expediente. Desde esta misma pantalla podrá aceptar la solicitud y generar/imprimir el cargo cuando corresponda.'
-      :'La solicitud no cambia la ubicación física. Archivo acepta y verifica la solicitud sin generar cargo. Luego decide si cada expediente se atiende con un cargo nuevo o con un cargo ya existente.';
+      :'La solicitud no cambia la ubicación física. Al enviarla, los expedientes registrados ingresan automáticamente a PENDIENTE POR ATENDER en Archivo. Los expedientes nuevos o que requieran revisión permanecen PENDIENTES DE VERIFICACIÓN.';
   }
 
   if(el('rqSaveBtn')){
@@ -8914,7 +9310,7 @@ async function openRequestDetail(id){
     ` · Modalidad: ${r.modalidad||'PRÉSTAMO'}`+
     ` · Fecha solicitud: ${fmtDate(r.fecha_solicitud)}`+
     `${r.fecha_atencion||r.hora_atencion
-      ?` · Aceptación Archivo: ${requestAttentionText(r)}`
+      ?` · Ingreso a atención: ${requestAttentionText(r)}`
       :''}`+
     `${r.fechas_entrega_prestamo?.length
       ?` · Entrega préstamo: ${requestDeliveryText(r)}`
@@ -8925,7 +9321,8 @@ async function openRequestDetail(id){
   el('rqDSolicitante').textContent=r.solicitante||'—';
   if(el('rqDOrigen'))el('rqDOrigen').innerHTML=requestOriginPill(r.origen_registro);
   if(el('rqDRegistradoPor'))el('rqDRegistradoPor').textContent=r.registrado_por||'—';
-  setArchiveStaffValue('rqDAtiende',(r.atiende||'').trim());
+  const atiendeActual=(r.atiende||'').trim();
+  setArchiveStaffValue('rqDAtiende',norm(atiendeActual)==='ARCHIVO'?'':atiendeActual);
 
   // Valor de retorno por defecto: primera ubicación que contenga ARCHIVO.
   const retornoOpts=[...el('rqDRetorno').options].map(o=>o.value);
@@ -8936,6 +9333,10 @@ async function openRequestDetail(id){
   renderRequestMovements();
   renderRequestActions();
   el('requestDetailModal').classList.add('show');
+  if(hasFullAccess()){
+    setTimeout(forceEnableRequestAttendant,0);
+    setTimeout(forceEnableRequestAttendant,120);
+  }
 }
 
 function closeRequestDetail(){
@@ -9314,6 +9715,30 @@ function renderRequestMovements(){
   </table>`;
 }
 
+function forceEnableRequestAttendant(){
+  const s=el('rqDAtiende');
+  if(!s)return;
+
+  // Solo Archivo/Administrador puede definir quién atiende.
+  if(hasFullAccess()){
+    const current=String(s.value||currentRequest?.atiende||'').trim();
+    fillArchiveStaffSelect('rqDAtiende');
+    s.disabled=false;
+    s.removeAttribute('disabled');
+    s.style.pointerEvents='auto';
+    s.style.opacity='1';
+    s.tabIndex=0;
+
+    // Conservar el valor previamente asignado si existe.
+    if(current){
+      const opt=[...s.options].find(o=>norm(o.value)===norm(current));
+      if(opt)s.value=opt.value;
+    }
+  }else{
+    s.disabled=true;
+  }
+}
+
 function renderRequestActions(){
   const r=currentRequest||{};
   const hasMyLoan=requestDetailRows.some(x=>requestItemCanReassign(x));
@@ -9335,7 +9760,7 @@ function renderRequestActions(){
           ya no se puede modificar el asunto, modalidad, observación ni agregar o retirar expedientes.
         </span>`;
     }else if(r.estado==='ACEPTADO'){
-      actions='<span class="note">Solicitud pendiente por atender. Archivo ya registró la aceptación y todavía no se ha generado el cargo.</span>';
+      actions='<span class="note">Solicitud pendiente por atender. Ya ingresó a la bandeja de Archivo y todavía no se ha generado el cargo.</span>';
     }
 
     if(hasArchiveRequestedItem){
@@ -9363,6 +9788,7 @@ function renderRequestActions(){
   ['rqDAtiende','rqDNuevoResponsable','rqDRetorno','rqDCargoExistente','rqDObservacion'].forEach(id=>{
     if(el(id))el(id).disabled=false;
   });
+  forceEnableRequestAttendant();
 
   let actions='';
 
@@ -9377,12 +9803,12 @@ function renderRequestActions(){
   const hasPendingAccepted=requestDetailRows.some(x=>x.estado_item==='ACEPTADO');
 
   if(hasPendingAccepted){
-    if(el('rqDAtiende'))el('rqDAtiende').disabled=true;
+    if(el('rqDAtiende'))el('rqDAtiende').disabled=false;
     actions += `
       <button class="btn secondary" onclick="savePendingRequestDetailData()">Guardar Extensión / R.D. / folio</button>
       <button class="btn" onclick="assignNewCargoToAccepted()">Guardar, generar e imprimir cargo</button>
       <button class="btn secondary" onclick="assignExistingCargoToAccepted()">Vincular a cargo existente</button>
-      <span class="note">Los campos editables corresponden únicamente a expedientes PENDIENTES POR ATENDER. Al generar e imprimir el cargo, los seleccionados pasan directamente a EN PRÉSTAMO.</span>`;
+      <span class="note">Seleccione quién atiende el requerimiento y revise los datos de los expedientes PENDIENTES POR ATENDER. Al generar e imprimir el cargo, los seleccionados pasan directamente a EN PRÉSTAMO.</span>`;
   }
 
   if(requestDetailRows.some(x=>x.cargo_numero && ['EN PRÉSTAMO','DEVOLUCIÓN SOLICITADA','DEVUELTO','CARGO GENERADO'].includes(x.estado_item))){
@@ -9578,7 +10004,7 @@ async function assignNewCargoToAccepted(){
 
   const ids=[...requestSelectedIds];
   const accepted=selectedAcceptedIds();
-  const atiende=((currentRequest?.atiende||el('rqDAtiende')?.value||'')).trim();
+  const atiende=((el('rqDAtiende')?.value||currentRequest?.atiende||'')).trim();
   const obs=el('rqDObservacion').value.trim();
 
   if(!ids.length){
@@ -9592,7 +10018,7 @@ async function assignNewCargoToAccepted(){
   }
 
   if(!atiende){
-    el('rqActionStatus').textContent='La solicitud no tiene responsable de atención asignado. Vuelva a la aceptación o solicite corrección al Administrador.';
+    el('rqActionStatus').textContent='Seleccione quién atiende el requerimiento antes de generar el cargo.';
     return;
   }
 
@@ -12227,7 +12653,7 @@ async function importCSV(ev){
 
 
 /* ===== ACTUALIZACIÓN AUTOMÁTICA DE VERSIÓN ===== */
-const APP_VERSION='20260827-0732';
+const APP_VERSION='20260827-1005-listados';
 let __versionCheckRunning=false;
 
 async function checkForNewAppVersion(){
