@@ -1,8 +1,11 @@
 <!doctype html>
+<!-- REGISTRO MAESTRO: SOLICITANTE PENDIENTE POR ATENDER ACTIVO -->
+
 <html lang="es">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="app-version" content="20260827-0732">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -10156,6 +10159,53 @@ function masterNormalizeRow(r){
   };
 }
 
+function masterRowIsPendingAttention(r){
+  const state=norm(r?.estado_operativo||r?.estado||'');
+  return ['PENDIENTE DE VERIFICACIÓN','PENDIENTE POR ATENDER','ACEPTADO'].includes(state);
+}
+
+async function enrichMasterPendingRequestData(rows){
+  if(!Array.isArray(rows)||!rows.length||!sb||!session)return rows||[];
+
+  const pendingIds=new Set(
+    rows
+      .filter(masterRowIsPendingAttention)
+      .map(r=>String(r.id||r.expediente_id||''))
+      .filter(Boolean)
+  );
+
+  if(!pendingIds.size)return rows;
+
+  const {data,error}=await sb.rpc('listar_pendientes_por_atender_inclusivo');
+
+  if(error){
+    console.warn('solicitantes Registro Maestro:',error.message);
+    return rows;
+  }
+
+  // La RPC ya viene ordenada desde la solicitud más reciente. Si un expediente
+  // tuviera más de una solicitud pendiente, se muestra la solicitud vigente más reciente.
+  const byExpediente=new Map();
+  (data||[]).forEach(x=>{
+    const id=String(x.expediente_id||'');
+    if(!id||!pendingIds.has(id)||byExpediente.has(id))return;
+    byExpediente.set(id,x);
+  });
+
+  return rows.map(r=>{
+    if(!masterRowIsPendingAttention(r))return r;
+    const id=String(r.id||r.expediente_id||'');
+    const p=byExpediente.get(id);
+    return {
+      ...r,
+      solicitante_pendiente:p?.solicitante||'',
+      solicitud_pendiente_numero:p?.solicitud_numero||'',
+      solicitud_pendiente_fecha:p?.fecha_solicitud||'',
+      solicitud_pendiente_id:p?.solicitud_id||''
+    };
+  });
+}
+
 function updateMasterMonthDayOptions(monthRows,dayRows){
   const monthSel=el('allMonthFilter');
   const daySel=el('allDayFilter');
@@ -10231,7 +10281,7 @@ async function loadAll(){
   updateMasterMonthDayOptions(result.resumen_meses||[],result.resumen_dias||[]);
   renderMasterDateSummary(result.resumen_meses||[],result.resumen_dias||[]);
 
-  allRows=rows.map(masterNormalizeRow);
+  allRows=await enrichMasterPendingRequestData(rows.map(masterNormalizeRow));
   allCountValue=Number(result.total_encontrados||0);
   allTotalGeneral=Number(result.total_general||0);
 
@@ -10297,7 +10347,8 @@ async function fetchMasterFilteredRows(){
     const result=data||{};
     const rows=Array.isArray(result.rows)?result.rows:[];
 
-    all.push(...rows.map(masterNormalizeRow));
+    const normalized=await enrichMasterPendingRequestData(rows.map(masterNormalizeRow));
+    all.push(...normalized);
 
     if(rows.length<BATCH)break;
 
@@ -11200,6 +11251,7 @@ function recordTable(data,withOwner=false,source='panel'){
   const ownerHead='<th>Responsable actual / ubicación</th>';
 
   const movementHead=limited?'<th>Último movimiento</th>':'';
+  const masterSolicitanteHead=source==='all'?'<th>Solicitante</th><th>Fecha solicitud</th>':'';
   const allChecked=data.length>0&&data.every(r=>selectedIds.has(r.id));
 
   const body=data.map(r=>`<tr>
@@ -11213,6 +11265,11 @@ function recordTable(data,withOwner=false,source='panel'){
       :''}
 
     <td>${rowStatus(r)}</td>
+    ${source==='all'?`<td>${masterRowIsPendingAttention(r)
+      ?`<b>${esc(r.solicitante_pendiente||'—')}</b>${r.solicitud_pendiente_numero
+        ?`<div style="font-size:10px;color:var(--muted);margin-top:3px">${esc(r.solicitud_pendiente_numero)}</div>`
+        :''}`
+      :'—'}</td><td>${masterRowIsPendingAttention(r)?fmtDate(r.solicitud_pendiente_fecha):'—'}</td>`:''}
     ${limited?`<td>${movementLabel(r)}</td>`:''}
     <td>${fmtDate(r.fecha_entrega)}</td>
     <td>${fmtDate(r.fecha_devolucion)}</td>
@@ -11237,6 +11294,7 @@ function recordTable(data,withOwner=false,source='panel'){
     <th>R.D.</th>
     ${ownerHead}
     <th>Estado</th>
+    ${masterSolicitanteHead}
     ${movementHead}
     <th>F. entrega</th>
     <th>F. devolución</th>
@@ -12166,6 +12224,63 @@ async function importCSV(ev){
   };
   rd.readAsText(f,'UTF-8')
 }
+
+
+/* ===== ACTUALIZACIÓN AUTOMÁTICA DE VERSIÓN ===== */
+const APP_VERSION='20260827-0732';
+let __versionCheckRunning=false;
+
+async function checkForNewAppVersion(){
+  if(__versionCheckRunning || document.hidden)return;
+  __versionCheckRunning=true;
+
+  try{
+    // Se consulta únicamente el inicio del index.html con un parámetro único
+    // para evitar que el navegador reutilice una copia anterior.
+    const checkUrl=new URL(window.location.href);
+    checkUrl.searchParams.set('__version_check',String(Date.now()));
+
+    const response=await fetch(checkUrl.toString(),{
+      method:'GET',
+      cache:'no-store',
+      headers:{'Range':'bytes=0-8191'}
+    });
+
+    if(!response.ok && response.status!==206)return;
+
+    const html=await response.text();
+    const match=html.match(/<meta\s+name=["']app-version["']\s+content=["']([^"']+)["']/i)
+      || html.match(/<meta\s+content=["']([^"']+)["']\s+name=["']app-version["']/i);
+    const remoteVersion=match?.[1]||'';
+
+    if(remoteVersion && remoteVersion!==APP_VERSION){
+      try{
+        if(typeof showToast==='function')showToast('Nueva versión disponible. Actualizando...');
+      }catch(_e){}
+
+      setTimeout(()=>{
+        const nextUrl=new URL(window.location.href);
+        nextUrl.searchParams.delete('__version_check');
+        nextUrl.searchParams.set('v',remoteVersion);
+        window.location.replace(nextUrl.toString());
+      },700);
+    }
+  }catch(err){
+    // Una falla temporal de red no interrumpe el trabajo del usuario.
+    console.debug('Comprobación de versión:',err?.message||err);
+  }finally{
+    __versionCheckRunning=false;
+  }
+}
+
+// Verifica al abrir la aplicación, al volver a la pestaña y cada minuto.
+setTimeout(checkForNewAppVersion,5000);
+setInterval(checkForNewAppVersion,60000);
+window.addEventListener('focus',checkForNewAppVersion);
+document.addEventListener('visibilitychange',()=>{
+  if(!document.hidden)checkForNewAppVersion();
+});
+/* ===== FIN ACTUALIZACIÓN AUTOMÁTICA ===== */
 
 connect();
 </script>
