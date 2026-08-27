@@ -7,7 +7,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="app-version" content="20260827-1005-listados">
+<meta name="app-version" content="20260827-1543-reasignacion-interna-misma-area">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -2463,6 +2463,21 @@
       </div>
     </div>
 
+    <div class="card" style="margin-bottom:12px">
+      <div class="table-head">
+        <div>
+          <strong>🤝 Solicitudes internas · misma área</strong>
+          <div class="note" style="margin-top:3px;padding:0;border:0;background:transparent">
+            Un usuario puede solicitar directamente un expediente que está con otro usuario de su misma área. La custodia cambia únicamente cuando el responsable actual acepta.
+          </div>
+        </div>
+        <span class="pill alert"><span id="internalReassignAlertsCount">0</span> pendientes</span>
+      </div>
+      <div id="internalReassignAlertsList" class="notification-list">
+        <div class="empty">No hay solicitudes internas de reasignación.</div>
+      </div>
+    </div>
+
     <div class="card">
       <div class="table-head">
         <div>
@@ -2654,7 +2669,7 @@ const MASTER=[["MARCELA ALONZO", "PERSONAL"], ["ABRAHAN DAMAS", "PERSONAL"], ["A
 const ASUNTOS_PREDETERMINADOS=["ACCESO A LA INFORMACIÓN", "ANALISIS Y EVALUACIÓN DEL MEMORANDO DE CONCLUSIÓN DEL PROCESO CONTENCIOSO ADMINISTRATIVO, REMITIDO POR LA PROCURADURÍA PÚBLICA (PP)", "ANEXADO DE CÉDULAS DE NOTIFICACIÓN", "ANEXADO DE DOCUMENTOS", "ATENCIÓN A LA DIRECCIÓN DE EXTRACCIÓN PARA CONSUMO HUMANO DIRECTO E INDIRECTO (DECHDI)", "ATENCIÓN A LA DIRECCIÓN DE VIGILANCIA Y CONTROL (DVC) - RD ARCHIVAMIENTO", "ATENCIÓN A LA OFICINA DE CONTROL INTERNO (OCI)", "ATENCIÓN A LA OFICINA GENERAL DE ADMINISTRACIÓN (OGA)", "ATENCIÓN A LA PROCURADURÍA PÚBLICA", "ATENCIÓN AL MINISTERIO PÚBLICO (FISCALÍA)", "ATENCIÓN DE ESCRITOS", "ATENCIÓN DE ESCRITOS REMITIDOS POR EL CONSEJO DE APELACIÓN DE SANCIONES CALIDAD DE PRÉSTAMO (CONAS)", "ATENCIÓN DE QUEJAS", "CADUCIDAD", "COMUNICACIÓN DE LAS SANCIONES A LA DIRECCIÓN GENERAL DE PESCA PARA CONSUMO HUMANO DIRECTO E INDIRECTO (DGPCHDI)", "DESLINDE DE RESPONSABILIDAD", "ELEVACIÓN DEL EXPEDIENTE AL CONSEJO DE APELACIÓN DE SANCIONES (CONAS)", "ENMIENDA", "EVALUACIÓN DE OFICIO", "EVALUACIÓN DE PAGOS POR CONCEPTO DE DECOMISOS", "EVALUACIÓN DEL EXPEDIENTE QUE RETORNA DEL CONSEJO DE APELACIÓN DE SANCIONES (CONAS)", "INTERES PARTICULAR", "LECTURA EN SALA (USUARIOS INTERNOS)", "LECTURA EXPEDIENTE (USUARIOS EXTERNOS)", "NULIDAD DE OFICIO", "PERDIDA DE BENEFICIO", "PETICIÓN ADMINISTRATIVA", "RECOMENDACIÓN DE INICIO", "RECONSIDERACIÓN", "REINCIDENCIAS DEL PAS", "REVISIÓN", "REVISIÓN DEL PROCEDIMIENTO DE EJECUCIÓN COACTIVA (PEC) - OEC", "SECRETARIA TÉCNICA DE LOS ORGANOS INSTRUCTORES (STOI)", "SOLICITUD DE BENEFICIOS", "TRAMITACIÓN DEL PAS (IFIS)", "USO DE LA PALABRA O AUDIENCIA"];
 const STATUSES=['CUSTODIA','EN PRÉSTAMO','DEVUELTO','REASIGNADO','EN TRÁMITE'];
 const PAGE_SIZE=200;
-let sb=null, session=null, currentProfile=null, userProfiles=[], abogadoProfiles=[], reassignmentProfiles=[], reassignmentProfilesLoadedAt=0, returnRequestRows=[], pendingRegisterRows=[], pendingVerifyRows=[], notificationRows=[], notificationUnread=0, notificationsLoaded=false, requestExcelRows=[], requestExcelMissing=[], requestExcelDuplicates=0, summaryRows=[], panelRows=[], allRows=[], historyRows=[], cargosRows=[], selectedCargoNumero='', stateRows=[], stateDetailRows=[], requestRows=[], requestDetailRows=[], requestMovementRows=[], requestSearchRows=[], requestsByLawyerRows=[];
+let sb=null, session=null, currentProfile=null, userProfiles=[], abogadoProfiles=[], reassignmentProfiles=[], reassignmentProfilesLoadedAt=0, returnRequestRows=[], pendingRegisterRows=[], pendingVerifyRows=[], notificationRows=[], notificationUnread=0, notificationsLoaded=false, internalReassignRows=[], internalReassignPendingCount=0, requestExcelRows=[], requestExcelMissing=[], requestExcelDuplicates=0, summaryRows=[], panelRows=[], allRows=[], historyRows=[], cargosRows=[], selectedCargoNumero='', stateRows=[], stateDetailRows=[], requestRows=[], requestDetailRows=[], requestMovementRows=[], requestSearchRows=[], requestsByLawyerRows=[];
 let activeArchiveDeliveryRequestId='';
 let bulkReturnRows=[];
 let pendingRegisterSelectedRequestIds=new Set();
@@ -3217,7 +3232,8 @@ async function afterLogin(){
   await Promise.all([
     loadNotifications(true),
     loadOperationalAlerts(true),
-    loadArchiveDeliveryRequests(true)
+    loadArchiveDeliveryRequests(true),
+    loadInternalReassignRequests(true)
   ]);
   startNotificationPolling();
 
@@ -3243,18 +3259,19 @@ async function afterLogin(){
 
 function updateAlertsBadge(){
   const badge=el('alertsBadge');
-  const totalActive=Number(notificationUnread||0)+Number(operationalAlertCount||0)+Number(archiveDeliveryAlertCount||0);
+  const totalActive=Number(notificationUnread||0)+Number(operationalAlertCount||0)+Number(archiveDeliveryAlertCount||0)+Number(internalReassignPendingCount||0);
 
   if(badge){
     badge.textContent=totalActive>99?'99+':String(totalActive);
     badge.classList.toggle('zero',totalActive===0);
-    badge.title=`${operationalAlertCount||0} préstamo(s) >30 días · ${archiveDeliveryAlertCount||0} entrega(s) a Archivo · ${notificationUnread||0} reasignación(es) no leídas`;
+    badge.title=`${operationalAlertCount||0} préstamo(s) >30 días · ${archiveDeliveryAlertCount||0} entrega(s) a Archivo · ${internalReassignPendingCount||0} solicitud(es) interna(s) · ${notificationUnread||0} reasignación(es) no leídas`;
   }
 
   if(el('alertsUnreadText'))el('alertsUnreadText').textContent=totalActive;
   if(el('operationalAlertsCount'))el('operationalAlertsCount').textContent=operationalAlertCount||0;
   if(el('reassignmentUnreadText'))el('reassignmentUnreadText').textContent=notificationUnread||0;
   if(el('archiveDeliveryAlertsCount'))el('archiveDeliveryAlertsCount').textContent=archiveDeliveryAlertCount||0;
+  if(el('internalReassignAlertsCount'))el('internalReassignAlertsCount').textContent=internalReassignPendingCount||0;
 
   if(el('markAllAlertsBtn')){
     el('markAllAlertsBtn').disabled=notificationUnread===0;
@@ -3537,6 +3554,176 @@ async function confirmArchiveDeliveryReceived(id){
   renderArchiveDeliveryRequests();
 }
 
+// ============================================================
+// SOLICITUD INTERNA DE REASIGNACIÓN · MISMA ÁREA
+// ============================================================
+async function loadInternalReassignRequests(silent=false){
+  if(!sb||!session)return;
+
+  const {data,error}=await sb.rpc('listar_solicitudes_reasignacion_interna');
+  if(error){
+    // Mantener compatibilidad si el SQL aún no fue instalado.
+    console.warn('listar_solicitudes_reasignacion_interna:',error.message);
+    internalReassignRows=[];
+    internalReassignPendingCount=0;
+    updateAlertsBadge();
+    if(!silent && el('internalReassignAlertsList')){
+      el('internalReassignAlertsList').innerHTML=`<div class="empty">${esc(error.message)}</div>`;
+    }
+    return;
+  }
+
+  internalReassignRows=data||[];
+  internalReassignPendingCount=internalReassignRows.filter(x=>
+    norm(x.estado)==='PENDIENTE' && (hasFullAccess() || x.puede_responder)
+  ).length;
+  updateAlertsBadge();
+
+  if(el('alertsModal')?.classList.contains('show'))renderInternalReassignRequests();
+}
+
+function internalReassignStatePill(state){
+  const s=norm(state||'');
+  if(s==='ACEPTADA')return '<span class="pill returned">ACEPTADA</span>';
+  if(s==='RECHAZADA')return '<span class="pill alert">RECHAZADA</span>';
+  if(s==='CANCELADA')return '<span class="pill">CANCELADA</span>';
+  return '<span class="pill alert">PENDIENTE</span>';
+}
+
+function renderInternalReassignRequests(){
+  const list=el('internalReassignAlertsList');
+  if(!list)return;
+
+  if(!internalReassignRows.length){
+    list.innerHTML='<div class="empty">No hay solicitudes internas de reasignación.</div>';
+    return;
+  }
+
+  list.innerHTML=internalReassignRows.map(r=>{
+    const received=norm(r.direccion)==='RECIBIDA';
+    const sent=norm(r.direccion)==='ENVIADA';
+    return `<div class="notification-item ${norm(r.estado)==='PENDIENTE'?'unread':''}">
+      <div class="notification-head">
+        <div>
+          <div class="notification-title">🤝 ${esc(r.expediente||'—')} · ${esc(r.area_trabajo||'MISMA ÁREA')}</div>
+          <div class="notification-meta">
+            ${fmtDate(r.created_at)} · ${esc(r.direccion||'SUPERVISIÓN')}
+          </div>
+        </div>
+        ${internalReassignStatePill(r.estado)}
+      </div>
+      <div class="notification-message">
+        ${received
+          ?`<b>${esc(r.solicitante_nombre||'Otro usuario')}</b> solicita que le reasigne el expediente que actualmente está bajo su responsabilidad.`
+          :sent
+            ?`Solicitud enviada a <b>${esc(r.responsable_actual_nombre||'—')}</b>. La custodia no cambia hasta que esa persona acepte.`
+            :`<b>${esc(r.solicitante_nombre||'—')}</b> solicita el expediente a <b>${esc(r.responsable_actual_nombre||'—')}</b>.`}
+        ${r.asunto?`<br>Asunto: ${esc(r.asunto)}`:''}
+        ${r.observacion?`<br>Observación: ${esc(r.observacion)}`:''}
+        ${r.motivo_respuesta?`<br>Resultado: ${esc(r.motivo_respuesta)}`:''}
+      </div>
+      <div class="notification-actions">
+        ${r.puede_responder && norm(r.estado)==='PENDIENTE'
+          ?`<button class="btn" onclick="respondInternalReassign('${r.id}','ACEPTAR')">Aceptar y reasignar</button>
+             <button class="btn secondary small" onclick="respondInternalReassign('${r.id}','RECHAZAR')">No reasignar</button>`
+          :''}
+        ${sent && norm(r.estado)==='PENDIENTE'
+          ?`<button class="btn secondary small" onclick="cancelInternalReassign('${r.id}')">Cancelar solicitud</button>`
+          :''}
+        ${r.expediente_id
+          ?`<button class="btn secondary small" onclick="closeAlertsModal();manageExpedienteFromPanel('${r.expediente_id}')">Ver expediente</button>`
+          :''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function respondInternalReassign(id,action){
+  const row=(internalReassignRows||[]).find(x=>String(x.id)===String(id));
+  if(!row)return;
+
+  const {data,error}=await sb.rpc('responder_solicitud_reasignacion_interna',{
+    p_solicitud_interna_id:id,
+    p_accion:action,
+    p_motivo:null
+  });
+
+  if(error){
+    showToast(error.message);
+    return;
+  }
+
+  showToast(action==='ACEPTAR'
+    ?`${data?.expediente||row.expediente} reasignado a ${data?.nuevo_responsable||row.solicitante_nombre}`
+    :`Solicitud de ${row.expediente||'expediente'} rechazada`);
+
+  await Promise.all([
+    loadInternalReassignRequests(true),loadNotifications(true),loadPanel(),loadRequests(),loadHistory()
+  ]);
+  renderInternalReassignRequests();
+}
+
+async function cancelInternalReassign(id){
+  const {error}=await sb.rpc('cancelar_solicitud_reasignacion_interna',{
+    p_solicitud_interna_id:id
+  });
+  if(error){showToast(error.message);return}
+  showToast('Solicitud interna cancelada');
+  await loadInternalReassignRequests(true);
+  renderInternalReassignRequests();
+}
+
+async function annotateInternalReassignEligibility(rows){
+  if(!isLimitedUser() || !Array.isArray(rows) || !rows.length)return rows||[];
+
+  const ids=[...new Set(rows.map(x=>x.id).filter(Boolean))];
+  if(!ids.length)return rows;
+
+  const {data,error}=await sb.rpc('evaluar_reasignacion_interna',{
+    p_expediente_ids:ids
+  });
+  if(error){
+    console.warn('evaluar_reasignacion_interna:',error.message);
+    return rows;
+  }
+
+  const map=new Map((data||[]).map(x=>[String(x.expediente_id),x]));
+  return rows.map(r=>{
+    const ev=map.get(String(r.id));
+    if(!ev || !ev.elegible)return r;
+    return {
+      ...r,
+      disponible:true,
+      solicitud_interna:true,
+      area_trabajo:ev.area_trabajo||null,
+      responsable_actual:ev.responsable_actual||r.responsable_actual||null,
+      motivo:'MISMA ÁREA · Solicitud directa al usuario que tiene el expediente'
+    };
+  });
+}
+
+async function splitInternalReassignItems(cleanItems,modalidad){
+  if(!isLimitedUser() || modalidad!=='PRÉSTAMO'){
+    return {internal:[],normal:cleanItems};
+  }
+  const ids=cleanItems.map(x=>x.id).filter(Boolean);
+  if(!ids.length)return {internal:[],normal:cleanItems};
+
+  const {data,error}=await sb.rpc('evaluar_reasignacion_interna',{
+    p_expediente_ids:ids
+  });
+  if(error)throw error;
+
+  const eligible=new Set((data||[]).filter(x=>x.elegible).map(x=>String(x.expediente_id)));
+  return {
+    internal:cleanItems.filter(x=>x.id && eligible.has(String(x.id))),
+    normal:cleanItems.filter(x=>!x.id || !eligible.has(String(x.id)))
+  };
+}
+// ============================================================
+// FIN SOLICITUD INTERNA DE REASIGNACIÓN · MISMA ÁREA
+// ============================================================
+
 async function loadNotifications(silent=false){
   if(!sb||!session)return;
 
@@ -3643,11 +3830,13 @@ async function openAlertsModal(){
   await Promise.all([
     loadNotifications(false),
     loadOperationalAlerts(false),
-    loadArchiveDeliveryRequests(false)
+    loadArchiveDeliveryRequests(false),
+    loadInternalReassignRequests(false)
   ]);
   renderNotifications();
   renderOperationalAlerts();
   renderArchiveDeliveryRequests();
+  renderInternalReassignRequests();
   updateAlertsBadge();
 }
 
@@ -3704,6 +3893,8 @@ function startNotificationPolling(){
       loadNotifications(true);
       loadOperationalAlerts(true);
       loadArchiveDeliveryRequests(true);
+      loadInternalReassignRequests(true);
+      loadInternalReassignRequests(true);
     }
   },30000);
 
@@ -6283,15 +6474,30 @@ function returnedDestinationClass(destino){
   return d==='SAN LUIS'?'san-luis':(d==='BARRENECHEA'?'barrenechea':'revisar');
 }
 
+function normalizeReturnedExpediente(value){
+  const raw=String(value||'').trim().toUpperCase().replace(/\s+/g,'').replace(/[\/_]+/g,'-');
+  if(!raw)return {numero:'',anio:'',key:''};
+  const parts=raw.split('-').filter(Boolean);
+  const numeroRaw=(parts[0]||'').replace(/\D/g,'');
+  const anioRaw=(parts[1]||'').replace(/\D/g,'');
+  const numero=numeroRaw?String(parseInt(numeroRaw,10)):'';
+  const anio=anioRaw||'';
+  return {numero,anio,key:anio?`${numero}-${anio}`:numero};
+}
+
 function returnedArchiveFilteredRows(){
-  const search=norm(el('returnedArchiveSearch')?.value||'');
+  const searchRaw=el('returnedArchiveSearch')?.value||'';
+  const search=normalizeReturnedExpediente(searchRaw);
   const destino=String(el('returnedArchiveDestination')?.value||'').trim();
   const listStatus=String(el('returnedArchiveListStatus')?.value||'').trim();
 
   return (returnedArchiveRows||[]).filter(r=>{
-    const text=[r.expediente,r.extension,r.rd,r.ultimo_folio,r.devuelto_por,r.cargo,r.destino_archivo,r.listado_numero]
-      .map(x=>norm(x||'')).join(' ');
-    if(search && !text.includes(search))return false;
+    // Permite buscar sin ceros iniciales: 968-2011 encuentra 0968-2011.
+    const expediente=normalizeReturnedExpediente(r.expediente||'');
+    if(search.numero){
+      if(expediente.numero!==search.numero)return false;
+      if(search.anio && expediente.anio!==search.anio)return false;
+    }
     if(destino && r.destino_archivo!==destino)return false;
     if(listStatus==='SIN LISTAR' && r.listado_numero)return false;
     if(listStatus==='EN LISTADO' && !r.listado_numero)return false;
@@ -6327,6 +6533,15 @@ async function loadReturnedArchiveForLists(){
 function renderReturnedArchiveDetail(){
   if(!hasFullAccess())return;
   const rows=returnedArchiveFilteredRows();
+  const searchInfo=normalizeReturnedExpediente(el('returnedArchiveSearch')?.value||'');
+  // Si la búsqueda identifica un único expediente, dejarlo seleccionado automáticamente.
+  // Se prioriza el expediente completo (número + año); si solo se escribió el número,
+  // también se selecciona cuando existe una única coincidencia visible.
+  if(searchInfo.numero && rows.length===1){
+    const only=rows[0];
+    const selectable=!only.listado_numero && ['SAN LUIS','BARRENECHEA'].includes(only.destino_archivo);
+    if(selectable)returnedArchiveSelectedIds.add(only.id);
+  }
   const totalSan=(returnedArchiveRows||[]).filter(r=>r.destino_archivo==='SAN LUIS').length;
   const totalBar=(returnedArchiveRows||[]).filter(r=>r.destino_archivo==='BARRENECHEA').length;
   const totalSin=(returnedArchiveRows||[]).filter(r=>!r.listado_numero).length;
@@ -6382,7 +6597,9 @@ function renderReturnedArchiveDetail(){
     <div class="returned-list-toolbar">
       <div class="field search">
         <label>Buscar expediente</label>
-        <input id="returnedArchiveSearch" placeholder="Expediente, R.D., cargo, persona..." oninput="rerenderReturnedArchive()" value="${esc(el('returnedArchiveSearch')?.value||'')}">
+        <input id="returnedArchiveSearch" placeholder="Ej.: 968-2011" autocomplete="off" inputmode="numeric"
+          oninput="scheduleReturnedArchiveSearch(this)" value="${esc(el('returnedArchiveSearch')?.value||'')}">
+        <div class="note" style="margin-top:4px">No es necesario escribir los ceros iniciales. Si queda una sola coincidencia, se selecciona automáticamente.</div>
       </div>
       <div class="field">
         <label>Grupo / destino</label>
@@ -6424,6 +6641,15 @@ function renderReturnedArchiveDetail(){
     if(el('returnedArchiveListStatus'))el('returnedArchiveListStatus').value=s.status||'';
     window.__returnedFilterState=null;
   }
+  if(window.__returnedRefocusSearch){
+    window.__returnedRefocusSearch=false;
+    const searchInput=el('returnedArchiveSearch');
+    if(searchInput){
+      searchInput.focus({preventScroll:true});
+      const end=searchInput.value.length;
+      try{searchInput.setSelectionRange(end,end)}catch(_e){}
+    }
+  }
 }
 
 function rememberReturnedArchiveFilters(){
@@ -6436,6 +6662,23 @@ function rememberReturnedArchiveFilters(){
 
 // En renderizaciones originadas por filtros, preservar los valores antes de reconstruir.
 function rerenderReturnedArchive(){rememberReturnedArchiveFilters();renderReturnedArchiveDetail()}
+
+// El buscador no reconstruye la sección en cada tecla.
+// Espera una breve pausa y luego filtra, manteniendo el foco para seguir escribiendo.
+let __returnedArchiveSearchTimer=null;
+function scheduleReturnedArchiveSearch(input){
+  const searchValue=input?.value||'';
+  const destino=el('returnedArchiveDestination')?.value||'';
+  const status=el('returnedArchiveListStatus')?.value||'';
+
+  window.__returnedFilterState={search:searchValue,destino,status};
+  clearTimeout(__returnedArchiveSearchTimer);
+  __returnedArchiveSearchTimer=setTimeout(()=>{
+    window.__returnedFilterState={search:searchValue,destino,status};
+    window.__returnedRefocusSearch=true;
+    renderReturnedArchiveDetail();
+  },350);
+}
 
 function toggleReturnedArchive(id,checked){
   if(checked)returnedArchiveSelectedIds.add(id);else returnedArchiveSelectedIds.delete(id);
@@ -6683,7 +6926,7 @@ function closeNewRequestModal(){
   }
   if(el('rqModalNote')){
     el('rqModalNote').textContent=
-      'La solicitud no cambia la ubicación física. Al enviarla, los expedientes registrados ingresan automáticamente a PENDIENTE POR ATENDER en Archivo. Los expedientes nuevos o que requieran revisión permanecen PENDIENTES DE VERIFICACIÓN.';
+      'La solicitud no cambia la ubicación física. Los expedientes disponibles ingresan a PENDIENTE POR ATENDER en Archivo. Si un expediente está con otro USUARIO de su misma área, se enviará una SOLICITUD INTERNA al responsable actual y la custodia solo cambiará cuando este la acepte. Los expedientes nuevos o que requieran revisión permanecen PENDIENTES DE VERIFICACIÓN.';
   }
   if(el('rqSaveBtn')){
     el('rqSaveBtn').textContent='Enviar solicitud';
@@ -6783,30 +7026,51 @@ async function saveNewRequest(){
   }
 
   try{
-    const rpcName=editId
-      ?'editar_solicitud_antes_cargo'
-      :'crear_solicitud_multiple_mixta_con_modalidad';
+    let data=null;
+    let internalCreated=[];
 
-    const rpcArgs=editId
-      ?{
-          p_solicitud_id:editId,
+    if(editId){
+      const {data:editData,error}=await sb.rpc('editar_solicitud_antes_cargo',{
+        p_solicitud_id:editId,
+        p_solicitante:solicitante,
+        p_asunto:asunto,
+        p_observacion:observacion||null,
+        p_modalidad:modalidad,
+        p_items:cleanItems
+      });
+      if(error)throw error;
+      data=editData;
+    }else{
+      // Clasificar nuevamente al momento de enviar para no depender de datos
+      // antiguos de la pantalla. Solo PRÉSTAMO usa la vía interna.
+      const split=await splitInternalReassignItems(cleanItems,modalidad);
+
+      if(split.normal.length){
+        const {data:normalData,error}=await sb.rpc('crear_solicitud_multiple_mixta_con_modalidad',{
           p_solicitante:solicitante,
           p_asunto:asunto,
           p_observacion:observacion||null,
           p_modalidad:modalidad,
-          p_items:cleanItems
-        }
-      :{
-          p_solicitante:solicitante,
+          p_items:split.normal
+        });
+        if(error)throw error;
+        data=normalData;
+      }
+
+      for(const item of split.internal){
+        const {data:riData,error:riError}=await sb.rpc('solicitar_reasignacion_interna',{
+          p_expediente_id:item.id,
           p_asunto:asunto,
-          p_observacion:observacion||null,
-          p_modalidad:modalidad,
-          p_items:cleanItems
-        };
+          p_observacion:observacion||null
+        });
+        if(riError)throw riError;
+        internalCreated.push(riData);
+      }
 
-    const {data,error}=await sb.rpc(rpcName,rpcArgs);
-
-    if(error)throw error;
+      if(!data && internalCreated.length){
+        data={numero:'',total:internalCreated.length};
+      }
+    }
 
     selectedIds.clear();
     updateSelectionUI();
@@ -6819,14 +7083,17 @@ async function saveNewRequest(){
 
     closeNewRequestModal();
 
-    showToast(
-      editId
-        ?`Solicitud ${data?.numero||editNumero} actualizada correctamente`
-        :`Solicitud ${data?.numero||''} registrada · `+
-          `${data?.total||cleanItems.length} expediente(s) · ${modalidad}`
-    );
+    if(editId){
+      showToast(`Solicitud ${data?.numero||editNumero} actualizada correctamente`);
+    }else if(internalCreated.length && data?.numero){
+      showToast(`Solicitud ${data.numero} registrada · ${internalCreated.length} solicitud(es) interna(s) de misma área enviada(s)`);
+    }else if(internalCreated.length){
+      showToast(`${internalCreated.length} solicitud(es) interna(s) enviada(s) al usuario que tiene el expediente`);
+    }else{
+      showToast(`Solicitud ${data?.numero||''} registrada · ${data?.total||cleanItems.length} expediente(s) · ${modalidad}`);
+    }
 
-    await loadRequests();
+    await Promise.all([loadRequests(),loadInternalReassignRequests(true)]);
 
     if(hasFullAccess()){
       await loadRequestsByLawyer();
@@ -6889,7 +7156,7 @@ async function openNewRequestModal(rowsOverride=null,preserveHeader=false){
   if(el('rqModalNote')){
     el('rqModalNote').textContent=editMode
       ?'Complete y verifique los datos del expediente. Desde esta misma pantalla podrá aceptar la solicitud y generar/imprimir el cargo cuando corresponda.'
-      :'La solicitud no cambia la ubicación física. Al enviarla, los expedientes registrados ingresan automáticamente a PENDIENTE POR ATENDER en Archivo. Los expedientes nuevos o que requieran revisión permanecen PENDIENTES DE VERIFICACIÓN.';
+      :'La solicitud no cambia la ubicación física. Los expedientes disponibles ingresan a PENDIENTE POR ATENDER en Archivo. Si un expediente está con otro USUARIO de su misma área, se enviará una SOLICITUD INTERNA al responsable actual y la custodia solo cambiará cuando este la acepte. Los expedientes nuevos o que requieran revisión permanecen PENDIENTES DE VERIFICACIÓN.';
   }
 
   if(el('rqSaveBtn')){
@@ -7069,8 +7336,10 @@ async function openNewRequestModal(rowsOverride=null,preserveHeader=false){
               :esc(r.ultimo_folio||'—')}
           </td>
 
-          <td>${(r._nuevo||r.nuevo)?'NUEVO':'EXISTENTE'}</td>
-          <td>${esc(r.estado||((r._nuevo||r.nuevo)?'PENDIENTE DE VERIFICACIÓN':''))}</td>
+          <td>${(r._nuevo||r.nuevo)?'NUEVO':r.solicitud_interna?'MISMA ÁREA · INTERNA':'EXISTENTE'}</td>
+          <td>${r.solicitud_interna
+            ?`SOLICITUD DIRECTA A ${esc(r.responsable_actual||'USUARIO')}`
+            :esc(r.estado||((r._nuevo||r.nuevo)?'PENDIENTE DE VERIFICACIÓN':''))}</td>
           <td>
             ${partialContinue
               ?'<span class="note" style="padding:4px 6px">Pendiente</span>'
@@ -7098,6 +7367,9 @@ async function openNewRequestModal(rowsOverride=null,preserveHeader=false){
     estado:r.estado||null,
     estado_item:r.estado_item||null,
     cargo_numero:r.cargo_numero||null,
+    solicitud_interna:!!r.solicitud_interna,
+    area_trabajo:r.area_trabajo||null,
+    responsable_actual:r.responsable_actual||null,
     nuevo:!!(r._nuevo||r.nuevo)
   }));
 
@@ -7445,6 +7717,9 @@ function openRequestSourceFromNew(mode){
     ultimo_folio:x.ultimo_folio||null,
     observacion:x.observacion||null,
     estado:x.estado||null,
+    solicitud_interna:!!x.solicitud_interna,
+    area_trabajo:x.area_trabajo||null,
+    responsable_actual:x.responsable_actual||null,
     _nuevo:!!x.nuevo
   }));
 
@@ -7530,6 +7805,9 @@ function returnToNewRequestFromSearch(){
     ultimo_folio:x.ultimo_folio||null,
     observacion:x.observacion||null,
     estado:x.estado||null,
+    solicitud_interna:!!x.solicitud_interna,
+    area_trabajo:x.area_trabajo||null,
+    responsable_actual:x.responsable_actual||null,
     _nuevo:!!x._nuevo
   }));
 
@@ -7688,6 +7966,7 @@ async function importRequestExcel(file){
       ...x,
       ...(sourceMap.get(x.expediente_buscado)||{})
     }));
+    requestExcelRows=await annotateInternalReassignEligibility(requestExcelRows);
 
     requestExcelMissing=requestExcelRows
       .filter(x=>!x.encontrado)
@@ -7707,6 +7986,9 @@ async function importRequestExcel(file){
         rd:x.rd||null,
         estado:x.estado||null,
         disponible:true,
+        solicitud_interna:!!x.solicitud_interna,
+        area_trabajo:x.area_trabajo||null,
+        responsable_actual:x.responsable_actual||null,
         _nuevo:false
       };
 
@@ -7740,6 +8022,7 @@ async function importRequestExcel(file){
 function requestExcelStatus(x){
   if(!x.encontrado)return '<span class="pill alert">NO ENCONTRADO</span>';
   if(Number(x.coincidencias)>1)return '<span class="pill alert">VARIAS COINCIDENCIAS</span>';
+  if(x.solicitud_interna)return '<span class="pill returned">MISMA ÁREA · SOLICITUD INTERNA</span>';
   if(!x.disponible)return `<span class="pill alert">${esc(x.motivo||'NO DISPONIBLE')}</span>`;
   return '<span class="pill returned">ENCONTRADO</span>';
 }
@@ -7962,7 +8245,7 @@ async function searchRequestCandidates(){
     return;
   }
 
-  requestSearchRows=data||[];
+  requestSearchRows=await annotateInternalReassignEligibility(data||[]);
   requestSearchSelectedIds.clear();
 
   if(!requestSearchRows.length && /^\d{4}-\d{4}$/.test(q)){
@@ -8020,7 +8303,7 @@ function renderRequestDraft(){
         <td><b>${esc(x.expediente)}</b></td>
         <td>${x.extension?esc(x.extension):'—'}</td>
         <td>${esc(x.rd||'')}</td>
-        <td>${x._nuevo?'<span class="pill">NUEVO</span>':'<span class="pill returned">EXISTENTE</span>'}</td>
+        <td>${x._nuevo?'<span class="pill">NUEVO</span>':x.solicitud_interna?'<span class="pill returned">MISMA ÁREA · INTERNA</span>':'<span class="pill returned">EXISTENTE</span>'}</td>
         <td><button class="btn secondary small" onclick="removeRequestDraftItem(${i})">Quitar</button></td>
       </tr>`).join('')}
     </tbody>
@@ -8126,10 +8409,13 @@ function renderRequestLookupResults(){
         <td class="request-owner-current">${esc(r.responsable_actual||'—')}</td>
         <td>${already
           ?'<span class="pill">YA AGREGADO</span>'
-          :(r.disponible
-            ?'<span class="pill returned">DISPONIBLE</span>'
-            :`<span class="pill alert">NO DISPONIBLE</span>
-               <span class="request-custody-warning">${esc(r.motivo||'NO DISPONIBLE')}</span>`)}</td>
+          :(r.solicitud_interna
+            ?`<span class="pill returned">MISMA ÁREA · SOLICITUD INTERNA</span>
+               <span class="request-custody-warning">Con ${esc(r.responsable_actual||'otro usuario')} · ${esc(r.area_trabajo||'misma área')}</span>`
+            :(r.disponible
+              ?'<span class="pill returned">DISPONIBLE</span>'
+              :`<span class="pill alert">NO DISPONIBLE</span>
+                 <span class="request-custody-warning">${esc(r.motivo||'NO DISPONIBLE')}</span>`))}</td>
       </tr>`;
     }).join('')}</tbody>
   </table>`;
@@ -8147,6 +8433,9 @@ async function continueRequestFromSearch(){
     rd:x.rd||null,
     ultimo_folio:x.ultimo_folio||null,
     observacion:x.observacion||null,
+    solicitud_interna:!!x.solicitud_interna,
+    area_trabajo:x.area_trabajo||null,
+    responsable_actual:x.responsable_actual||null,
     nuevo:!!x._nuevo
   }));
 
@@ -12653,7 +12942,7 @@ async function importCSV(ev){
 
 
 /* ===== ACTUALIZACIÓN AUTOMÁTICA DE VERSIÓN ===== */
-const APP_VERSION='20260827-1005-listados';
+const APP_VERSION='20260827-1543-reasignacion-interna-misma-area';
 let __versionCheckRunning=false;
 
 async function checkForNewAppVersion(){
