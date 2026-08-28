@@ -7,7 +7,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="app-version" content="20260827-1543-reasignacion-interna-misma-area">
+<meta name="app-version" content="20260828-1018-cierre-administrativo">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -96,6 +96,10 @@
 .req-devuelto{background:#e6f5ea;color:#21613a}
 .req-devolucion-solicitada{background:#f4eaff;color:#6b2c91}
 .req-cancelado{background:#f2f2f2;color:#555}
+.req-cerrado-admin{background:#f1f1f1;color:#2f3b4b;border:1px solid #cdd4dd}
+.admin-close-summary{padding:10px 12px;border:1px solid #d8e0ea;border-radius:10px;background:#f8fafc;font-size:12px;line-height:1.55;max-height:180px;overflow:auto}
+.admin-close-warning{padding:10px 12px;border:1px solid #f0d7a2;border-radius:10px;background:#fffaf0;color:#6b4c12;font-size:12px}
+
 .req-summary{display:grid;grid-template-columns:repeat(4,minmax(120px,1fr));gap:8px;margin:10px 0}
 .req-summary .mini{border:1px solid var(--line);border-radius:8px;padding:9px;background:#fbfdff}
 .req-summary .mini b{display:block;font-size:18px;margin-top:3px}
@@ -149,6 +153,7 @@
 
 
 .pill.reassigned{background:#f4eaff;color:#6b2c91}
+.pill.reassign-requested{background:#fff0d9;color:#7a4a00;border:1px solid #e7c47f}
 .pill.return-requested{background:#fee8d5;color:#8a4100}
 .pill.archive-requested{background:#fff0e8;color:#984514;border:1px solid #f1c7ae}
 .pill.returned-archive{background:#e6f5ea;color:#21613a}
@@ -811,6 +816,148 @@
 .datetime-date{font-weight:700;color:var(--navy);line-height:1.15;white-space:nowrap}
 .datetime-time{display:inline-flex;align-items:center;justify-content:center;padding:4px 8px;border-radius:999px;background:#eef4ff;border:1px solid #cddcf7;color:var(--navy);font-size:11px;font-weight:700;line-height:1;white-space:nowrap}
 
+
+
+/* Vista ordenada de expedientes solicitados / reasignación interna */
+#newRequestModal .modal-box{
+  max-width:1280px;
+  width:min(96vw,1280px)
+}
+#newRequestModal .request-selected-wrap{
+  overflow-x:auto;
+  border:1px solid #dbe4ef;
+  border-radius:11px;
+  background:#fff
+}
+#newRequestModal .request-selected-wrap .table-head{
+  padding:12px 14px;
+  background:#fbfdff
+}
+#rqSelectedTable{min-width:0}
+#rqSelectedTable table{
+  table-layout:auto;
+  width:100%;
+  min-width:1080px
+}
+#rqSelectedTable th,
+#rqSelectedTable td{
+  box-sizing:border-box;
+  vertical-align:middle
+}
+#rqSelectedTable th{
+  padding:10px 9px;
+  white-space:nowrap
+}
+#rqSelectedTable td{
+  padding:10px 9px;
+  white-space:normal;
+  overflow-wrap:normal;
+  word-break:normal
+}
+#rqSelectedTable .rq-col-num{width:46px;min-width:46px;text-align:center}
+#rqSelectedTable .rq-col-select{width:44px;min-width:44px;text-align:center}
+#rqSelectedTable .rq-col-exp{width:120px;min-width:120px;white-space:nowrap}
+#rqSelectedTable .rq-col-ext{width:92px;min-width:92px}
+#rqSelectedTable .rq-col-rd{width:132px;min-width:132px}
+#rqSelectedTable .rq-col-folio{width:110px;min-width:110px}
+#rqSelectedTable .rq-col-tipo{width:105px;min-width:105px;white-space:nowrap}
+#rqSelectedTable .rq-col-estado{min-width:270px}
+#rqSelectedTable .rq-col-actions{width:110px;min-width:110px;text-align:center}
+#rqSelectedTable .request-item-edit{
+  display:block;
+  width:100%;
+  min-width:0;
+  box-sizing:border-box
+}
+#rqSelectedTable .rq-col-exp b{
+  display:inline-block;
+  white-space:nowrap;
+  font-size:12px;
+  color:var(--navy)
+}
+#rqSelectedTable .rq-col-estado:not(:empty){line-height:1.3}
+.internal-reassign-state{display:flex;flex-direction:column;align-items:flex-start;gap:6px;min-width:0}
+.internal-reassign-state .pill{white-space:normal;line-height:1.2;text-align:left}
+.internal-reassign-note{display:block;color:var(--muted);font-size:10px;line-height:1.35;max-width:100%}
+.internal-reassign-note b{color:var(--navy)}
+.request-item-actions{min-width:0}
+.request-item-actions .btn{max-width:100%}
+.internal-reassign-btn{display:block;width:100%;margin:0 0 7px 0!important;white-space:normal;line-height:1.2;padding:7px 9px}
+.request-remove-btn{display:inline-flex;justify-content:center;white-space:nowrap}
+.internal-reassign-bulkbar{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:10px 12px;padding:10px 12px;border:1px solid #cddcf7;border-radius:9px;background:#f7faff}
+.internal-reassign-bulkbar .left{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.internal-reassign-bulkbar label{display:inline-flex;align-items:center;gap:6px;margin:0;font-size:11px;font-weight:700;color:var(--navy);cursor:pointer}
+.internal-reassign-bulkbar .note{margin:0}
+.internal-reassign-check{width:17px;height:17px;cursor:pointer;vertical-align:middle}
+.internal-reassign-number{display:flex;align-items:center;justify-content:center;gap:5px;flex-wrap:nowrap}
+
+/* Preparación del cargo: separada visualmente del listado */
+#newRequestModal .prepare-delivery-panel{
+  margin-top:16px;
+  padding:16px;
+  border:1px solid #cddcf7;
+  border-radius:12px;
+  background:#f8fbff;
+  box-shadow:0 2px 8px rgba(15,39,71,.04)
+}
+#newRequestModal .prepare-delivery-title{
+  display:flex;
+  justify-content:space-between;
+  gap:12px;
+  align-items:flex-start;
+  margin-bottom:12px;
+  padding-bottom:10px;
+  border-bottom:1px solid #dbe4ef
+}
+#newRequestModal .prepare-delivery-title strong{
+  display:block;
+  color:var(--navy);
+  font-size:14px
+}
+#newRequestModal .prepare-delivery-grid{
+  display:grid;
+  grid-template-columns:minmax(320px,1.15fr) minmax(280px,1fr);
+  gap:14px
+}
+#newRequestModal .prepare-delivery-grid .field{min-width:0}
+#newRequestModal .prepare-delivery-grid select,
+#newRequestModal .prepare-delivery-grid input{
+  width:100%;
+  min-height:42px
+}
+#newRequestModal .cargo-select-count{
+  padding-top:2px;
+  font-size:11px;
+  color:var(--muted);
+  white-space:nowrap
+}
+#newRequestModal .modal-foot{
+  align-items:center;
+  justify-content:space-between;
+  flex-wrap:wrap;
+  gap:10px
+}
+#newRequestModal #rqSaveStatus{
+  flex:1 1 260px;
+  min-width:220px
+}
+#newRequestModal .modal-foot > div{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  justify-content:flex-end
+}
+#newRequestModal .modal-foot .btn{white-space:nowrap}
+
+@media(max-width:900px){
+  #newRequestModal{padding:8px}
+  #newRequestModal .modal-box{padding:12px;max-height:96vh;width:98vw}
+  #rqSelectedTable table{min-width:980px}
+  #newRequestModal .prepare-delivery-grid{grid-template-columns:1fr}
+  #newRequestModal .modal-foot{align-items:stretch}
+  #newRequestModal #rqSaveStatus{min-width:100%;flex-basis:100%}
+  #newRequestModal .modal-foot > div{width:100%;justify-content:flex-end}
+}
 
 .workflow-intro{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:#f8fafc}.workflow-intro strong{color:var(--navy)}.workflow-steps{display:flex;gap:7px;flex-wrap:wrap;margin-top:7px}.workflow-step{display:inline-flex;align-items:center;gap:5px;padding:5px 8px;border-radius:999px;background:#fff;border:1px solid var(--line);color:var(--muted);font-size:10px;font-weight:700}.workflow-step b{color:var(--navy)}.request-workflow-kpis{display:grid;grid-template-columns:repeat(4,minmax(150px,1fr));gap:10px;margin-bottom:12px}.request-workflow-kpis .kpi{cursor:pointer;min-height:110px;transition:.12s ease}.request-workflow-kpis .kpi:hover{transform:translateY(-1px);box-shadow:0 5px 15px rgba(15,39,71,.08)}.request-workflow-kpis .kpi.selected{box-shadow:0 0 0 2px #173f6b inset}.request-workflow-kpis .kpi .label{font-size:10px;line-height:1.25}.request-workflow-kpis .kpi .value{margin-top:5px}.note-mini{margin-top:5px;font-size:9px;line-height:1.25;color:var(--muted)}.cargo-kpis{display:grid;grid-template-columns:repeat(4,minmax(160px,1fr));gap:10px;margin-bottom:12px}.cargo-kpis .kpi{cursor:pointer;min-height:105px}.cargo-kpis .kpi.selected{box-shadow:0 0 0 2px #173f6b inset}.cargo-flow-bar{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0 0}.cargo-flow-step{padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;font-size:10px;color:var(--muted)}.cargo-flow-step b{display:block;margin-bottom:3px;color:var(--navy);font-size:11px}@media(max-width:1050px){.request-workflow-kpis,.cargo-kpis{grid-template-columns:repeat(2,1fr)}}@media(max-width:700px){.request-workflow-kpis,.cargo-kpis,.cargo-flow-bar{grid-template-columns:1fr}}
 
@@ -1908,7 +2055,7 @@
       </div>
     </div>
 
-    <div class="card table-wrap" style="margin-top:12px">
+    <div class="card table-wrap request-selected-wrap" style="margin-top:12px">
       <div class="table-head"><strong id="rqSelectedTitle">Expedientes solicitados</strong><span id="rqSelectedCount">0</span></div>
       <div id="rqSelectedTable"></div>
     </div>
@@ -2028,6 +2175,48 @@
   </div>
 </div>
 
+<!-- Cierre administrativo de solicitud / expediente -->
+<div class="modal" id="adminCloseModal">
+  <div class="modal-box" style="max-width:720px">
+    <div class="modal-head">
+      <div>
+        <h2 id="adminCloseTitle">Cierre administrativo</h2>
+        <div class="note" id="adminCloseNote">El registro permanecerá en el historial.</div>
+      </div>
+      <button class="btn secondary small" onclick="closeAdminCloseModal()">Cerrar</button>
+    </div>
+
+    <div id="adminCloseSummary" class="admin-close-summary"></div>
+
+    <div class="admin-close-warning" style="margin-top:12px">
+      El cierre administrativo <b>no devuelve ni cambia la custodia física</b>. Solo puede aplicarse antes de que el expediente haya sido entregado, prestado o se encuentre en proceso de devolución.
+    </div>
+
+    <div class="form-grid" style="margin-top:14px">
+      <div class="field">
+        <label>Motivo del cierre *</label>
+        <select id="adminCloseReasonType">
+          <option value="">— Seleccione motivo —</option>
+          <option value="SOLICITUD DUPLICADA">SOLICITUD DUPLICADA</option>
+          <option value="YA NO REQUERIDO">YA NO REQUERIDO</option>
+          <option value="ERROR DE REGISTRO">ERROR DE REGISTRO</option>
+          <option value="ATENDIDO POR OTRA VÍA">ATENDIDO POR OTRA VÍA</option>
+          <option value="OTRO">OTRO</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Detalle / sustento</label>
+        <textarea id="adminCloseReasonDetail" placeholder="Detalle adicional, si corresponde"></textarea>
+      </div>
+    </div>
+
+    <div class="modal-foot">
+      <span id="adminCloseStatus" class="note"></span>
+      <button class="btn secondary" onclick="closeAdminCloseModal()">Cancelar</button>
+      <button class="btn" id="adminCloseSubmitBtn" onclick="submitAdminClose()">Cerrar administrativamente</button>
+    </div>
+  </div>
+</div>
 
 
 <!-- Usuarios y permisos -->
@@ -3590,6 +3779,71 @@ function internalReassignStatePill(state){
   return '<span class="pill alert">PENDIENTE</span>';
 }
 
+
+async function myPendingInternalReassignPanelRows(search=''){
+  if(!isLimitedUser()||!sb||!session)return [];
+
+  // Refrescar primero la bandeja interna para que Mis Expedientes refleje
+  // únicamente solicitudes ENVIADAS que todavía están PENDIENTES.
+  await loadInternalReassignRequests(true);
+
+  let sent=(internalReassignRows||[]).filter(r=>
+    norm(r.direccion)==='ENVIADA' && norm(r.estado)==='PENDIENTE'
+  );
+
+  const q=norm(search||'');
+  if(q){
+    sent=sent.filter(r=>[
+      r.expediente,r.extension,r.responsable_actual_nombre,
+      r.area_trabajo,r.asunto,r.observacion
+    ].some(v=>norm(v||'').includes(q)));
+  }
+
+  if(!sent.length)return [];
+
+  // Intentar completar los datos del Registro Maestro. Si RLS no permite
+  // leer algún dato, se mantiene de todos modos la fila mínima devuelta por RPC.
+  const ids=[...new Set(sent.map(r=>r.expediente_id).filter(Boolean))];
+  let masterMap=new Map();
+  if(ids.length){
+    const {data,error}=await sb
+      .from('expedientes')
+      .select('*')
+      .in('id',ids);
+    if(!error){
+      masterMap=new Map((data||[]).map(x=>[String(x.id),x]));
+    }else{
+      console.warn('Datos de reasignación solicitada:',error.message);
+    }
+  }
+
+  return sent.map(r=>{
+    const m=masterMap.get(String(r.expediente_id))||{};
+    const detail=[
+      r.area_trabajo?`Área: ${r.area_trabajo}`:'',
+      r.asunto?`Asunto: ${r.asunto}`:'',
+      r.observacion||''
+    ].filter(Boolean).join(' · ');
+
+    return {
+      ...m,
+      id:r.expediente_id,
+      expediente:r.expediente||m.expediente||'',
+      extension:r.extension||m.extension||'',
+      responsable:r.responsable_actual_nombre||m.responsable||'',
+      estado:'REASIGNACIÓN SOLICITADA',
+      modalidad:'REASIGNACIÓN INTERNA',
+      fecha_devolucion:null,
+      observacion:detail||m.observacion||'',
+      _internal_reassign_requested:true,
+      _internal_request_id:r.id,
+      _internal_request_created_at:r.created_at,
+      _internal_request_target:r.responsable_actual_nombre||'',
+      _internal_request_area:r.area_trabajo||''
+    };
+  });
+}
+
 function renderInternalReassignRequests(){
   const list=el('internalReassignAlertsList');
   if(!list)return;
@@ -3670,6 +3924,9 @@ async function cancelInternalReassign(id){
   if(error){showToast(error.message);return}
   showToast('Solicitud interna cancelada');
   await loadInternalReassignRequests(true);
+  if(isLimitedUser()){
+    await Promise.all([loadSummary(),loadPanel()]);
+  }
   renderInternalReassignRequests();
 }
 
@@ -3697,7 +3954,7 @@ async function annotateInternalReassignEligibility(rows){
       solicitud_interna:true,
       area_trabajo:ev.area_trabajo||null,
       responsable_actual:ev.responsable_actual||r.responsable_actual||null,
-      motivo:'MISMA ÁREA · Solicitud directa al usuario que tiene el expediente'
+      motivo:'MISMA ÁREA · Debe solicitar reasignación interna'
     };
   });
 }
@@ -3706,8 +3963,14 @@ async function splitInternalReassignItems(cleanItems,modalidad){
   if(!isLimitedUser() || modalidad!=='PRÉSTAMO'){
     return {internal:[],normal:cleanItems};
   }
-  const ids=cleanItems.map(x=>x.id).filter(Boolean);
-  if(!ids.length)return {internal:[],normal:cleanItems};
+
+  // Verificar TODOS los expedientes al momento de enviar. Si alguno está
+  // con otro USUARIO de la misma área, no puede ingresar por el flujo normal
+  // de Archivo: la reasignación interna es obligatoria.
+  const ids=[...new Set(cleanItems.map(x=>x.id).filter(Boolean))];
+  if(!ids.length){
+    return {internal:[],normal:cleanItems};
+  }
 
   const {data,error}=await sb.rpc('evaluar_reasignacion_interna',{
     p_expediente_ids:ids
@@ -3715,10 +3978,26 @@ async function splitInternalReassignItems(cleanItems,modalidad){
   if(error)throw error;
 
   const eligible=new Set((data||[]).filter(x=>x.elegible).map(x=>String(x.expediente_id)));
-  return {
-    internal:cleanItems.filter(x=>x.id && eligible.has(String(x.id))),
-    normal:cleanItems.filter(x=>!x.id || !eligible.has(String(x.id)))
-  };
+
+  const pendingChoice=cleanItems.filter(x=>
+    x.id && eligible.has(String(x.id)) && !x.usar_reasignacion_interna
+  );
+
+  if(pendingChoice.length){
+    const names=pendingChoice.map(x=>x.expediente).filter(Boolean).join(', ');
+    throw new Error(
+      `${names||'El expediente'} está con otro usuario de su misma área. `+
+      `No puede solicitarlo a Archivo. Debe pulsar “Solicitar reasignación interna”.`
+    );
+  }
+
+  const internal=cleanItems.filter(x=>
+    x.id && eligible.has(String(x.id)) && x.usar_reasignacion_interna
+  );
+  const internalKeys=new Set(internal.map(x=>String(x.id)));
+  const normal=cleanItems.filter(x=>!x.id || !internalKeys.has(String(x.id)));
+
+  return {internal,normal};
 }
 // ============================================================
 // FIN SOLICITUD INTERNA DE REASIGNACIÓN · MISMA ÁREA
@@ -4676,8 +4955,15 @@ async function loadUserPersonalSummary(){
     requestedReturnCount=(returnRequested||[]).length;
   }
 
+  // Las solicitudes internas enviadas todavía no son custodia del usuario,
+  // pero deben figurar en "Todos mis expedientes" como REASIGNACIÓN SOLICITADA.
+  await loadInternalReassignRequests(true);
+  const internalRequestedCount=(internalReassignRows||[]).filter(r=>
+    norm(r.direccion)==='ENVIADA' && norm(r.estado)==='PENDIENTE'
+  ).length;
+
   userPanelSummary={
-    todos:Number(s.todos||0),
+    todos:Number(s.todos||0)+internalRequestedCount,
     en_prestamo:Number(s.en_prestamo||0),
     devolucion_solicitada:Number(requestedReturnCount||0),
     reasignados_por_mi:Number(s.reasignados_por_mi||0),
@@ -5345,6 +5631,13 @@ function archiveDeliveryVisualState(r){
 }
 
 function movementLabel(r){
+  if(r?._internal_reassign_requested){
+    const target=String(r._internal_request_target||r.responsable||'').trim();
+    return target
+      ?`REASIGNACIÓN SOLICITADA → ${esc(target)}`
+      :'REASIGNACIÓN SOLICITADA';
+  }
+
   const archiveState=archiveDeliveryVisualState(r);
   if(archiveState==='SOLICITADO POR EL ARCHIVO'){
     return 'SOLICITUD DE DEVOLUCIÓN · ARCHIVO';
@@ -5691,7 +5984,35 @@ async function loadPanel(){
       return;
     }
 
-    const all=data||[];
+    let all=data||[];
+
+    if(userPanelMode==='TODOS'){
+      const requested=await myPendingInternalReassignPanelRows(search);
+      if(requested.length){
+        const requestedMap=new Map(requested.map(r=>[String(r.id),r]));
+        const seen=new Set();
+
+        // Si el RPC personal ya devolviera el expediente por historial,
+        // no duplicarlo: prevalece visualmente REASIGNACIÓN SOLICITADA.
+        all=all.map(r=>{
+          const key=String(r.id||'');
+          seen.add(key);
+          const pending=requestedMap.get(key);
+          return pending?{...r,...pending}:r;
+        });
+        requested.forEach(r=>{
+          const key=String(r.id||'');
+          if(!seen.has(key))all.push(r);
+        });
+
+        all.sort((a,b)=>{
+          const da=new Date(a._internal_request_created_at||a.updated_at||a.fecha_entrega||0).getTime()||0;
+          const db=new Date(b._internal_request_created_at||b.updated_at||b.fecha_entrega||0).getTime()||0;
+          return db-da;
+        });
+      }
+    }
+
     panelCount=all.length;
     panelRows=all.slice(from,to+1);
     panelRows=await attachLatestMovementToRecords(panelRows);
@@ -6771,7 +7092,7 @@ async function loadArchiveListDetail(id){
     :'Listado generado. Se conserva como histórico.';
 
   el('archiveListDetailTable').innerHTML=currentArchiveListRows.length?`<table>
-    <thead><tr><th>N°</th><th>Expediente</th><th>Ext.</th><th>R.D.</th><th>Último folio</th><th>Fecha devolución</th><th>Devuelto por</th><th>Cargo</th>${estado==='EN PREPARACIÓN'?'<th></th>':''}</tr></thead>
+    <thead><tr><th class="rq-col-num">N°</th><th>Expediente</th><th>Ext.</th><th>R.D.</th><th>Último folio</th><th>Fecha devolución</th><th>Devuelto por</th><th>Cargo</th>${estado==='EN PREPARACIÓN'?'<th></th>':''}</tr></thead>
     <tbody>${currentArchiveListRows.map((r,i)=>`<tr>
       <td>${i+1}</td><td><b>${esc(r.expediente)}</b></td><td>${esc(r.extension||'—')}</td><td>${esc(r.rd||'—')}</td>
       <td>${esc(r.ultimo_folio||'—')}</td><td>${fmtDate(r.fecha_devolucion)}</td><td>${esc(r.devuelto_por||'—')}</td><td>${esc(r.cargo||'—')}</td>
@@ -6852,7 +7173,8 @@ function reqStatePill(state){
     state==='EN ATENCIÓN'?'req-atencion':
     state==='EN PRÉSTAMO'?'req-prestamo':
     state==='DEVOLUCIÓN SOLICITADA'?'req-devolucion-solicitada':
-    state==='DEVUELTO'?'req-devuelto':'req-cancelado';
+    state==='DEVUELTO'?'req-devuelto':
+    state==='CERRADO POR ADMINISTRADOR'?'req-cerrado-admin':'req-cancelado';
   return `<span class="req-state ${cls}">${esc(requestStateDisplayName(state||''))}</span>`;
 }
 
@@ -6926,7 +7248,7 @@ function closeNewRequestModal(){
   }
   if(el('rqModalNote')){
     el('rqModalNote').textContent=
-      'La solicitud no cambia la ubicación física. Los expedientes disponibles ingresan a PENDIENTE POR ATENDER en Archivo. Si un expediente está con otro USUARIO de su misma área, se enviará una SOLICITUD INTERNA al responsable actual y la custodia solo cambiará cuando este la acepte. Los expedientes nuevos o que requieran revisión permanecen PENDIENTES DE VERIFICACIÓN.';
+      'La solicitud no cambia la ubicación física. Los expedientes disponibles ingresan a PENDIENTE POR ATENDER en Archivo. Si un expediente está con otro USUARIO de su misma área, NO podrá solicitarlo a Archivo: deberá usar SOLICITAR REASIGNACIÓN INTERNA. La custodia solo cambiará cuando el responsable actual la acepte. Los expedientes nuevos o que requieran revisión permanecen PENDIENTES DE VERIFICACIÓN.';
   }
   if(el('rqSaveBtn')){
     el('rqSaveBtn').textContent='Enviar solicitud';
@@ -7002,6 +7324,8 @@ async function saveNewRequest(){
       rd:raw?.rd||null,
       ultimo_folio:raw?.ultimo_folio||null,
       observacion:raw?.observacion||null,
+      solicitud_interna:!!raw?.solicitud_interna,
+      usar_reasignacion_interna:!!raw?.usar_reasignacion_interna,
       nuevo:!!raw?.nuevo
     });
   }
@@ -7128,6 +7452,120 @@ async function saveNewRequest(){
   }
 }
 
+
+function internalReassignBulkKey(item,index){
+  if(item?.id)return 'ID:'+String(item.id);
+  return 'ROW:'+String(index)+'|'+norm(item?.expediente||'');
+}
+
+function getInternalReassignBulkSet(){
+  if(!(window.__internalReassignBulkSelectedKeys instanceof Set)){
+    window.__internalReassignBulkSelectedKeys=new Set();
+  }
+  return window.__internalReassignBulkSelectedKeys;
+}
+
+function toggleInternalReassignBulkItem(index,checked){
+  let items=[];
+  try{items=JSON.parse(el('newRequestModal')?.dataset.items||'[]')}catch(_){items=[]}
+  const item=items[index];
+  if(!item || !item.solicitud_interna || item.usar_reasignacion_interna)return;
+  const set=getInternalReassignBulkSet();
+  const key=internalReassignBulkKey(item,index);
+  if(checked)set.add(key); else set.delete(key);
+  updateInternalReassignBulkUI();
+}
+
+function toggleAllInternalReassignBulk(checked){
+  let items=[];
+  try{items=JSON.parse(el('newRequestModal')?.dataset.items||'[]')}catch(_){items=[]}
+  const set=getInternalReassignBulkSet();
+  items.forEach((item,index)=>{
+    if(!item?.solicitud_interna || item.usar_reasignacion_interna)return;
+    const key=internalReassignBulkKey(item,index);
+    if(checked)set.add(key); else set.delete(key);
+  });
+  document.querySelectorAll('#rqSelectedTable .internal-reassign-check:not(:disabled)').forEach(cb=>cb.checked=!!checked);
+  updateInternalReassignBulkUI();
+}
+
+function updateInternalReassignBulkUI(){
+  let items=[];
+  try{items=JSON.parse(el('newRequestModal')?.dataset.items||'[]')}catch(_){items=[]}
+  const set=getInternalReassignBulkSet();
+  const pending=items.map((item,index)=>({item,index,key:internalReassignBulkKey(item,index)}))
+    .filter(x=>x.item?.solicitud_interna && !x.item.usar_reasignacion_interna);
+  const selected=pending.filter(x=>set.has(x.key)).length;
+  const count=el('rqInternalReassignBulkCount');
+  const btn=el('rqInternalReassignBulkBtn');
+  const all=el('rqInternalReassignBulkAll');
+  if(count)count.textContent=selected+' seleccionado'+(selected===1?'':'s');
+  if(btn){
+    btn.disabled=selected===0;
+    btn.textContent='↪ Solicitar reasignación de seleccionados'+(selected?` (${selected})`:'' );
+  }
+  if(all){
+    all.checked=!!pending.length && selected===pending.length;
+    all.indeterminate=selected>0 && selected<pending.length;
+  }
+}
+
+function requestInternalReassignBulkSelected(){
+  if(!isLimitedUser())return;
+  let items=[];
+  try{items=JSON.parse(el('newRequestModal')?.dataset.items||'[]')}catch(_){items=[]}
+  const set=getInternalReassignBulkSet();
+  let changed=0;
+  items.forEach((item,index)=>{
+    if(!item?.solicitud_interna || item.usar_reasignacion_interna)return;
+    if(set.has(internalReassignBulkKey(item,index))){
+      item.usar_reasignacion_interna=true;
+      changed++;
+    }
+  });
+  if(!changed){
+    showToast('Marque al menos un expediente de la misma área.');
+    return;
+  }
+  window.__newRequestHeaderDraft={
+    solicitante:(el('rqSolicitante')?.value||'').trim(),
+    asunto:(el('rqAsunto')?.value||'').trim(),
+    modalidad:(el('rqModalidad')?.value||'PRÉSTAMO').trim(),
+    observacion:(el('rqObservacion')?.value||'').trim()
+  };
+  window.__internalReassignBulkSelectedKeys=new Set();
+  showToast(`${changed} expediente${changed===1?'':'s'} marcado${changed===1?'':'s'} para reasignación interna.`);
+  openNewRequestModal(items,true);
+}
+
+function toggleInternalReassignPreference(index){
+  if(!isLimitedUser())return;
+
+  let items=[];
+  try{
+    items=JSON.parse(el('newRequestModal')?.dataset.items||'[]');
+  }catch(_){
+    items=[];
+  }
+
+  const item=items[index];
+  if(!item || !item.solicitud_interna)return;
+
+  // En la misma área no existe alternativa de solicitud normal.
+  // Una vez elegida la reasignación interna, solo se puede retirar el
+  // expediente de la solicitud usando el botón Quitar.
+  item.usar_reasignacion_interna=true;
+
+  window.__newRequestHeaderDraft={
+    solicitante:(el('rqSolicitante')?.value||'').trim(),
+    asunto:(el('rqAsunto')?.value||'').trim(),
+    modalidad:(el('rqModalidad')?.value||'PRÉSTAMO').trim(),
+    observacion:(el('rqObservacion')?.value||'').trim()
+  };
+
+  openNewRequestModal(items,true);
+}
+
 async function openNewRequestModal(rowsOverride=null,preserveHeader=false){
   if(!sb||!session){
     alert('Debe iniciar sesión.');
@@ -7156,7 +7594,7 @@ async function openNewRequestModal(rowsOverride=null,preserveHeader=false){
   if(el('rqModalNote')){
     el('rqModalNote').textContent=editMode
       ?'Complete y verifique los datos del expediente. Desde esta misma pantalla podrá aceptar la solicitud y generar/imprimir el cargo cuando corresponda.'
-      :'La solicitud no cambia la ubicación física. Los expedientes disponibles ingresan a PENDIENTE POR ATENDER en Archivo. Si un expediente está con otro USUARIO de su misma área, se enviará una SOLICITUD INTERNA al responsable actual y la custodia solo cambiará cuando este la acepte. Los expedientes nuevos o que requieran revisión permanecen PENDIENTES DE VERIFICACIÓN.';
+      :'La solicitud no cambia la ubicación física. Los expedientes disponibles ingresan a PENDIENTE POR ATENDER en Archivo. Si un expediente está con otro USUARIO de su misma área, deberá marcarlo (o marcar varios) y usar SOLICITAR REASIGNACIÓN DE SELECCIONADOS. La custodia solo cambiará cuando el responsable actual la acepte. Los expedientes nuevos o que requieran revisión permanecen PENDIENTES DE VERIFICACIÓN.';
   }
 
   if(el('rqSaveBtn')){
@@ -7167,6 +7605,10 @@ async function openNewRequestModal(rowsOverride=null,preserveHeader=false){
 
   let rows=Array.isArray(rowsOverride)?rowsOverride:[];
   let ids=[];
+
+  if(!preserveHeader || !(window.__internalReassignBulkSelectedKeys instanceof Set)){
+    window.__internalReassignBulkSelectedKeys=new Set();
+  }
 
   // Si viene desde "Solicitar seleccionados", cargar esos expedientes.
   if(!rows.length && !preserveHeader){
@@ -7274,12 +7716,35 @@ async function openNewRequestModal(rowsOverride=null,preserveHeader=false){
       ['ACEPTADO','ENTREGA PARCIAL'].includes(norm(window.__editingRequestState||'')) &&
       (el('rqModalidad')?.value||window.__editingRequestModalidad)==='PRÉSTAMO';
 
-    el('rqSelectedTable').innerHTML=`<table>
+    const internalPendingCount=isLimitedUser()
+      ?rows.filter(r=>r.solicitud_interna && !r.usar_reasignacion_interna).length
+      :0;
+    const internalMarkedCount=isLimitedUser()
+      ?rows.filter(r=>r.solicitud_interna && r.usar_reasignacion_interna).length
+      :0;
+    const bulkBar=(isLimitedUser() && (internalPendingCount||internalMarkedCount))
+      ?`<div class="internal-reassign-bulkbar">
+          <div class="left">
+            ${internalPendingCount
+              ?`<label><input id="rqInternalReassignBulkAll" class="internal-reassign-check" type="checkbox" onchange="toggleAllInternalReassignBulk(this.checked)"> Seleccionar todos de la misma área</label>`
+              :''}
+            <span class="note">${internalPendingCount} pendiente${internalPendingCount===1?'':'s'} · ${internalMarkedCount} marcado${internalMarkedCount===1?'':'s'} para reasignación</span>
+          </div>
+          ${internalPendingCount
+            ?`<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                <span id="rqInternalReassignBulkCount" class="note">0 seleccionados</span>
+                <button id="rqInternalReassignBulkBtn" class="btn small" type="button" disabled onclick="requestInternalReassignBulkSelected()">↪ Solicitar reasignación de seleccionados</button>
+              </div>`
+            :''}
+        </div>`
+      :'';
+
+    el('rqSelectedTable').innerHTML=`${bulkBar}<table>
       <thead>
         <tr>
           <th>N°</th>
           ${cargoMode
-            ?`<th>
+            ?`<th class="rq-col-select">
                 <input class="request-cargo-check"
                        type="checkbox"
                        checked
@@ -7287,29 +7752,40 @@ async function openNewRequestModal(rowsOverride=null,preserveHeader=false){
                        onchange="toggleAllEditCargoItems(this.checked)">
               </th>`
             :''}
-          <th>Expediente</th>
-          <th>Ext.</th>
-          <th>R.D.</th>
-          <th>Último folio</th>
-          <th>Tipo</th>
-          <th>Estado</th>
-          <th></th>
+          <th class="rq-col-exp">Expediente</th>
+          <th class="rq-col-ext">Ext.</th>
+          <th class="rq-col-rd">R.D.</th>
+          <th class="rq-col-folio">Último folio</th>
+          <th class="rq-col-tipo">Tipo</th>
+          <th class="rq-col-estado">Estado</th>
+          <th class="rq-col-actions">Acciones</th>
         </tr>
       </thead>
       <tbody>
         ${rows.map((r,i)=>`<tr>
-          <td>${i+1}</td>
+          <td class="rq-col-num">
+            <div class="internal-reassign-number">
+              ${isLimitedUser() && r.solicitud_interna
+                ?`<input class="internal-reassign-check"
+                         type="checkbox"
+                         ${r.usar_reasignacion_interna?'checked disabled':''}
+                         title="Marcar para solicitar reasignación interna"
+                         onchange="toggleInternalReassignBulkItem(${i},this.checked)">`
+                :''}
+              <span>${i+1}</span>
+            </div>
+          </td>
           ${cargoMode
-            ?`<td>
+            ?`<td class="rq-col-select">
                 <input class="request-cargo-check"
                        type="checkbox"
                        ${cargoItemSelected(r)?'checked':''}
                        onchange="toggleEditCargoItem(${i},this.checked)">
               </td>`
             :''}
-          <td><b>${esc(expBase(r.expediente))}</b></td>
+          <td class="rq-col-exp"><b>${esc(expBase(r.expediente))}</b></td>
 
-          <td>
+          <td class="rq-col-ext">
             ${editMode
               ?`<input class="request-item-edit extension"
                        value="${esc(r.extension||'')}"
@@ -7318,7 +7794,7 @@ async function openNewRequestModal(rowsOverride=null,preserveHeader=false){
               :(r.extension?esc(r.extension):'—')}
           </td>
 
-          <td>
+          <td class="rq-col-rd">
             ${editMode
               ?`<input class="request-item-edit rd"
                        value="${esc(r.rd||'')}"
@@ -7327,7 +7803,7 @@ async function openNewRequestModal(rowsOverride=null,preserveHeader=false){
               :esc(r.rd||'')}
           </td>
 
-          <td>
+          <td class="rq-col-folio">
             ${editMode
               ?`<input class="request-item-edit folio"
                        value="${esc(r.ultimo_folio||'')}"
@@ -7336,14 +7812,22 @@ async function openNewRequestModal(rowsOverride=null,preserveHeader=false){
               :esc(r.ultimo_folio||'—')}
           </td>
 
-          <td>${(r._nuevo||r.nuevo)?'NUEVO':r.solicitud_interna?'MISMA ÁREA · INTERNA':'EXISTENTE'}</td>
-          <td>${r.solicitud_interna
-            ?`SOLICITUD DIRECTA A ${esc(r.responsable_actual||'USUARIO')}`
+          <td class="rq-col-tipo">${(r._nuevo||r.nuevo)?'NUEVO':r.solicitud_interna?'MISMA ÁREA':'EXISTENTE'}</td>
+          <td class="rq-col-estado">${r.solicitud_interna
+            ?(r.usar_reasignacion_interna
+              ?`<div class="internal-reassign-state selected">
+                  <span class="pill returned">REASIGNACIÓN INTERNA</span>
+                  <span class="internal-reassign-note">Solicitud directa a <b>${esc(r.responsable_actual||'USUARIO')}</b></span>
+                </div>`
+              :`<div class="internal-reassign-state required">
+                  <span class="pill alert">REASIGNACIÓN OBLIGATORIA</span>
+                  <span class="internal-reassign-note">Con <b>${esc(r.responsable_actual||'USUARIO')}</b> · misma área. Debe solicitar su reasignación.</span>
+                </div>`)
             :esc(r.estado||((r._nuevo||r.nuevo)?'PENDIENTE DE VERIFICACIÓN':''))}</td>
-          <td>
+          <td class="request-item-actions rq-col-actions">
             ${partialContinue
               ?'<span class="note" style="padding:4px 6px">Pendiente</span>'
-              :`<button class="btn secondary small"
+              :`<button class="btn secondary small request-remove-btn"
                   type="button"
                   onclick="removeNewRequestItem(${i})">
                   Quitar
@@ -7368,6 +7852,7 @@ async function openNewRequestModal(rowsOverride=null,preserveHeader=false){
     estado_item:r.estado_item||null,
     cargo_numero:r.cargo_numero||null,
     solicitud_interna:!!r.solicitud_interna,
+    usar_reasignacion_interna:!!r.usar_reasignacion_interna,
     area_trabajo:r.area_trabajo||null,
     responsable_actual:r.responsable_actual||null,
     nuevo:!!(r._nuevo||r.nuevo)
@@ -7376,6 +7861,7 @@ async function openNewRequestModal(rowsOverride=null,preserveHeader=false){
   el('newRequestModal').dataset.items=JSON.stringify(normalized);
   el('newRequestModal').dataset.ids='';
   el('newRequestModal').dataset.newExp='';
+  updateInternalReassignBulkUI();
   updatePrepareDeliveryUI();
   el('newRequestModal').classList.add('show');
   updatePrepareCargoCount();
@@ -7718,6 +8204,7 @@ function openRequestSourceFromNew(mode){
     observacion:x.observacion||null,
     estado:x.estado||null,
     solicitud_interna:!!x.solicitud_interna,
+    usar_reasignacion_interna:!!x.usar_reasignacion_interna,
     area_trabajo:x.area_trabajo||null,
     responsable_actual:x.responsable_actual||null,
     _nuevo:!!x.nuevo
@@ -7806,6 +8293,7 @@ function returnToNewRequestFromSearch(){
     observacion:x.observacion||null,
     estado:x.estado||null,
     solicitud_interna:!!x.solicitud_interna,
+    usar_reasignacion_interna:!!x.usar_reasignacion_interna,
     area_trabajo:x.area_trabajo||null,
     responsable_actual:x.responsable_actual||null,
     _nuevo:!!x._nuevo
@@ -8022,7 +8510,7 @@ async function importRequestExcel(file){
 function requestExcelStatus(x){
   if(!x.encontrado)return '<span class="pill alert">NO ENCONTRADO</span>';
   if(Number(x.coincidencias)>1)return '<span class="pill alert">VARIAS COINCIDENCIAS</span>';
-  if(x.solicitud_interna)return '<span class="pill returned">MISMA ÁREA · SOLICITUD INTERNA</span>';
+  if(x.solicitud_interna)return '<span class="pill alert">MISMA ÁREA · REASIGNACIÓN OBLIGATORIA</span>';
   if(!x.disponible)return `<span class="pill alert">${esc(x.motivo||'NO DISPONIBLE')}</span>`;
   return '<span class="pill returned">ENCONTRADO</span>';
 }
@@ -8410,7 +8898,7 @@ function renderRequestLookupResults(){
         <td>${already
           ?'<span class="pill">YA AGREGADO</span>'
           :(r.solicitud_interna
-            ?`<span class="pill returned">MISMA ÁREA · SOLICITUD INTERNA</span>
+            ?`<span class="pill alert">MISMA ÁREA · REASIGNACIÓN OBLIGATORIA</span>
                <span class="request-custody-warning">Con ${esc(r.responsable_actual||'otro usuario')} · ${esc(r.area_trabajo||'misma área')}</span>`
             :(r.disponible
               ?'<span class="pill returned">DISPONIBLE</span>'
@@ -8434,6 +8922,7 @@ async function continueRequestFromSearch(){
     ultimo_folio:x.ultimo_folio||null,
     observacion:x.observacion||null,
     solicitud_interna:!!x.solicitud_interna,
+    usar_reasignacion_interna:!!x.usar_reasignacion_interna,
     area_trabajo:x.area_trabajo||null,
     responsable_actual:x.responsable_actual||null,
     nuevo:!!x._nuevo
@@ -8832,6 +9321,7 @@ function requestWorkflowAction(r){
   if(st==='ENTREGA TOTAL')return `<button class="btn secondary small" onclick="openRequestDetail('${r.id}')">Ver entrega</button>`;
   if(st==='PENDIENTE DE CIERRE')return `<button class="btn small" onclick="openRequestDetail('${r.id}')">Recibir devolución</button>`;
   if(st==='CERRADA POR ARCHIVO')return `<button class="btn secondary small" onclick="openRequestDetail('${r.id}')">Ver historial</button>`;
+  if(st==='CERRADA POR ADMINISTRADOR')return `<button class="btn secondary small" onclick="openRequestDetail('${r.id}')">Ver historial</button>`;
   return `<button class="btn secondary small" onclick="openRequestDetail('${r.id}')">Gestionar</button>`;
 }
 
@@ -9013,7 +9503,8 @@ function attentionStateClass(value){
     value==='ENTREGA PARCIAL'?'partial':
     value==='ENTREGA TOTAL'?'total':
     value==='PENDIENTE DE CIERRE'?'returning':
-    value==='CERRADA POR ARCHIVO'?'received':'accepted';
+    value==='CERRADA POR ARCHIVO'?'received':
+    value==='CERRADA POR ADMINISTRADOR'?'received':'accepted';
 }
 
 function attentionStatePill(value){
@@ -9679,6 +10170,17 @@ function requestItemCanConfirmReturn(x){
   return hasFullAccess() && x.estado_item==='DEVOLUCIÓN SOLICITADA';
 }
 
+function requestItemCanAdminClose(x){
+  if(!isAdmin() || !x)return false;
+  const state=norm(x.estado_item||'');
+  return [
+    'SOLICITADO',
+    'ACEPTADO',
+    'PENDIENTE DE VERIFICACIÓN',
+    'PENDIENTE POR ATENDER'
+  ].includes(state);
+}
+
 function requestItemCanManageArchiveDelivery(x){
   if(!isLimitedUser() || !activeArchiveDeliveryRequestId)return false;
   if(!isArchiveRequestedReturnItem(x))return false;
@@ -9693,7 +10195,8 @@ function requestItemSelectable(x){
     return requestItemCanAssignCargo(x) ||
       requestItemCanConfirmDelivery(x) ||
       requestItemCanReassign(x) ||
-      requestItemCanConfirmReturn(x);
+      requestItemCanConfirmReturn(x) ||
+      requestItemCanAdminClose(x);
   }
 
   // Si Archivo solicitó específicamente el expediente, esta pantalla
@@ -10028,6 +10531,152 @@ function forceEnableRequestAttendant(){
   }
 }
 
+let adminCloseMode='';
+let adminCloseIds=[];
+
+function adminClosableRows(){
+  return (requestDetailRows||[]).filter(x=>requestItemCanAdminClose(x));
+}
+
+function openAdminCloseItemsModal(){
+  if(!isAdmin())return;
+
+  const ids=[...requestSelectedIds];
+  if(!ids.length){
+    el('rqActionStatus').textContent='Seleccione uno o más expedientes pendientes para cerrar.';
+    return;
+  }
+
+  const selected=(requestDetailRows||[]).filter(x=>ids.includes(x.expediente_id));
+  const invalid=selected.filter(x=>!requestItemCanAdminClose(x));
+  if(invalid.length){
+    el('rqActionStatus').textContent='Para cerrar administrativamente, seleccione únicamente expedientes que todavía no hayan sido entregados o prestados.';
+    return;
+  }
+
+  adminCloseMode='ITEMS';
+  adminCloseIds=selected.map(x=>x.expediente_id);
+  el('adminCloseTitle').textContent=`Cerrar ${selected.length} expediente${selected.length===1?'':'s'} de la solicitud`;
+  el('adminCloseNote').textContent=`Solicitud ${currentRequest?.numero||''} · El registro continuará visible en el historial.`;
+  el('adminCloseSummary').innerHTML=selected.map(x=>
+    `<div><b>${esc(x.expediente||'')}</b> · Estado actual: ${esc(requestStateDisplayName(x.estado_item||''))}</div>`
+  ).join('');
+  el('adminCloseReasonType').value='';
+  el('adminCloseReasonDetail').value='';
+  el('adminCloseStatus').textContent='';
+  el('adminCloseSubmitBtn').disabled=false;
+  el('adminCloseModal').classList.add('show');
+}
+
+function openAdminCloseRequestModal(){
+  if(!isAdmin())return;
+
+  const rows=requestDetailRows||[];
+  if(!rows.length){
+    el('rqActionStatus').textContent='La solicitud no contiene expedientes.';
+    return;
+  }
+
+  const invalid=rows.filter(x=>!requestItemCanAdminClose(x));
+  if(invalid.length){
+    const examples=invalid.slice(0,3).map(x=>`${x.expediente} (${requestStateDisplayName(x.estado_item||'')})`).join(', ');
+    el('rqActionStatus').textContent=`No se puede cerrar la solicitud completa porque ${invalid.length} expediente(s) ya avanzaron en el flujo${examples?' · '+examples:''}. Puede cerrar únicamente los expedientes pendientes seleccionándolos.`;
+    return;
+  }
+
+  adminCloseMode='REQUEST';
+  adminCloseIds=[];
+  el('adminCloseTitle').textContent='Cerrar solicitud completa';
+  el('adminCloseNote').textContent=`Solicitud ${currentRequest?.numero||''} · ${rows.length} expediente${rows.length===1?'':'s'} quedarán CERRADOS POR ADMINISTRADOR.`;
+  el('adminCloseSummary').innerHTML=rows.map(x=>
+    `<div><b>${esc(x.expediente||'')}</b> · Estado actual: ${esc(requestStateDisplayName(x.estado_item||''))}</div>`
+  ).join('');
+  el('adminCloseReasonType').value='';
+  el('adminCloseReasonDetail').value='';
+  el('adminCloseStatus').textContent='';
+  el('adminCloseSubmitBtn').disabled=false;
+  el('adminCloseModal').classList.add('show');
+}
+
+function closeAdminCloseModal(){
+  el('adminCloseModal')?.classList.remove('show');
+  adminCloseMode='';
+  adminCloseIds=[];
+}
+
+function adminCloseReason(){
+  const type=String(el('adminCloseReasonType')?.value||'').trim();
+  const detail=String(el('adminCloseReasonDetail')?.value||'').trim();
+  if(!type)return '';
+  if(type==='OTRO')return detail?`OTRO: ${detail}`:'';
+  return detail?`${type}: ${detail}`:type;
+}
+
+async function submitAdminClose(){
+  if(!isAdmin())return;
+
+  const reason=adminCloseReason();
+  const status=el('adminCloseStatus');
+  const btn=el('adminCloseSubmitBtn');
+
+  if(!reason){
+    status.textContent=String(el('adminCloseReasonType')?.value||'')==='OTRO'
+      ?'Ingrese el detalle del motivo OTRO.'
+      :'Seleccione el motivo del cierre.';
+    return;
+  }
+  if(!currentRequestId){
+    status.textContent='No se pudo identificar la solicitud.';
+    return;
+  }
+
+  btn.disabled=true;
+  status.textContent='Registrando cierre administrativo...';
+
+  try{
+    let result;
+    if(adminCloseMode==='ITEMS'){
+      if(!adminCloseIds.length){
+        status.textContent='No hay expedientes seleccionados.';
+        return;
+      }
+      result=await sb.rpc('cerrar_expedientes_solicitud_admin',{
+        p_solicitud_id:currentRequestId,
+        p_expediente_ids:adminCloseIds,
+        p_motivo:reason
+      });
+    }else if(adminCloseMode==='REQUEST'){
+      result=await sb.rpc('cerrar_solicitud_admin',{
+        p_solicitud_id:currentRequestId,
+        p_motivo:reason
+      });
+    }else{
+      status.textContent='No se pudo determinar el tipo de cierre.';
+      return;
+    }
+
+    if(result.error){
+      status.textContent=result.error.message;
+      return;
+    }
+
+    const completedMode=adminCloseMode;
+    closeAdminCloseModal();
+    requestSelectedIds.clear();
+    showToast(completedMode==='REQUEST'?'Solicitud cerrada por Administrador':'Expediente(s) cerrados por Administrador');
+
+    await Promise.all([
+      loadSummary(),loadPanel(),loadAll(),loadStates(),loadRequests(),
+      loadRequestsByLawyer(),loadCargos(),loadHistory()
+    ]);
+    await openRequestDetail(currentRequestId);
+  }catch(err){
+    status.textContent=err?.message||String(err);
+  }finally{
+    if(btn)btn.disabled=false;
+  }
+}
+
 function renderRequestActions(){
   const r=currentRequest||{};
   const hasMyLoan=requestDetailRows.some(x=>requestItemCanReassign(x));
@@ -10079,6 +10728,14 @@ function renderRequestActions(){
   });
   forceEnableRequestAttendant();
 
+  if(norm(r.estado||r.estado_atencion||'')==='CERRADA POR ADMINISTRADOR'){
+    ['rqDAtiende','rqDNuevoResponsable','rqDRetorno','rqDCargoExistente','rqDObservacion'].forEach(id=>{
+      if(el(id))el(id).disabled=true;
+    });
+    el('rqWorkflowActions').innerHTML='<span class="note"><b>CERRADA POR ADMINISTRADOR.</b> La solicitud se conserva únicamente para consulta e historial. El cierre no modifica la custodia física de ningún expediente.</span>';
+    return;
+  }
+
   let actions='';
 
   if(r.estado==='SOLICITADO'){
@@ -10117,6 +10774,22 @@ function renderRequestActions(){
   if(requestDetailRows.some(x=>x.estado_item==='DEVOLUCIÓN SOLICITADA')){
     actions += `
       <button class="btn" onclick="confirmReturnItems()">Confirmar devolución física</button>`;
+  }
+
+  if(isAdmin()){
+    const closable=adminClosableRows();
+    const allClosable=requestDetailRows.length>0 && closable.length===requestDetailRows.length;
+    if(closable.length){
+      actions += `
+        <button class="btn secondary" onclick="openAdminCloseItemsModal()">Cerrar expediente(s) seleccionados</button>`;
+    }
+    if(allClosable){
+      actions += `
+        <button class="btn secondary" onclick="openAdminCloseRequestModal()">Cerrar solicitud completa</button>`;
+    }
+    if(closable.length){
+      actions += `<span class="note">Cierre administrativo disponible solo para ADMINISTRADOR. Requiere motivo y conserva el registro en el historial.</span>`;
+    }
   }
 
   if(r.estado==='DEVUELTO'){
@@ -11422,7 +12095,8 @@ function toggleSelect(id,checked){
 }
 function toggleAllRows(checked,source){
   const rows=source==='all'?allRows:(source==='states'?stateDetailRows:panelRows);
-  rows.forEach(r=>checked?selectedIds.add(r.id):selectedIds.delete(r.id));
+  rows.filter(r=>!r._internal_reassign_requested)
+    .forEach(r=>checked?selectedIds.add(r.id):selectedIds.delete(r.id));
   updateSelectionUI();
   if(source==='all')el('allTable').innerHTML=recordTable(allRows,true,'all');
   else if(source==='states')el('stateDetailTable').innerHTML=recordTable(stateDetailRows,true,'states');
@@ -11889,6 +12563,10 @@ async function submitBulkReturn(){
 }
 
 function operationalStatus(r){
+  // Una solicitud interna todavía no transfiere custodia, pero para el
+  // solicitante debe verse en Mis Expedientes como trámite pendiente.
+  if(r?._internal_reassign_requested)return 'REASIGNACIÓN SOLICITADA';
+
   // La columna ESTADO muestra el último estado operativo
   // para Abogado, Archivo y Administrador.
   const action=norm(r.ultimo_movimiento||'');
@@ -11946,6 +12624,7 @@ function rowStatus(r){
   const state=operationalStatus(r);
 
   const c=state==='EN PRÉSTAMO'?'loan':
+    state==='REASIGNACIÓN SOLICITADA'?'reassign-requested':
     state==='SOLICITADO POR EL ARCHIVO'?'archive-requested':
     state==='DEVUELTO AL ARCHIVO'?'returned-archive':
     state==='REASIGNADO'?'reassigned':
@@ -11967,10 +12646,13 @@ function recordTable(data,withOwner=false,source='panel'){
 
   const movementHead=limited?'<th>Último movimiento</th>':'';
   const masterSolicitanteHead=source==='all'?'<th>Solicitante</th><th>Fecha solicitud</th>':'';
-  const allChecked=data.length>0&&data.every(r=>selectedIds.has(r.id));
+  const selectableRows=data.filter(r=>!r._internal_reassign_requested);
+  const allChecked=selectableRows.length>0&&selectableRows.every(r=>selectedIds.has(r.id));
 
   const body=data.map(r=>`<tr>
-    <td><input type="checkbox" aria-label="Seleccionar ${esc(expKey(r))}" ${selectedIds.has(r.id)?'checked':''} onchange="toggleSelect('${r.id}',this.checked)"></td>
+    <td>${r._internal_reassign_requested
+      ?`<input type="checkbox" disabled title="La reasignación fue solicitada, pero el expediente todavía no está bajo su custodia.">`
+      :`<input type="checkbox" aria-label="Seleccionar ${esc(expKey(r))}" ${selectedIds.has(r.id)?'checked':''} onchange="toggleSelect('${r.id}',this.checked)">`}</td>
     <td><b>${esc(expBase(r.expediente))}</b></td>
     <td>${r.extension?esc(r.extension):'—'}</td>
     <td>${esc(r.rd)}</td>
@@ -12942,7 +13624,7 @@ async function importCSV(ev){
 
 
 /* ===== ACTUALIZACIÓN AUTOMÁTICA DE VERSIÓN ===== */
-const APP_VERSION='20260827-1543-reasignacion-interna-misma-area';
+const APP_VERSION='20260828-1018-cierre-administrativo';
 let __versionCheckRunning=false;
 
 async function checkForNewAppVersion(){
