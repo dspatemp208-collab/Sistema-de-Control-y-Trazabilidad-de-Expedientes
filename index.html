@@ -7,7 +7,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="app-version" content="20260828-1505-flujo-unico-pendiente-atender">
+<meta name="app-version" content="20260828-1528-prestamos-globales-admin-archivo">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -1671,6 +1671,38 @@
           <span id="stateDetailCount">0</span>
         </div>
       </div>
+      <div id="stateLoanFilters" class="hidden" style="padding:12px 14px 4px;border-top:1px solid #e5e7eb;background:#f8fafc">
+        <div class="filters" style="margin:0;padding:0;background:transparent;border:0;box-shadow:none;grid-template-columns:repeat(6,minmax(150px,1fr));gap:10px">
+          <div class="field">
+            <label>Expediente</label>
+            <input id="loanGlobalSearch" placeholder="Ej.: 968-2011" oninput="renderGlobalLoanRows()">
+          </div>
+          <div class="field">
+            <label>Responsable actual</label>
+            <select id="loanGlobalOwner" onchange="renderGlobalLoanRows()"><option value="">TODOS</option></select>
+          </div>
+          <div class="field">
+            <label>Área</label>
+            <select id="loanGlobalArea" onchange="renderGlobalLoanRows()"><option value="">TODAS</option></select>
+          </div>
+          <div class="field">
+            <label>Situación operativa</label>
+            <select id="loanGlobalSituation" onchange="renderGlobalLoanRows()"><option value="">TODAS</option></select>
+          </div>
+          <div class="field">
+            <label>Entrega desde</label>
+            <input id="loanGlobalDateFrom" type="date" onchange="renderGlobalLoanRows()">
+          </div>
+          <div class="field">
+            <label>Entrega hasta</label>
+            <input id="loanGlobalDateTo" type="date" onchange="renderGlobalLoanRows()">
+          </div>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px">
+          <div class="note" style="margin:0">Incluye todos los expedientes que continúan físicamente fuera de Archivo, aunque estén reasignados o con devolución solicitada.</div>
+          <button class="btn secondary small" type="button" onclick="clearGlobalLoanFilters()">Limpiar filtros</button>
+        </div>
+      </div>
       <div id="stateDetailTable">
         <div class="empty">Pulse “Ver expedientes” en uno de los estados.</div>
       </div>
@@ -2819,7 +2851,7 @@ const MASTER=[["MARCELA ALONZO", "PERSONAL"], ["ABRAHAN DAMAS", "PERSONAL"], ["A
 const ASUNTOS_PREDETERMINADOS=["ACCESO A LA INFORMACIÓN", "ANALISIS Y EVALUACIÓN DEL MEMORANDO DE CONCLUSIÓN DEL PROCESO CONTENCIOSO ADMINISTRATIVO, REMITIDO POR LA PROCURADURÍA PÚBLICA (PP)", "ANEXADO DE CÉDULAS DE NOTIFICACIÓN", "ANEXADO DE DOCUMENTOS", "ATENCIÓN A LA DIRECCIÓN DE EXTRACCIÓN PARA CONSUMO HUMANO DIRECTO E INDIRECTO (DECHDI)", "ATENCIÓN A LA DIRECCIÓN DE VIGILANCIA Y CONTROL (DVC) - RD ARCHIVAMIENTO", "ATENCIÓN A LA OFICINA DE CONTROL INTERNO (OCI)", "ATENCIÓN A LA OFICINA GENERAL DE ADMINISTRACIÓN (OGA)", "ATENCIÓN A LA PROCURADURÍA PÚBLICA", "ATENCIÓN AL MINISTERIO PÚBLICO (FISCALÍA)", "ATENCIÓN DE ESCRITOS", "ATENCIÓN DE ESCRITOS REMITIDOS POR EL CONSEJO DE APELACIÓN DE SANCIONES CALIDAD DE PRÉSTAMO (CONAS)", "ATENCIÓN DE QUEJAS", "CADUCIDAD", "COMUNICACIÓN DE LAS SANCIONES A LA DIRECCIÓN GENERAL DE PESCA PARA CONSUMO HUMANO DIRECTO E INDIRECTO (DGPCHDI)", "DESLINDE DE RESPONSABILIDAD", "ELEVACIÓN DEL EXPEDIENTE AL CONSEJO DE APELACIÓN DE SANCIONES (CONAS)", "ENMIENDA", "EVALUACIÓN DE OFICIO", "EVALUACIÓN DE PAGOS POR CONCEPTO DE DECOMISOS", "EVALUACIÓN DEL EXPEDIENTE QUE RETORNA DEL CONSEJO DE APELACIÓN DE SANCIONES (CONAS)", "INTERES PARTICULAR", "LECTURA EN SALA (USUARIOS INTERNOS)", "LECTURA EXPEDIENTE (USUARIOS EXTERNOS)", "NULIDAD DE OFICIO", "PERDIDA DE BENEFICIO", "PETICIÓN ADMINISTRATIVA", "RECOMENDACIÓN DE INICIO", "RECONSIDERACIÓN", "REINCIDENCIAS DEL PAS", "REVISIÓN", "REVISIÓN DEL PROCEDIMIENTO DE EJECUCIÓN COACTIVA (PEC) - OEC", "SECRETARIA TÉCNICA DE LOS ORGANOS INSTRUCTORES (STOI)", "SOLICITUD DE BENEFICIOS", "TRAMITACIÓN DEL PAS (IFIS)", "USO DE LA PALABRA O AUDIENCIA"];
 const STATUSES=['CUSTODIA','EN PRÉSTAMO','DEVUELTO','REASIGNADO','EN TRÁMITE'];
 const PAGE_SIZE=200;
-let sb=null, session=null, currentProfile=null, userProfiles=[], abogadoProfiles=[], reassignmentProfiles=[], reassignmentProfilesLoadedAt=0, returnRequestRows=[], returnRequestSelectedKeys=new Set(), pendingRegisterRows=[], pendingVerifyRows=[], pendingAttentionRows=[], pendingVerificationRows=[], stateWorkRows=[], notificationRows=[], notificationUnread=0, notificationsLoaded=false, internalReassignRows=[], internalReassignPendingCount=0, requestExcelRows=[], requestExcelMissing=[], requestExcelDuplicates=0, summaryRows=[], panelRows=[], allRows=[], historyRows=[], cargosRows=[], selectedCargoNumero='', stateRows=[], stateDetailRows=[], requestRows=[], requestDetailRows=[], requestMovementRows=[], requestSearchRows=[], requestsByLawyerRows=[];
+let sb=null, session=null, currentProfile=null, userProfiles=[], abogadoProfiles=[], reassignmentProfiles=[], reassignmentProfilesLoadedAt=0, returnRequestRows=[], returnRequestSelectedKeys=new Set(), pendingRegisterRows=[], pendingVerifyRows=[], pendingAttentionRows=[], pendingVerificationRows=[], stateWorkRows=[], notificationRows=[], notificationUnread=0, notificationsLoaded=false, internalReassignRows=[], internalReassignPendingCount=0, requestExcelRows=[], requestExcelMissing=[], requestExcelDuplicates=0, summaryRows=[], panelRows=[], allRows=[], historyRows=[], cargosRows=[], selectedCargoNumero='', stateRows=[], stateDetailRows=[], requestRows=[], requestDetailRows=[], requestMovementRows=[], requestSearchRows=[], requestsByLawyerRows=[], stateLoanAllRows=[];
 let activeArchiveDeliveryRequestId='';
 let bulkReturnRows=[];
 let pendingRegisterSelectedRequestIds=new Set();
@@ -6266,7 +6298,7 @@ async function loadStates(){
   ]=await Promise.all([
     sb.rpc('resumen_estados'),
     sb.rpc('resumen_reasignaciones'),
-    sb.rpc('resumen_en_prestamo_fisico_v2'),
+    sb.rpc('resumen_prestamos_activos_global_v3'),
     sb.rpc('listar_pendientes_por_atender_inclusivo')
   ]);
 
@@ -6276,7 +6308,7 @@ async function loadStates(){
   }
 
   if(reassignError)console.warn('resumen_reasignaciones:',reassignError.message);
-  if(loanError)console.warn('resumen_en_prestamo_fisico_v2:',loanError.message);
+  if(loanError)console.warn('resumen_prestamos_activos_global_v3:',loanError.message);
   if(pendingAttentionError)console.warn('listar_pendientes_por_atender_inclusivo:',pendingAttentionError.message);
 
   pendingRegisterRows=[];
@@ -6364,7 +6396,7 @@ function renderStates(){
   if(physical.length){
     html+=`<div style="grid-column:1/-1;font-weight:800;color:#17365d;margin:2px 0 0">ESTADO FÍSICO ACTUAL</div>`;
     html+=physical.map(x=>card(x,
-      x.estado==='EN PRÉSTAMO'?'Custodia física fuera de Archivo':
+      x.estado==='EN PRÉSTAMO'?'Todos los préstamos activos aún fuera de Archivo':
       x.estado==='DEVUELTOS AL ARCHIVO'?'Custodia física en Archivo':
       'Estado físico que requiere revisión')).join('');
   }
@@ -6388,8 +6420,95 @@ function renderStates(){
   el('stateGrid').innerHTML=html||'<div class="empty">No se encontraron estados o bandejas.</div>';
 }
 
+function globalLoanSearchKey(v){
+  const s=String(v||'').trim().toUpperCase().replace(/\s+/g,'');
+  const m=s.match(/^(\d+)(?:[-\/](\d{4}))?$/);
+  if(!m)return s;
+  const n=String(parseInt(m[1],10)||0);
+  return m[2]?`${n}-${m[2]}`:n;
+}
+function fillGlobalLoanFilters(){
+  const owners=[...new Set((stateLoanAllRows||[]).map(x=>String(x.responsable||x.responsable_actual||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es'));
+  const areas=[...new Set((stateLoanAllRows||[]).map(x=>String(x.area_trabajo||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es'));
+  const situations=[...new Set((stateLoanAllRows||[]).map(x=>String(x.situacion_operativa||'EN PRÉSTAMO').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es'));
+  const setOptions=(id,values,allLabel)=>{
+    const s=el(id); if(!s)return;
+    const current=s.value;
+    s.innerHTML=`<option value="">${allLabel}</option>`+values.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join('');
+    if(values.includes(current))s.value=current;
+  };
+  setOptions('loanGlobalOwner',owners,'TODOS');
+  setOptions('loanGlobalArea',areas,'TODAS');
+  setOptions('loanGlobalSituation',situations,'TODAS');
+}
+function clearGlobalLoanFilters(){
+  ['loanGlobalSearch','loanGlobalOwner','loanGlobalArea','loanGlobalSituation','loanGlobalDateFrom','loanGlobalDateTo'].forEach(id=>{if(el(id))el(id).value='';});
+  renderGlobalLoanRows();
+}
+function renderGlobalLoanRows(){
+  const box=el('stateLoanFilters');
+  if(box)box.classList.remove('hidden');
+  const search=globalLoanSearchKey(el('loanGlobalSearch')?.value||'');
+  const owner=norm(el('loanGlobalOwner')?.value||'');
+  const area=norm(el('loanGlobalArea')?.value||'');
+  const situation=norm(el('loanGlobalSituation')?.value||'');
+  const dateFrom=el('loanGlobalDateFrom')?.value||'';
+  const dateTo=el('loanGlobalDateTo')?.value||'';
+
+  const rows=(stateLoanAllRows||[]).filter(x=>{
+    const exp=globalLoanSearchKey(x.expediente||'');
+    if(search && !(exp===search || exp.startsWith(search+'-') || exp.includes(search)))return false;
+    if(owner && norm(x.responsable||x.responsable_actual||'')!==owner)return false;
+    if(area && norm(x.area_trabajo||'')!==area)return false;
+    if(situation && norm(x.situacion_operativa||'EN PRÉSTAMO')!==situation)return false;
+    const d=String(x.fecha_entrega||'').slice(0,10);
+    if(dateFrom && (!d || d<dateFrom))return false;
+    if(dateTo && (!d || d>dateTo))return false;
+    return true;
+  });
+
+  stateDetailRows=rows;
+  stateDetailCount=rows.length;
+  if(el('stateDetailCount'))el('stateDetailCount').textContent=rows.length===(stateLoanAllRows||[]).length
+    ?`${rows.length} expedientes`
+    :`${rows.length} de ${(stateLoanAllRows||[]).length} expedientes`;
+
+  if(!rows.length){
+    el('stateDetailTable').innerHTML='<div class="empty">No hay préstamos activos que coincidan con los filtros.</div>';
+    return;
+  }
+
+  el('stateDetailTable').innerHTML=`<div style="overflow:auto"><table>
+    <thead><tr>
+      <th>Expediente</th><th>R.D.</th><th>Último folio</th><th>Responsable actual</th><th>Área</th>
+      <th>Situación operativa</th><th>Fecha entrega</th><th>Últ. reasignación</th><th>Cargo</th><th>Solicitud</th><th></th>
+    </tr></thead>
+    <tbody>${rows.map(x=>`<tr>
+      <td><b>${esc(x.expediente||'—')}</b></td>
+      <td>${esc(x.rd||'—')}</td>
+      <td>${esc(x.ultimo_folio||'—')}</td>
+      <td><b>${esc(x.responsable||x.responsable_actual||'—')}</b></td>
+      <td>${esc(x.area_trabajo||'—')}</td>
+      <td><span class="pill ${norm(x.situacion_operativa||'').includes('DEVOLUCIÓN')?'return':norm(x.situacion_operativa||'').includes('SOLICITADO POR EL ARCHIVO')?'alert':norm(x.situacion_operativa||'').includes('REASIGNADO')?'reassigned':'loan'}">${esc(x.situacion_operativa||'EN PRÉSTAMO')}</span></td>
+      <td>${fmtDate(x.fecha_entrega)}</td>
+      <td>${fmtDate(x.fecha_ultima_reasignacion||x.fecha_reasignacion)}</td>
+      <td>${esc(x.cargo_numero||x.cargo||'—')}</td>
+      <td>${esc(x.solicitud_numero||'—')}</td>
+      <td><div style="display:flex;gap:6px;white-space:nowrap">
+        <button class="btn secondary small" onclick="showExpHistory('${x.id}')">Historial</button>
+        ${hasFullAccess()?`<button class="btn small" onclick="manageExpedienteFromPanel('${x.id}')">Gestionar</button>`:''}
+      </div></td>
+    </tr>`).join('')}</tbody>
+  </table></div>`;
+}
+function hideGlobalLoanFilters(){
+  const box=el('stateLoanFilters');
+  if(box)box.classList.add('hidden');
+}
+
 async function loadStateDetail(estado){
   selectedState=estado;
+  if(estado!=='EN PRÉSTAMO')hideGlobalLoanFilters();
   renderStates();
 
   if(estado==='PENDIENTE POR ATENDER'){
@@ -6447,29 +6566,21 @@ async function loadStateDetail(estado){
   }
 
   if(estado==='EN PRÉSTAMO'){
-    el('stateDetailTitle').textContent='Expedientes físicamente EN PRÉSTAMO';
-    el('stateDetailTable').innerHTML='<div class="empty">Cargando expedientes en préstamo...</div>';
+    el('stateDetailTitle').textContent=hasFullAccess()
+      ?'Todos los préstamos activos · custodia física fuera de Archivo'
+      :'Mis expedientes físicamente EN PRÉSTAMO';
+    el('stateDetailTable').innerHTML='<div class="empty">Cargando préstamos activos...</div>';
 
-    const {data,error}=await sb.rpc('listar_expedientes_en_prestamo_fisico_v2');
+    const {data,error}=await sb.rpc('listar_prestamos_activos_global_v3');
 
     if(error){
       el('stateDetailTable').innerHTML=`<div class="empty">${esc(error.message)}</div>`;
       return;
     }
 
-    stateDetailRows=data||[];
-    stateDetailRows=await attachLatestMovementToRecords(stateDetailRows);
-    stateDetailCount=stateDetailRows.length;
-
-    el('stateDetailCount').textContent=`${stateDetailCount} expedientes`;
-
-    if(!stateDetailRows.length){
-      el('stateDetailTable').innerHTML=
-        '<div class="empty">No hay expedientes físicamente EN PRÉSTAMO.</div>';
-      return;
-    }
-
-    el('stateDetailTable').innerHTML=recordTable(stateDetailRows,true,'states');
+    stateLoanAllRows=Array.isArray(data)?data:(data||[]);
+    fillGlobalLoanFilters();
+    renderGlobalLoanRows();
     return;
   }
 
@@ -13352,7 +13463,7 @@ async function importCSV(ev){
 
 
 /* ===== ACTUALIZACIÓN AUTOMÁTICA DE VERSIÓN ===== */
-const APP_VERSION='20260828-1505-flujo-unico-pendiente-atender';
+const APP_VERSION='20260828-1528-prestamos-globales-admin-archivo';
 let __versionCheckRunning=false;
 
 async function checkForNewAppVersion(){
