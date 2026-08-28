@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- FLUJO DIRECTO USUARIO A PENDIENTE POR ATENDER ACTIVO -->
+<!-- DEPURACIÓN PRIORIDAD ALTA: FLUJO DIRECTO + ESTADOS FÍSICOS CONSOLIDADOS -->
 <!-- SELECCION QUIEN ATIENDE HABILITADA PARA ARCHIVO/ADMIN -->
 <!-- REGISTRO MAESTRO: SOLICITANTE PENDIENTE POR ATENDER ACTIVO -->
 
@@ -7,7 +7,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="app-version" content="20260828-1018-cierre-administrativo">
+<meta name="app-version" content="20260828-1505-flujo-unico-pendiente-atender">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -1329,7 +1329,7 @@
   <div class="tabs">
     <button class="tab active" id="tabBtnPanel" data-tab="panel" onclick="switchTab('panel',this)">Panel por personal</button>
     <button class="tab" data-tab="summary" onclick="switchTab('summary',this)">Resumen</button>
-    <button class="tab" data-tab="states" onclick="switchTab('states',this);loadStates();if(isAdmin())loadReturnRequests()">Estados</button>
+    <button class="tab" data-tab="states" onclick="switchTab('states',this);loadStates();if(hasFullAccess())loadReturnRequests()">Estados</button>
     <button class="tab" data-tab="requests" onclick="switchTab('requests',this);loadRequests()">Solicitudes</button>
     <button class="tab" id="tabBtnRequestsByLawyer" data-tab="requestsByLawyer" onclick="switchTab('requestsByLawyer',this);loadRequestsByLawyer()">Solicitudes por abogado</button>
     <button class="tab" data-tab="all" onclick="switchTab('all',this);loadAll()">Registro maestro</button>
@@ -1574,7 +1574,7 @@
         <input id="stateSearch" placeholder="Ej.: EN PRÉSTAMO, DEVUELTOS AL ARCHIVO..." oninput="renderStates()">
       </div>
       <div class="note">
-        Panel global: préstamos, devoluciones, reasignaciones y expedientes que requieren atención.
+        Los estados físicos se contabilizan una sola vez. Las bandejas de trabajo se muestran aparte para evitar duplicidades.
       </div>
       <div style="display:flex;align-items:flex-end">
         <button class="btn secondary" onclick="clearStateSelection()">Ver todos</button>
@@ -1585,7 +1585,7 @@
       <div class="empty">Cargando estados...</div>
     </div>
 
-    <!-- SOLO ADMINISTRADOR: Solicitudes de devolución dentro de Estados -->
+    <!-- ARCHIVO / ADMINISTRADOR: Solicitudes de devolución dentro de Estados -->
     <div id="statesReturnAdminBox" class="hidden" style="margin-top:14px">
       <div class="card" style="margin-bottom:12px">
         <div class="table-head" style="padding:0">
@@ -1641,10 +1641,19 @@
     </div>
 
     <div class="card table-wrap">
-      <div class="table-head">
-        <strong>Solicitudes de devolución pendientes</strong>
-        <span id="returnRequestsCount">0 expedientes</span>
+      <div class="table-head" style="gap:10px;flex-wrap:wrap">
+        <div>
+          <strong>Solicitudes de devolución pendientes</strong>
+          <div class="note" style="margin-top:4px">Seleccione uno o varios expedientes para confirmar su recepción física.</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end">
+          <span id="returnRequestsCount">0 expedientes</span>
+          <span id="returnSelectedCount" class="sel-count">0 seleccionados</span>
+          <select id="returnBulkLocation" style="min-width:190px" aria-label="Ubicación al devolver"></select>
+          <button class="btn small" id="returnBulkConfirmBtn" type="button" onclick="confirmSelectedReturnRequests()" disabled>✓ Confirmar recepción seleccionados</button>
+        </div>
       </div>
+      <div id="returnBulkStatus" class="note" style="padding:0 14px 8px"></div>
       <div id="returnRequestsTable">
         <div class="empty">No hay solicitudes de devolución pendientes.</div>
       </div>
@@ -1660,9 +1669,6 @@
         <strong id="stateDetailTitle">Seleccione un estado para ver sus expedientes</strong>
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
           <span id="stateDetailCount">0</span>
-          <span id="pendingRegisterSelectedCount" class="sel-count hidden">0 solicitudes seleccionadas</span>
-          <button class="btn small hidden" id="bulkAcceptRequestsBtn" type="button"
-                  onclick="openBulkAcceptRequestsModal()" disabled>✓ Aceptar solicitudes seleccionadas</button>
         </div>
       </div>
       <div id="stateDetailTable">
@@ -1692,7 +1698,6 @@
     </div>
 
     <div class="request-workflow-kpis" id="fullRequestKpis">
-      <div class="card kpi" data-rq-state="REGISTRADA" onclick="selectAdminRequestCard('REGISTRADA')"><div class="label">POR ACEPTAR</div><div class="value" id="rqSolicitado">0</div><div class="note-mini">Enviadas y aún no aceptadas por Archivo.</div></div>
       <div class="card kpi" data-rq-state="PENDIENTES_POR_ATENDER_ITEMS" onclick="selectAdminRequestCard('PENDIENTES_POR_ATENDER_ITEMS')"><div class="label">EXPEDIENTES PENDIENTES POR ATENDER</div><div class="value" id="rqAceptado">0</div><div class="note-mini"><b><span id="rqAceptadoExpedientes">0 expedientes</span></b> · <span id="rqAceptadoSolicitudes">0 solicitudes</span> con atención pendiente.</div></div>
       <div class="card kpi warn" data-rq-state="ENTREGA PARCIAL" onclick="selectAdminRequestCard('ENTREGA PARCIAL')"><div class="label">ENTREGA PARCIAL</div><div class="value" id="rqEntregaParcial">0</div><div class="note-mini">Parte de los expedientes ya fue entregada.</div></div>
       <div class="card kpi" data-rq-state="" onclick="selectAdminRequestCard('')"><div class="label">TOTAL DE SOLICITUDES</div><div class="value" id="rqTodas">0</div><div class="note-mini">Vista completa de todas las solicitudes.</div></div>
@@ -1703,13 +1708,6 @@
            onclick="selectMyRequestCard('')">
         <div class="label">Total de solicitudes</div>
         <div class="value" id="uRqTotalSolicitudes">0</div>
-        <button class="kpi-view" type="button">Ver solicitudes</button>
-      </div>
-
-      <div class="card kpi req-card-click" id="userRqRegistradas"
-           onclick="selectMyRequestCard('REGISTRADA')">
-        <div class="label">Registradas</div>
-        <div class="value" id="uRqRegistradas">0</div>
         <button class="kpi-view" type="button">Ver solicitudes</button>
       </div>
 
@@ -1730,7 +1728,6 @@
         <label>Etapa de atención</label>
         <select id="requestStateFilter" onchange="loadRequests()">
           <option value="">TODOS</option>
-          <option value="REGISTRADA">POR ACEPTAR</option>
           <option value="PENDIENTES_POR_ATENDER_ITEMS">PENDIENTE POR ATENDER</option>
           <option value="ENTREGA PARCIAL">ENTREGA PARCIAL</option>
         </select>
@@ -1991,7 +1988,7 @@
     <div class="modal-head">
       <div>
         <h2 id="rqModalTitle">Nueva solicitud de expedientes</h2>
-        <div id="rqModalNote" class="note">La solicitud no cambia la ubicación física. Al enviarla, los expedientes registrados ingresan automáticamente a PENDIENTE POR ATENDER en Archivo. Los expedientes nuevos o que requieran revisión permanecen PENDIENTES DE VERIFICACIÓN.</div>
+        <div id="rqModalNote" class="note">La solicitud no cambia la ubicación física. Al enviarla, todos los expedientes ingresan automáticamente a PENDIENTE POR ATENDER en Archivo, donde serán revisados y preparados antes de generar el cargo.</div>
       </div>
       <button class="btn secondary small" onclick="closeNewRequestModal()">Cerrar</button>
     </div>
@@ -2089,12 +2086,6 @@
       <span id="rqSaveStatus" class="note"></span>
       <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
         <button class="btn secondary" onclick="closeNewRequestModal()">Cancelar</button>
-
-        <button class="btn secondary hidden"
-                id="rqAcceptFromEditBtn"
-                onclick="saveAndAcceptFromEdit()">
-          Guardar y aceptar solicitud
-        </button>
 
         <button class="btn hidden"
                 id="rqSavePrintCargoBtn"
@@ -2780,36 +2771,6 @@
   </div>
 </div>
 
-<!-- Aceptación múltiple de solicitudes pendientes -->
-<div class="modal" id="bulkAcceptRequestsModal">
-  <div class="modal-box" style="max-width:720px">
-    <div class="modal-head">
-      <div>
-        <h2>Aceptar varias solicitudes</h2>
-        <div class="note">Las solicitudes seleccionadas pasarán a PENDIENTE POR ATENDER. Todavía no se genera cargo ni cambia la ubicación física del expediente.</div>
-      </div>
-      <button class="btn secondary small" type="button" onclick="closeBulkAcceptRequestsModal()">Cerrar</button>
-    </div>
-    <div class="form-grid" style="grid-template-columns:1fr">
-      <div class="field">
-        <label>Atiende el requerimiento *</label>
-        <select id="bulkAcceptAtiende"><option value="">— Seleccione personal de Archivo —</option></select>
-      </div>
-      <div class="field">
-        <label>Observación</label>
-        <input id="bulkAcceptObs" placeholder="Opcional">
-      </div>
-    </div>
-    <div id="bulkAcceptRequestList" class="note" style="margin-top:12px"></div>
-    <div class="modal-foot">
-      <span id="bulkAcceptStatus" class="note" style="margin-right:auto"></span>
-      <button class="btn secondary" type="button" onclick="closeBulkAcceptRequestsModal()">Cancelar</button>
-      <button class="btn" id="bulkAcceptSubmitBtn" type="button" onclick="submitBulkAcceptRequests()">Aceptar seleccionadas</button>
-    </div>
-  </div>
-</div>
-
-
 <!-- Listados de expedientes devueltos: ARCHIVO / ADMINISTRADOR -->
 <div class="modal" id="archiveListsModal">
   <div class="modal-box" style="max-width:1220px">
@@ -2858,7 +2819,7 @@ const MASTER=[["MARCELA ALONZO", "PERSONAL"], ["ABRAHAN DAMAS", "PERSONAL"], ["A
 const ASUNTOS_PREDETERMINADOS=["ACCESO A LA INFORMACIÓN", "ANALISIS Y EVALUACIÓN DEL MEMORANDO DE CONCLUSIÓN DEL PROCESO CONTENCIOSO ADMINISTRATIVO, REMITIDO POR LA PROCURADURÍA PÚBLICA (PP)", "ANEXADO DE CÉDULAS DE NOTIFICACIÓN", "ANEXADO DE DOCUMENTOS", "ATENCIÓN A LA DIRECCIÓN DE EXTRACCIÓN PARA CONSUMO HUMANO DIRECTO E INDIRECTO (DECHDI)", "ATENCIÓN A LA DIRECCIÓN DE VIGILANCIA Y CONTROL (DVC) - RD ARCHIVAMIENTO", "ATENCIÓN A LA OFICINA DE CONTROL INTERNO (OCI)", "ATENCIÓN A LA OFICINA GENERAL DE ADMINISTRACIÓN (OGA)", "ATENCIÓN A LA PROCURADURÍA PÚBLICA", "ATENCIÓN AL MINISTERIO PÚBLICO (FISCALÍA)", "ATENCIÓN DE ESCRITOS", "ATENCIÓN DE ESCRITOS REMITIDOS POR EL CONSEJO DE APELACIÓN DE SANCIONES CALIDAD DE PRÉSTAMO (CONAS)", "ATENCIÓN DE QUEJAS", "CADUCIDAD", "COMUNICACIÓN DE LAS SANCIONES A LA DIRECCIÓN GENERAL DE PESCA PARA CONSUMO HUMANO DIRECTO E INDIRECTO (DGPCHDI)", "DESLINDE DE RESPONSABILIDAD", "ELEVACIÓN DEL EXPEDIENTE AL CONSEJO DE APELACIÓN DE SANCIONES (CONAS)", "ENMIENDA", "EVALUACIÓN DE OFICIO", "EVALUACIÓN DE PAGOS POR CONCEPTO DE DECOMISOS", "EVALUACIÓN DEL EXPEDIENTE QUE RETORNA DEL CONSEJO DE APELACIÓN DE SANCIONES (CONAS)", "INTERES PARTICULAR", "LECTURA EN SALA (USUARIOS INTERNOS)", "LECTURA EXPEDIENTE (USUARIOS EXTERNOS)", "NULIDAD DE OFICIO", "PERDIDA DE BENEFICIO", "PETICIÓN ADMINISTRATIVA", "RECOMENDACIÓN DE INICIO", "RECONSIDERACIÓN", "REINCIDENCIAS DEL PAS", "REVISIÓN", "REVISIÓN DEL PROCEDIMIENTO DE EJECUCIÓN COACTIVA (PEC) - OEC", "SECRETARIA TÉCNICA DE LOS ORGANOS INSTRUCTORES (STOI)", "SOLICITUD DE BENEFICIOS", "TRAMITACIÓN DEL PAS (IFIS)", "USO DE LA PALABRA O AUDIENCIA"];
 const STATUSES=['CUSTODIA','EN PRÉSTAMO','DEVUELTO','REASIGNADO','EN TRÁMITE'];
 const PAGE_SIZE=200;
-let sb=null, session=null, currentProfile=null, userProfiles=[], abogadoProfiles=[], reassignmentProfiles=[], reassignmentProfilesLoadedAt=0, returnRequestRows=[], pendingRegisterRows=[], pendingVerifyRows=[], notificationRows=[], notificationUnread=0, notificationsLoaded=false, internalReassignRows=[], internalReassignPendingCount=0, requestExcelRows=[], requestExcelMissing=[], requestExcelDuplicates=0, summaryRows=[], panelRows=[], allRows=[], historyRows=[], cargosRows=[], selectedCargoNumero='', stateRows=[], stateDetailRows=[], requestRows=[], requestDetailRows=[], requestMovementRows=[], requestSearchRows=[], requestsByLawyerRows=[];
+let sb=null, session=null, currentProfile=null, userProfiles=[], abogadoProfiles=[], reassignmentProfiles=[], reassignmentProfilesLoadedAt=0, returnRequestRows=[], returnRequestSelectedKeys=new Set(), pendingRegisterRows=[], pendingVerifyRows=[], pendingAttentionRows=[], pendingVerificationRows=[], stateWorkRows=[], notificationRows=[], notificationUnread=0, notificationsLoaded=false, internalReassignRows=[], internalReassignPendingCount=0, requestExcelRows=[], requestExcelMissing=[], requestExcelDuplicates=0, summaryRows=[], panelRows=[], allRows=[], historyRows=[], cargosRows=[], selectedCargoNumero='', stateRows=[], stateDetailRows=[], requestRows=[], requestDetailRows=[], requestMovementRows=[], requestSearchRows=[], requestsByLawyerRows=[];
 let activeArchiveDeliveryRequestId='';
 let bulkReturnRows=[];
 let pendingRegisterSelectedRequestIds=new Set();
@@ -2888,8 +2849,8 @@ function setVisible(id,visible){
 }
 function norm(v){return String(v??'').trim().toUpperCase()}
 function stateDisplayName(estado){
-  if(estado==='PENDIENTE DE VERIFICACIÓN')return 'PENDIENTE POR ATENDER';
   if(estado==='CARGO GENERADO')return 'EN PRÉSTAMO';
+  if(['PENDIENTE DE VERIFICACIÓN','PENDIENTE DE VERIFICACION','PENDIENTE POR VERIFICAR'].includes(estado))return 'PENDIENTE POR ATENDER';
   return estado||'';
 }
 
@@ -2904,7 +2865,7 @@ function movementActionDisplay(action){
 function requestStateDisplayName(estado){
   if(estado==='PENDIENTES_POR_ATENDER_ITEMS')return 'PENDIENTE POR ATENDER';
   if(estado==='REGISTRADA POR ARCHIVO')return 'PENDIENTE POR ATENDER';
-  if(estado==='ACEPTADO')return 'PENDIENTE POR ATENDER';
+  if(estado==='REGISTRADA' || estado==='SOLICITADO' || estado==='ACEPTADO')return 'PENDIENTE POR ATENDER';
   if(estado==='CARGO GENERADO')return 'EN PRÉSTAMO';
   return estado||'';
 }
@@ -3912,7 +3873,8 @@ async function respondInternalReassign(id,action){
     :`Solicitud de ${row.expediente||'expediente'} rechazada`);
 
   await Promise.all([
-    loadInternalReassignRequests(true),loadNotifications(true),loadPanel(),loadRequests(),loadHistory()
+    loadInternalReassignRequests(true),loadNotifications(true),loadPanel(),loadRequests(),loadHistory(),
+    isLimitedUser()?loadUserPersonalSummary():Promise.resolve()
   ]);
   renderInternalReassignRequests();
 }
@@ -4921,6 +4883,22 @@ async function loadSummary(){
   renderSidebar();renderSummary();renderKpis()
 }
 
+function reassignedAwayFromCurrentUser(r){
+  if(!isLimitedUser() || r?._internal_reassign_requested)return false;
+
+  const mine=norm(currentProfile?.nombre_personal||'');
+  if(!mine)return false;
+
+  const action=norm(r?.ultimo_movimiento||'');
+  const from=norm(r?.ultimo_movimiento_desde||'');
+  const to=norm(r?.ultimo_movimiento_hacia||'');
+
+  // Cuando la última acción es una REASIGNACIÓN desde el usuario actual
+  // hacia otra persona, el expediente ya no forma parte de su custodia.
+  // Solo debe conservarse en la tarjeta histórica "Reasignados por mí".
+  return action.includes('REASIGNACIÓN') && from===mine && !!to && to!==mine;
+}
+
 async function loadUserPersonalSummary(){
   if(!sb||!session||!isLimitedUser())return;
 
@@ -4962,8 +4940,23 @@ async function loadUserPersonalSummary(){
     norm(r.direccion)==='ENVIADA' && norm(r.estado)==='PENDIENTE'
   ).length;
 
+  // Corregir el total visible de "Todos mis expedientes": si el usuario
+  // ya aceptó una reasignación hacia otra persona, ese expediente dejó su
+  // custodia y no debe seguir contándose en esta tarjeta.
+  let currentAllCount=null;
+  const {data:allMine,error:allMineError}=await sb.rpc(
+    'listar_mis_expedientes_tarjeta',
+    {p_tipo:'TODOS',p_busqueda:null}
+  );
+  if(!allMineError){
+    const enrichedAll=await attachLatestMovementToRecords(allMine||[]);
+    currentAllCount=enrichedAll.filter(r=>!reassignedAwayFromCurrentUser(r)).length;
+  }else{
+    console.warn('Corrección de Todos mis expedientes:',allMineError.message);
+  }
+
   userPanelSummary={
-    todos:Number(s.todos||0)+internalRequestedCount,
+    todos:(currentAllCount===null?Number(s.todos||0):currentAllCount)+internalRequestedCount,
     en_prestamo:Number(s.en_prestamo||0),
     devolucion_solicitada:Number(requestedReturnCount||0),
     reasignados_por_mi:Number(s.reasignados_por_mi||0),
@@ -6013,9 +6006,17 @@ async function loadPanel(){
       }
     }
 
+    // Revisar el último movimiento ANTES de paginar. Así, cuando una
+    // reasignación interna ya fue aceptada, el expediente desaparece de las
+    // vistas de custodia del usuario anterior y queda con el nuevo responsable.
+    all=await attachLatestMovementToRecords(all);
+
+    if(['TODOS','PRESTAMO','DEVOLUCION_SOLICITADA','ALERTAS_30'].includes(userPanelMode)){
+      all=all.filter(r=>!reassignedAwayFromCurrentUser(r));
+    }
+
     panelCount=all.length;
     panelRows=all.slice(from,to+1);
-    panelRows=await attachLatestMovementToRecords(panelRows);
 
     el('panelTitle').textContent=
       `${userPanelLabel()} · ${currentProfile?.nombre_personal||'Mi espacio personal'}`;
@@ -6261,13 +6262,11 @@ async function loadStates(){
     {data,error},
     {data:reassignData,error:reassignError},
     {data:loanData,error:loanError},
-    {data:pendingRegisterData,error:pendingRegisterError},
-    {data:pendingVerifyData,error:pendingVerifyError}
+    {data:pendingAttentionData,error:pendingAttentionError}
   ]=await Promise.all([
     sb.rpc('resumen_estados'),
     sb.rpc('resumen_reasignaciones'),
-    sb.rpc('resumen_en_prestamo_ultimo_estado'),
-    sb.rpc('listar_pendientes_por_registrar'),
+    sb.rpc('resumen_en_prestamo_fisico_v2'),
     sb.rpc('listar_pendientes_por_atender_inclusivo')
   ]);
 
@@ -6276,31 +6275,21 @@ async function loadStates(){
     return;
   }
 
-  if(reassignError){
-    console.warn('resumen_reasignaciones:',reassignError.message);
-  }
+  if(reassignError)console.warn('resumen_reasignaciones:',reassignError.message);
+  if(loanError)console.warn('resumen_en_prestamo_fisico_v2:',loanError.message);
+  if(pendingAttentionError)console.warn('listar_pendientes_por_atender_inclusivo:',pendingAttentionError.message);
 
-  if(loanError){
-    console.warn('resumen_en_prestamo_ultimo_estado:',loanError.message);
-  }
-
-  if(pendingRegisterError){
-    console.warn('listar_pendientes_por_registrar:',pendingRegisterError.message);
-  }
-
-  if(pendingVerifyError){
-    console.warn('listar_pendientes_por_atender_inclusivo:',pendingVerifyError.message);
-  }
-
-  pendingRegisterRows=pendingRegisterError?[]:(pendingRegisterData||[]);
-  pendingVerifyRows=pendingVerifyError?[]:(pendingVerifyData||[]);
+  pendingRegisterRows=[];
+  pendingAttentionRows=pendingAttentionError?[]:(pendingAttentionData||[]);
+  pendingVerificationRows=[];
+  // Compatibilidad con la pantalla de preparación existente.
+  pendingVerifyRows=pendingAttentionRows;
 
   const totalEnPrestamo=Number(
     Array.isArray(loanData)
       ? (loanData[0]?.total||0)
       : (loanData?.total||0)
   );
-
   const totalReasignaciones=Number(
     Array.isArray(reassignData)
       ? (reassignData[0]?.total||0)
@@ -6311,355 +6300,157 @@ async function loadStates(){
     estado:(x.estado||'SIN ESTADO').trim()||'SIN ESTADO',
     total:Number(x.total||0)
   }));
-
-  // Total real de expedientes de la base.
   const totalExpedientes=dbRows.reduce((a,x)=>a+Number(x.total||0),0);
 
-  // La vista unifica:
-  // CUSTODIA + DEVUELTO = DEVUELTOS AL ARCHIVO.
-  //
-  // EN PRÉSTAMO y REASIGNADO se calculan según el ÚLTIMO MOVIMIENTO
-  // de cada expediente, para evitar que un expediente figure en dos
-  // estados operativos incompatibles.
-  const map=new Map();
-
-  ['EN PRÉSTAMO','DEVUELTOS AL ARCHIVO','REASIGNADO','EN TRÁMITE']
-    .forEach(s=>map.set(s,0));
-
+  let totalDevueltos=0;
   dbRows.forEach(x=>{
-    if(x.estado==='CUSTODIA' || x.estado==='DEVUELTO'){
-      map.set(
-        'DEVUELTOS AL ARCHIVO',
-        Number(map.get('DEVUELTOS AL ARCHIVO')||0)+Number(x.total||0)
-      );
-    }else if(x.estado!=='REASIGNADO' && x.estado!=='EN PRÉSTAMO'){
-      map.set(x.estado,Number(x.total||0));
-    }
+    const st=norm(x.estado);
+    if(['CUSTODIA','DEVUELTO','DEVUELTO AL ARCHIVO'].includes(st))totalDevueltos+=Number(x.total||0);
   });
 
-  // PENDIENTE DE VERIFICACIÓN:
-  // solo expedientes nuevos cuya solicitud YA fue aceptada por Archivo.
-  map.set('PENDIENTE DE VERIFICACIÓN',pendingVerifyRows.length);
-
-  // EN PRÉSTAMO: solo expedientes cuyo ÚLTIMO estado operativo es EN PRÉSTAMO.
-  map.set('EN PRÉSTAMO',totalEnPrestamo);
-
-  // REASIGNADO: solo expedientes cuyo último movimiento es REASIGNACIÓN.
-  map.set('REASIGNADO',totalReasignaciones);
-
-  stateRows=[...map.entries()]
-    .map(([estado,total])=>({
-      estado,
-      total:Number(total||0),
-      historial:false
-    }))
-    .sort((a,b)=>b.total-a.total||a.estado.localeCompare(b.estado));
-
-  // Panel global: mostrar únicamente los estados operativos definidos.
-  const globalOperationalStates=new Set([
-    'EN PRÉSTAMO','DEVUELTOS AL ARCHIVO','REASIGNADO','PENDIENTE DE VERIFICACIÓN'
-  ]);
-  const visibleStateRows=stateRows.filter(x=>globalOperationalStates.has(x.estado));
-
-  const globalSummaryRows=[
-    ...visibleStateRows,
-    {estado:'PENDIENTES POR REGISTRAR',total:pendingRegisterRows.length||0},
-    {estado:'SOLICITUDES DE DEVOLUCIÓN',total:returnRequestRows.length||0}
+  // Estados físicos exclusivos: su suma siempre debe coincidir con el total maestro.
+  const totalPorRevisar=Math.max(0,totalExpedientes-totalEnPrestamo-totalDevueltos);
+  stateRows=[
+    {estado:'EN PRÉSTAMO',total:totalEnPrestamo,historial:false},
+    {estado:'DEVUELTOS AL ARCHIVO',total:totalDevueltos,historial:false},
+    {estado:'POR REVISAR',total:totalPorRevisar,historial:false}
   ];
 
-  const top=globalSummaryRows
-    .slice()
-    .sort((a,b)=>b.total-a.total)[0]||{estado:'—',total:0};
+  // Bandejas de trabajo y movimientos. No se suman al total físico porque pueden
+  // referirse a expedientes ya contabilizados en uno de los estados anteriores.
+  stateWorkRows=[
+    {estado:'PENDIENTE POR ATENDER',total:pendingAttentionRows.length,tipo:'bandeja'},
+    {estado:'REASIGNACIONES',total:totalReasignaciones,tipo:'movimiento'}
+  ];
 
-  // Panel global: 4 estados operativos + Pendientes por registrar + Solicitudes de devolución.
-  el('statesTotalTypes').textContent=isAdmin()?6:5;
+  const top=stateRows.slice().sort((a,b)=>b.total-a.total)[0]||{estado:'—',total:0};
+  const physicalTypes=stateRows.filter(x=>x.total>0).length;
+  el('statesTotalTypes').textContent=physicalTypes;
   el('statesTotalRecords').textContent=totalExpedientes;
   el('statesTopCount').textContent=top.total;
   el('statesTopName').textContent=stateDisplayName(top.estado);
 
-  renderStates();
-
-  if(selectedState){
-    await loadStateDetail(selectedState);
+  if(selectedState==='PENDIENTES POR REGISTRAR' || selectedState==='REASIGNADO'){
+    selectedState=null;
   }
+
+  renderStates();
+  if(selectedState)await loadStateDetail(selectedState);
 }
 
 function renderStates(){
   if(!el('stateGrid'))return;
-
   const q=norm(el('stateSearch')?.value||'');
-  const allowedGlobalStates=new Set([
-    'EN PRÉSTAMO','DEVUELTOS AL ARCHIVO','REASIGNADO','PENDIENTE DE VERIFICACIÓN'
-  ]);
-  const visibleRows=stateRows.filter(x=>allowedGlobalStates.has(x.estado));
-  const data=visibleRows.filter(x=>!q||norm(stateDisplayName(x.estado)).includes(q));
-  const total=visibleRows.reduce((a,x)=>a+x.total,0);
 
-  const normalCards=data.map(x=>{
-    const pct=total?((x.total/total)*100):0;
+  const card=(x,meta)=>{
     const stateArg=x.estado.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-
-    const meta=x.estado==='REASIGNADO'
-      ?'Último estado: REASIGNADO'
-      :x.estado==='EN PRÉSTAMO'
-        ?'Último estado: EN PRÉSTAMO'
-        :x.estado==='PENDIENTE DE VERIFICACIÓN'
-          ?'Solicitud aceptada por Archivo · Pendiente por atender'
-          :`${pct.toFixed(1)}% del total`;
-
-    const buttonText='Ver expedientes';
-
+    const denom=Number(el('statesTotalRecords')?.textContent||0);
+    const pct=denom?Math.min(100,(Number(x.total||0)/denom)*100):0;
     return `<div class="card state-card ${selectedState===x.estado?'selected':''}">
-      <div class="state-name">${esc(stateDisplayName(x.estado))}</div>
-      <div class="state-count">${x.total}</div>
-      <div class="state-meta">${meta}</div>
-      <div class="state-progress"><span style="width:${x.estado==='REASIGNADO'?(x.total?100:0):Math.min(100,pct)}%"></span></div>
-      <div style="margin-top:10px">
-        <button class="btn secondary small" onclick="loadStateDetail('${stateArg}')">${buttonText}</button>
-      </div>
+      <div class="state-name">${esc(x.estado)}</div>
+      <div class="state-count">${Number(x.total||0)}</div>
+      <div class="state-meta">${esc(meta)}</div>
+      <div class="state-progress"><span style="width:${pct}%"></span></div>
+      <div style="margin-top:10px"><button class="btn secondary small" onclick="loadStateDetail('${stateArg}')">Ver expedientes</button></div>
     </div>`;
-  }).join('');
+  };
 
-  const pendingRegisterName='PENDIENTES POR REGISTRAR';
-  const showPendingRegisterCard=hasFullAccess() &&
-    (!q || norm(pendingRegisterName).includes(q));
-
-  const pendingRegisterCard=showPendingRegisterCard
-    ? `<div class="card state-card ${selectedState===pendingRegisterName?'selected':''}">
-        <div class="state-name">PENDIENTES POR REGISTRAR</div>
-        <div class="state-count">${pendingRegisterRows.length||0}</div>
-        <div class="state-meta">Solicitud aún no aceptada por Archivo</div>
-        <div class="state-progress">
-          <span style="width:${pendingRegisterRows.length?100:0}%"></span>
-        </div>
-        <div style="margin-top:10px">
-          <button class="btn secondary small"
-            onclick="loadStateDetail('PENDIENTES POR REGISTRAR')">
-            Ver expedientes
-          </button>
-        </div>
-      </div>`
-    :'';
-
+  const physical=stateRows.filter(x=>!q||norm(x.estado).includes(q));
+  const work=stateWorkRows.filter(x=>!q||norm(x.estado).includes(q));
   const returnName='SOLICITUDES DE DEVOLUCIÓN';
-  const showReturnCard=isAdmin() && (!q || norm(returnName).includes(q));
+  const showReturn=hasFullAccess() && (!q||norm(returnName).includes(q));
 
-  const returnCard=showReturnCard
-    ? `<div class="card state-card">
+  let html='';
+  if(physical.length){
+    html+=`<div style="grid-column:1/-1;font-weight:800;color:#17365d;margin:2px 0 0">ESTADO FÍSICO ACTUAL</div>`;
+    html+=physical.map(x=>card(x,
+      x.estado==='EN PRÉSTAMO'?'Custodia física fuera de Archivo':
+      x.estado==='DEVUELTOS AL ARCHIVO'?'Custodia física en Archivo':
+      'Estado físico que requiere revisión')).join('');
+  }
+
+  if(work.length||showReturn){
+    html+=`<div style="grid-column:1/-1;font-weight:800;color:#17365d;margin:10px 0 0">BANDEJAS DE TRABAJO Y MOVIMIENTOS</div>`;
+    html+=work.map(x=>card(x,
+      x.estado==='PENDIENTE POR ATENDER'?'Solicitud lista para preparar y generar cargo':
+      'Movimiento de custodia; el expediente continúa EN PRÉSTAMO')).join('');
+    if(showReturn){
+      html+=`<div class="card state-card">
         <div class="state-name">SOLICITUDES DE DEVOLUCIÓN</div>
         <div class="state-count">${returnRequestRows.length||0}</div>
         <div class="state-meta">Pendientes de recepción física</div>
         <div class="state-progress"><span style="width:${returnRequestRows.length?100:0}%"></span></div>
-        <div style="margin-top:10px">
-          <button class="btn secondary small" onclick="toggleReturnRequestsInStates()">
-            Ver solicitudes
-          </button>
-        </div>
-      </div>`
-    :'';
+        <div style="margin-top:10px"><button class="btn secondary small" onclick="toggleReturnRequestsInStates()">Ver solicitudes</button></div>
+      </div>`;
+    }
+  }
 
-  const cardsHtml=normalCards+pendingRegisterCard+returnCard;
-  el('stateGrid').innerHTML=cardsHtml||'<div class="empty">No se encontraron estados.</div>';
+  el('stateGrid').innerHTML=html||'<div class="empty">No se encontraron estados o bandejas.</div>';
 }
 
 async function loadStateDetail(estado){
   selectedState=estado;
-  if(estado!=='PENDIENTES POR REGISTRAR')pendingRegisterSelectedRequestIds.clear();
-  updatePendingRegisterBulkUI();
   renderStates();
 
-  if(estado==='PENDIENTES POR REGISTRAR'){
-    el('stateDetailTitle').textContent='Expedientes pendientes por registrar';
-    el('stateDetailTable').innerHTML=
-      '<div class="empty">Cargando expedientes pendientes...</div>';
-
-    const {data,error}=await sb.rpc('listar_pendientes_por_registrar');
-
-    if(error){
-      el('stateDetailTable').innerHTML=
-        `<div class="empty">${esc(error.message)}</div>`;
-      return;
-    }
-
-    const rows=sortRequestsDesc(data||[],'solicitud_numero');
-    pendingRegisterRows=rows;
-    stateDetailCount=rows.length;
-    el('stateDetailCount').textContent=`${rows.length} expedientes`;
-
-    if(!rows.length){
-      el('stateDetailTable').innerHTML=
-        '<div class="empty">No hay expedientes pendientes por registrar.</div>';
-      return;
-    }
-
-    pendingRegisterSelectedRequestIds.clear();
-
-    el('stateDetailTable').innerHTML=`<table>
-      <thead>
-        <tr>
-          <th style="width:38px;text-align:center">
-            <input type="checkbox" id="pendingRegisterSelectAll" title="Seleccionar todas las solicitudes"
-                   onchange="toggleAllPendingRegisterRequests(this.checked)">
-          </th>
-          <th>Expediente</th>
-          <th>Extensión</th>
-          <th>R.D.</th>
-          <th>Solicitud</th>
-          <th>Solicitante</th>
-          <th>Fecha solicitud</th>
-          <th>Estado solicitud</th>
-          <th>Origen</th>
-          <th>Estado</th>
-          <th>Observación</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody>
-        ${rows.map(x=>`<tr>
-          <td style="text-align:center">
-            <input type="checkbox" class="pending-register-request-check"
-                   data-request-id="${esc(x.solicitud_id||'')}"
-                   onchange="togglePendingRegisterRequest('${String(x.solicitud_id||'').replace(/'/g,"\\'")}',this.checked)">
-          </td>
-          <td><b>${esc(x.expediente||'—')}</b></td>
-          <td>${esc(x.extension||'—')}</td>
-          <td>${esc(x.rd||'—')}</td>
-          <td><b>${esc(x.solicitud_numero||'—')}</b></td>
-          <td>${esc(x.solicitante||'—')}</td>
-          <td>${fmtDate(x.fecha_solicitud)}</td>
-          <td><span class="pill alert">${esc(requestStateDisplayName(x.estado_item||'SOLICITADO'))}</span></td>
-          <td>${esc(x.origen_registro||'SOLICITUD')}</td>
-          <td><span class="pill pending">PENDIENTE POR REGISTRAR</span></td>
-          <td>${esc(x.observacion||'')}</td>
-          <td>
-            <div style="display:flex;gap:6px;white-space:nowrap">
-              <button class="btn secondary small" onclick="showExpHistory('${x.expediente_id}')">Historial</button>
-              <button class="btn small" onclick="manageExpedienteFromPanel('${x.expediente_id}')">Gestionar</button>
-            </div>
-          </td>
-        </tr>`).join('')}
-      </tbody>
-    </table>`;
-
-    updatePendingRegisterBulkUI();
-    return;
-  }
-
-  if(estado==='PENDIENTE DE VERIFICACIÓN'){
-    el('stateDetailTitle').textContent=
-      'Pendiente por atender · Solicitud aceptada por Archivo';
-    el('stateDetailTable').innerHTML=
-      '<div class="empty">Cargando expedientes pendientes de verificación...</div>';
+  if(estado==='PENDIENTE POR ATENDER'){
+    el('stateDetailTitle').textContent='Pendiente por atender · listo para preparación de Archivo';
+    el('stateDetailTable').innerHTML='<div class="empty">Cargando expedientes pendientes por atender...</div>';
 
     const {data,error}=await sb.rpc('listar_pendientes_por_atender_inclusivo');
-
-    if(error){
-      el('stateDetailTable').innerHTML=
-        `<div class="empty">${esc(error.message)}</div>`;
-      return;
-    }
+    if(error){el('stateDetailTable').innerHTML=`<div class="empty">${esc(error.message)}</div>`;return;}
 
     let rows=sortRequestsDesc(data||[],'solicitud_numero');
-
-    // Completar con los datos vigentes del Registro maestro.
-    // Así Extensión, R.D. y Último folio reflejan siempre el valor actual.
-    const verifyIds=rows.map(x=>x.expediente_id).filter(Boolean);
-
-    if(verifyIds.length){
-      const {data:masterRows,error:masterError}=await sb
-        .from('expedientes')
-        .select('id,extension,rd,ultimo_folio')
-        .in('id',verifyIds);
-
+    const ids=rows.map(x=>x.expediente_id).filter(Boolean);
+    if(ids.length){
+      const {data:masterRows,error:masterError}=await sb.from('expedientes').select('id,extension,rd,ultimo_folio').in('id',ids);
       if(!masterError){
-        const masterMap=new Map((masterRows||[]).map(x=>[x.id,x]));
-
-        rows=rows.map(x=>{
-          const m=masterMap.get(x.expediente_id)||{};
-          return {
-            ...x,
-            extension:m.extension??x.extension,
-            rd:m.rd??x.rd,
-            ultimo_folio:m.ultimo_folio??x.ultimo_folio
-          };
-        });
-      }else{
-        console.warn('Datos maestros pendientes de verificación:',masterError.message);
+        const mm=new Map((masterRows||[]).map(x=>[x.id,x]));
+        rows=rows.map(x=>({...x,...(mm.get(x.expediente_id)||{})}));
       }
     }
 
+    pendingAttentionRows=rows;
     pendingVerifyRows=rows;
     stateDetailCount=rows.length;
     el('stateDetailCount').textContent=`${rows.length} expedientes`;
+    if(!rows.length){el('stateDetailTable').innerHTML='<div class="empty">No hay expedientes pendientes por atender.</div>';return;}
 
-    if(!rows.length){
-      el('stateDetailTable').innerHTML=
-        '<div class="empty">No hay expedientes pendientes por atender.</div>';
-      return;
-    }
+    el('stateDetailTable').innerHTML=`<table><thead><tr>
+      <th>Expediente</th><th>Extensión</th><th>R.D.</th><th>Último folio</th><th>Solicitud</th><th>Solicitante</th><th>Estado</th><th>F. solicitud</th><th>Observación</th><th></th>
+    </tr></thead><tbody>${rows.map((x,i)=>`<tr>
+      <td><b>${esc(x.expediente||'—')}</b></td><td>${esc(x.extension||'—')}</td><td>${esc(x.rd||'—')}</td><td>${esc(x.ultimo_folio||'—')}</td>
+      <td><b>${esc(x.solicitud_numero||'—')}</b></td><td>${esc(x.solicitante||'—')}</td><td><span class="pill pending">PENDIENTE POR ATENDER</span></td>
+      <td>${fmtDate(x.fecha_solicitud)}</td><td>${esc(x.observacion||'')}</td><td><div style="display:flex;gap:6px;white-space:nowrap">
+        <button class="btn secondary small" onclick="showExpHistory('${x.expediente_id}')">Historial</button>
+        ${hasFullAccess()?`<button class="btn small" onclick="openPendingManageRequest(${i})">Preparar / gestionar</button>`:''}
+        ${isAdmin()?`<button class="btn secondary small" onclick="editRecord('${x.expediente_id}')">Editar</button>`:''}
+      </div></td></tr>`).join('')}</tbody></table>`;
+    return;
+  }
 
-    el('stateDetailTable').innerHTML=`
-      <div class="note" style="margin:8px 10px 10px">
-        <b>Preparar / gestionar</b> abre una sola pantalla para completar Extensión, R.D. y Último folio,
-        generar/imprimir el siguiente cargo y, cuando existan expedientes ya <b>EN PRÉSTAMO</b> dentro
-        de la misma solicitud, realizar su reasignación. <b>Editar</b> mantiene la edición directa
-        del expediente para el perfil Administrador.
-      </div>
-      <table>
-      <thead>
-        <tr>
-          <th>Expediente</th>
-          <th>Extensión</th>
-          <th>R.D.</th>
-          <th>Último folio</th>
-          <th>Solicitud</th>
-          <th>Solicitante</th>
-          <th>Estado solicitud</th>
-          <th>F. solicitud</th>
-          <th>F. aceptación Archivo</th>
-          <th>Observación</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody>
-        ${rows.map((x,i)=>`<tr>
-          <td><b>${esc(x.expediente||'—')}</b></td>
-          <td>${esc(x.extension||'—')}</td>
-          <td>${esc(x.rd||'—')}</td>
-          <td>${esc(x.ultimo_folio||'—')}</td>
-          <td><b>${esc(x.solicitud_numero||'—')}</b></td>
-          <td>${esc(x.solicitante||'—')}</td>
-          <td><span class="pill pending">${esc(requestStateDisplayName(x.estado_item||'ACEPTADO'))}</span></td>
-          <td>${fmtDate(x.fecha_solicitud)}</td>
-          <td>${x.fecha_atencion?fmtDate(x.fecha_atencion):'—'}</td>
-          <td>${esc(x.observacion||'')}</td>
-          <td>
-            <div style="display:flex;gap:6px;white-space:nowrap">
-              <button class="btn secondary small"
-                onclick="showExpHistory('${x.expediente_id}')">
-                Historial
-              </button>
-              ${hasFullAccess()?`<button class="btn small"
-                onclick="openPendingManageRequest(${i})">
-                Preparar / gestionar
-              </button>`:''}
-              ${hasFullAccess()?`<button class="btn secondary small"
-                onclick="editRecord('${x.expediente_id}')">
-                Editar
-              </button>`:''}
-            </div>
-          </td>
-        </tr>`).join('')}
-      </tbody>
-    </table>`;
+  // Compatibilidad con enlaces antiguos: la verificación ya no es una bandeja separada.
+  if(estado==='PENDIENTE DE VERIFICACIÓN'){
+    return loadStateDetail('PENDIENTE POR ATENDER');
+  }
+
+  if(estado==='POR REVISAR'){
+    el('stateDetailTitle').textContent='Expedientes con estado físico por revisar';
+    el('stateDetailTable').innerHTML='<div class="empty">Cargando expedientes por revisar...</div>';
+    const {data,error}=await sb.rpc('listar_expedientes_por_revisar_v2');
+    if(error){el('stateDetailTable').innerHTML=`<div class="empty">${esc(error.message)}</div>`;return;}
+    stateDetailRows=data||[];
+    stateDetailRows=await attachLatestMovementToRecords(stateDetailRows);
+    stateDetailCount=stateDetailRows.length;
+    el('stateDetailCount').textContent=`${stateDetailCount} expedientes`;
+    el('stateDetailTable').innerHTML=recordTable(stateDetailRows,true,'states');
     return;
   }
 
   if(estado==='EN PRÉSTAMO'){
-    el('stateDetailTitle').textContent='Expedientes cuyo último estado es: EN PRÉSTAMO';
+    el('stateDetailTitle').textContent='Expedientes físicamente EN PRÉSTAMO';
     el('stateDetailTable').innerHTML='<div class="empty">Cargando expedientes en préstamo...</div>';
 
-    const {data,error}=await sb.rpc('listar_expedientes_en_prestamo_ultimo_estado');
+    const {data,error}=await sb.rpc('listar_expedientes_en_prestamo_fisico_v2');
 
     if(error){
       el('stateDetailTable').innerHTML=`<div class="empty">${esc(error.message)}</div>`;
@@ -6674,7 +6465,7 @@ async function loadStateDetail(estado){
 
     if(!stateDetailRows.length){
       el('stateDetailTable').innerHTML=
-        '<div class="empty">No hay expedientes cuyo último estado sea EN PRÉSTAMO.</div>';
+        '<div class="empty">No hay expedientes físicamente EN PRÉSTAMO.</div>';
       return;
     }
 
@@ -6682,8 +6473,8 @@ async function loadStateDetail(estado){
     return;
   }
 
-  if(estado==='REASIGNADO'){
-    el('stateDetailTitle').textContent='Expedientes cuyo último estado es: REASIGNADO';
+  if(estado==='REASIGNACIONES'){
+    el('stateDetailTitle').textContent='Movimientos de reasignación';
     el('stateDetailTable').innerHTML='<div class="empty">Cargando expedientes reasignados...</div>';
 
     const {data,error}=await sb.rpc('listar_expedientes_reasignados');
@@ -6699,7 +6490,7 @@ async function loadStateDetail(estado){
 
     if(!rows.length){
       el('stateDetailTable').innerHTML=
-        '<div class="empty">No hay expedientes cuyo último estado sea REASIGNADO.</div>';
+        '<div class="empty">No hay movimientos de reasignación para mostrar.</div>';
       return;
     }
 
@@ -6724,7 +6515,7 @@ async function loadStateDetail(estado){
           <td>${esc(x.extension||'—')}</td>
           <td>${esc(x.rd||'—')}</td>
           <td><b>${esc(x.responsable_actual||'—')}</b></td>
-          <td><span class="pill reassigned">REASIGNADO</span></td>
+          <td><span class="pill loan">EN PRÉSTAMO</span></td>
           <td>${fmtDate(x.fecha_ultima_reasignacion)}</td>
           <td>${esc(x.desde||'—')}</td>
           <td><b>${esc(x.hacia||'—')}</b></td>
@@ -7248,7 +7039,7 @@ function closeNewRequestModal(){
   }
   if(el('rqModalNote')){
     el('rqModalNote').textContent=
-      'La solicitud no cambia la ubicación física. Los expedientes disponibles ingresan a PENDIENTE POR ATENDER en Archivo. Si un expediente está con otro USUARIO de su misma área, NO podrá solicitarlo a Archivo: deberá usar SOLICITAR REASIGNACIÓN INTERNA. La custodia solo cambiará cuando el responsable actual la acepte. Los expedientes nuevos o que requieran revisión permanecen PENDIENTES DE VERIFICACIÓN.';
+      'La solicitud no cambia la ubicación física. Todos los expedientes de la solicitud normal ingresan directamente a PENDIENTE POR ATENDER en Archivo. Si un expediente está con otro USUARIO de su misma área, NO podrá solicitarlo a Archivo: deberá usar SOLICITAR REASIGNACIÓN INTERNA. La custodia solo cambiará cuando el responsable actual la acepte.';
   }
   if(el('rqSaveBtn')){
     el('rqSaveBtn').textContent='Enviar solicitud';
@@ -7594,7 +7385,7 @@ async function openNewRequestModal(rowsOverride=null,preserveHeader=false){
   if(el('rqModalNote')){
     el('rqModalNote').textContent=editMode
       ?'Complete y verifique los datos del expediente. Desde esta misma pantalla podrá aceptar la solicitud y generar/imprimir el cargo cuando corresponda.'
-      :'La solicitud no cambia la ubicación física. Los expedientes disponibles ingresan a PENDIENTE POR ATENDER en Archivo. Si un expediente está con otro USUARIO de su misma área, deberá marcarlo (o marcar varios) y usar SOLICITAR REASIGNACIÓN DE SELECCIONADOS. La custodia solo cambiará cuando el responsable actual la acepte. Los expedientes nuevos o que requieran revisión permanecen PENDIENTES DE VERIFICACIÓN.';
+      :'La solicitud no cambia la ubicación física. Todos los expedientes de la solicitud normal ingresan directamente a PENDIENTE POR ATENDER en Archivo. Si un expediente está con otro USUARIO de su misma área, deberá marcarlo (o marcar varios) y usar SOLICITAR REASIGNACIÓN DE SELECCIONADOS. La custodia solo cambiará cuando el responsable actual la acepte.';
   }
 
   if(el('rqSaveBtn')){
@@ -7823,7 +7614,7 @@ async function openNewRequestModal(rowsOverride=null,preserveHeader=false){
                   <span class="pill alert">REASIGNACIÓN OBLIGATORIA</span>
                   <span class="internal-reassign-note">Con <b>${esc(r.responsable_actual||'USUARIO')}</b> · misma área. Debe solicitar su reasignación.</span>
                 </div>`)
-            :esc(r.estado||((r._nuevo||r.nuevo)?'PENDIENTE DE VERIFICACIÓN':''))}</td>
+            :esc(r.estado||((r._nuevo||r.nuevo)?'PENDIENTE POR ATENDER':''))}</td>
           <td class="request-item-actions rq-col-actions">
             ${partialContinue
               ?'<span class="note" style="padding:4px 6px">Pendiente</span>'
@@ -8084,21 +7875,13 @@ function updatePrepareDeliveryUI(){
     }
   }
 
-  if(state==='SOLICITADO'){
-    acceptBtn?.classList.remove('hidden');
-    printBtn?.classList.add('hidden');
-    if(title)title.textContent='Aceptación y asignación de atención';
-    if(note){
-      note.textContent=
-        'Antes de aceptar, seleccione obligatoriamente quién atenderá el requerimiento. La aceptación registrará por separado quién aceptó y quién quedó asignado para atender.';
-    }
-  }else if(state==='ACEPTADO' && modalidad==='PRÉSTAMO'){
-    if(title)title.textContent='Preparación de entrega y cargo';
+  if((state==='SOLICITADO' || state==='ACEPTADO') && modalidad==='PRÉSTAMO'){
     acceptBtn?.classList.add('hidden');
     printBtn?.classList.remove('hidden');
+    if(title)title.textContent='Preparación de entrega y cargo';
     if(note){
       note.textContent=
-        'Complete Extensión, R.D. y Último folio; marque los expedientes que formarán el cargo y genere la impresión.';
+        'La solicitud ya ingresó automáticamente a atención. Seleccione quién atiende, complete los datos necesarios y genere el cargo.';
     }
   }else if(state==='ENTREGA PARCIAL' && modalidad==='PRÉSTAMO'){
     if(title)title.textContent='Continuar atención · preparar expedientes pendientes';
@@ -8109,12 +7892,12 @@ function updatePrepareDeliveryUI(){
         'Complete o corrija Extensión, R.D. y Último folio de los expedientes que aún están pendientes; seleccione los que atenderá ahora y genere el siguiente cargo.';
     }
   }else if(state==='ACEPTADO'){
-    if(title)title.textContent='Solicitud aceptada · responsable de atención asignado';
+    if(title)title.textContent='Solicitud en atención · responsable asignado';
     acceptBtn?.classList.add('hidden');
     printBtn?.classList.add('hidden');
     if(note){
       note.textContent=
-        'La solicitud está aceptada. La generación de cargo se habilita únicamente para modalidad PRÉSTAMO.';
+        'La solicitud está en atención. La generación de cargo se habilita únicamente para modalidad PRÉSTAMO.';
     }
   }else{
     if(title)title.textContent='Preparación de entrega y cargo';
@@ -8595,7 +8378,7 @@ function addMissingExcelExpediente(index){
     rd:null,
     ultimo_folio:null,
     observacion:'Registrado desde carga masiva de Excel',
-    estado:'PENDIENTE DE VERIFICACIÓN',
+    estado:'PENDIENTE POR ATENDER',
     _nuevo:true
   };
 
@@ -8620,7 +8403,7 @@ function addAllMissingExcelExpedientes(){
       rd:null,
       ultimo_folio:null,
       observacion:'Registrado desde carga masiva de Excel',
-      estado:'PENDIENTE DE VERIFICACIÓN',
+      estado:'PENDIENTE POR ATENDER',
       _nuevo:true
     };
     const key=requestDraftKey(item);
@@ -8685,7 +8468,7 @@ async function openNewFirstTimeRequest(){
     rd:el('newReqRd').value.trim()||null,
     ultimo_folio:el('newReqFolio').value.trim()||null,
     observacion:el('newReqExpObs').value.trim()||null,
-    estado:'PENDIENTE DE VERIFICACIÓN',
+    estado:'PENDIENTE POR ATENDER',
     _nuevo:true
   };
 
@@ -8969,7 +8752,7 @@ async function continueRequestFromSearch(){
 
 
 function toggleReturnRequestsInStates(){
-  if(!isAdmin())return;
+  if(!hasFullAccess())return;
 
   const box=el('statesReturnAdminBox');
   const btn=el('statesReturnToggleBtn');
@@ -9019,8 +8802,125 @@ function returnBusinessDays(dateStr){
   return days;
 }
 
+function returnRequestKey(row){
+  return `${row?.solicitud_id||''}::${row?.expediente_id||''}`;
+}
+
+function fillReturnBulkLocations(){
+  const sel=el('returnBulkLocation');
+  if(!sel)return;
+
+  const current=sel.value;
+  const locations=(catalogo||[])
+    .filter(x=>x.activo!==false && x.tipo!=='PERSONAL')
+    .map(x=>(x.nombre||'').trim())
+    .filter(Boolean);
+
+  const unique=[...new Set(locations)];
+  sel.innerHTML=unique.length
+    ? unique.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('')
+    : '<option value="ARCHIVO">ARCHIVO</option>';
+
+  if(current && [...sel.options].some(o=>o.value===current)){
+    sel.value=current;
+  }else{
+    const archivo=[...sel.options].find(o=>norm(o.value).includes('ARCHIVO'));
+    if(archivo)sel.value=archivo.value;
+  }
+}
+
+function syncReturnRequestBulkUI(){
+  const visibleKeys=new Set((returnRequestRows||[]).map(returnRequestKey));
+  [...returnRequestSelectedKeys].forEach(k=>{
+    if(!visibleKeys.has(k))returnRequestSelectedKeys.delete(k);
+  });
+
+  const count=returnRequestSelectedKeys.size;
+  if(el('returnSelectedCount'))el('returnSelectedCount').textContent=`${count} seleccionado${count===1?'':'s'}`;
+  if(el('returnBulkConfirmBtn'))el('returnBulkConfirmBtn').disabled=!count;
+
+  const all=el('returnSelectAll');
+  if(all){
+    const total=returnRequestRows.length;
+    const selected=returnRequestRows.filter(r=>returnRequestSelectedKeys.has(returnRequestKey(r))).length;
+    all.checked=total>0 && selected===total;
+    all.indeterminate=selected>0 && selected<total;
+  }
+}
+
+function toggleReturnRequestSelection(key,checked){
+  if(checked)returnRequestSelectedKeys.add(key);
+  else returnRequestSelectedKeys.delete(key);
+  syncReturnRequestBulkUI();
+}
+
+function toggleAllReturnRequests(checked){
+  (returnRequestRows||[]).forEach(r=>{
+    const key=returnRequestKey(r);
+    if(checked)returnRequestSelectedKeys.add(key);
+    else returnRequestSelectedKeys.delete(key);
+  });
+  renderReturnRequests();
+}
+
+async function confirmSelectedReturnRequests(){
+  if(!hasFullAccess())return;
+
+  const selected=(returnRequestRows||[]).filter(r=>returnRequestSelectedKeys.has(returnRequestKey(r)));
+  if(!selected.length){
+    if(el('returnBulkStatus'))el('returnBulkStatus').textContent='Seleccione uno o más expedientes.';
+    return;
+  }
+
+  const location=(el('returnBulkLocation')?.value||'').trim();
+  if(!location){
+    if(el('returnBulkStatus'))el('returnBulkStatus').textContent='Seleccione la ubicación física de retorno.';
+    return;
+  }
+
+  const btn=el('returnBulkConfirmBtn');
+  if(btn)btn.disabled=true;
+  if(el('returnBulkStatus'))el('returnBulkStatus').textContent=`Confirmando recepción de ${selected.length} expediente(s)...`;
+
+  const groups=new Map();
+  selected.forEach(r=>{
+    if(!groups.has(r.solicitud_id))groups.set(r.solicitud_id,[]);
+    groups.get(r.solicitud_id).push(r.expediente_id);
+  });
+
+  let confirmed=0;
+  const errors=[];
+  for(const [solicitudId,expedienteIds] of groups.entries()){
+    const {data,error}=await sb.rpc('confirmar_devolucion_archivo',{
+      p_solicitud_id:solicitudId,
+      p_expediente_ids:expedienteIds,
+      p_ubicacion_retorno:location,
+      p_observacion:null
+    });
+    if(error){
+      errors.push(error.message);
+      continue;
+    }
+    confirmed+=Number(data?.devueltos||expedienteIds.length);
+  }
+
+  if(errors.length){
+    if(el('returnBulkStatus'))el('returnBulkStatus').textContent=`Se confirmaron ${confirmed} expediente(s). Error: ${errors[0]}`;
+  }else{
+    returnRequestSelectedKeys.clear();
+    if(el('returnBulkStatus'))el('returnBulkStatus').textContent='';
+    showToast(`${confirmed} expediente(s) recibidos por Archivo`);
+  }
+
+  await Promise.all([
+    loadReturnRequests(),loadSummary(),loadPanel(),loadAll(),loadStates(),
+    loadRequestsByLawyer(),loadHistory(),loadOperationalAlerts(true),loadNotifications(true)
+  ]);
+  syncReturnRequestBulkUI();
+}
+
 async function loadReturnRequests(){
-  if(!isAdmin())return;
+  if(!hasFullAccess())return;
 
   const search=(el('returnSearch')?.value||'').trim();
   const responsible=(el('returnResponsible')?.value||'').trim();
@@ -9074,7 +8974,9 @@ async function loadReturnRequests(){
     if(names.includes(current))el('returnResponsible').value=current;
   }
 
+  fillReturnBulkLocations();
   renderReturnRequests();
+  syncReturnRequestBulkUI();
 
   // Refrescar la tarjeta dentro de Estados con la cantidad pendiente.
   if(el('stateGrid'))renderStates();
@@ -9084,12 +8986,17 @@ function renderReturnRequests(){
   if(!returnRequestRows.length){
     el('returnRequestsTable').innerHTML=
       '<div class="empty">No hay solicitudes de devolución pendientes.</div>';
+    syncReturnRequestBulkUI();
     return;
   }
 
   el('returnRequestsTable').innerHTML=`<table>
     <thead>
       <tr>
+        <th style="width:42px;text-align:center">
+          <input id="returnSelectAll" type="checkbox" title="Seleccionar todos"
+                 onchange="toggleAllReturnRequests(this.checked)">
+        </th>
         <th>Expediente</th>
         <th>Ext.</th>
         <th>Solicitud</th>
@@ -9101,13 +9008,20 @@ function renderReturnRequests(){
         <th>F. solicitud devolución</th>
         <th>Días háb.</th>
         <th>Observación</th>
-        <th></th>
+        <th>Acción</th>
       </tr>
     </thead>
     <tbody>
       ${returnRequestRows.map(x=>{
         const days=returnBusinessDays(x.fecha_solicitud_devolucion);
+        const key=returnRequestKey(x);
+        const checked=returnRequestSelectedKeys.has(key)?'checked':'';
         return `<tr>
+          <td style="text-align:center">
+            <input type="checkbox" ${checked}
+                   aria-label="Seleccionar ${esc(x.expediente||'expediente')}"
+                   onchange="toggleReturnRequestSelection('${key}',this.checked)">
+          </td>
           <td><b>${esc(x.expediente)}</b></td>
           <td>${esc(x.extension||'—')}</td>
           <td><b>${esc(x.solicitud_numero||'—')}</b></td>
@@ -9129,10 +9043,12 @@ function renderReturnRequests(){
       }).join('')}
     </tbody>
   </table>`;
+
+  syncReturnRequestBulkUI();
 }
 
 async function manageReturnRequest(solicitudId,expedienteId){
-  if(!isAdmin())return;
+  if(!hasFullAccess())return;
 
   await openRequestDetail(solicitudId);
 
@@ -9223,7 +9139,6 @@ function renderRequestsByLawyer(){
       <div class="note">solicitudes registradas</div>
 
       <div class="lawyer-stats">
-        <div>POR ACEPTAR<b>${Number(x.solicitado||0)}</b></div>
         <div>PEND. POR ATENDER<b>${Number(x.aceptado||0)}</b></div>
         <div>ENTREGA PARCIAL<b>${Number(x.entrega_parcial||0)}</b></div>
         <div>ENTREGA TOTAL<b>${Number(x.entrega_total||0)}</b></div>
@@ -9233,7 +9148,6 @@ function renderRequestsByLawyer(){
 
       <div class="lawyer-actions">
         <button class="btn secondary small" onclick="openLawyerRequests('${x.solicitante.replace(/'/g,"\\'")}')">Ver todas (${Number(x.total||0)})</button>
-        ${Number(x.solicitado||0)>0?`<button class="btn small" onclick="openLawyerRequests('${x.solicitante.replace(/'/g,"\\'")}','REGISTRADA')">Por aceptar (${Number(x.solicitado||0)})</button>`:''}
         ${Number(x.aceptado||0)>0?`<button class="btn small" onclick="openLawyerRequests('${x.solicitante.replace(/'/g,"\\'")}','PENDIENTES_POR_ATENDER_ITEMS')">Por atender (${Number(x.aceptado||0)})</button>`:''}
         ${Number(x.entrega_parcial||0)>0?`<button class="btn secondary small" onclick="openLawyerRequests('${x.solicitante.replace(/'/g,"\\'")}','ENTREGA PARCIAL')">Parcial (${Number(x.entrega_parcial||0)})</button>`:''}
         ${Number(x.entrega_total||0)>0?`<button class="btn secondary small" onclick="openLawyerRequests('${x.solicitante.replace(/'/g,"\\'")}','ENTREGA TOTAL')">Entrega total (${Number(x.entrega_total||0)})</button>`:''}
@@ -9314,7 +9228,7 @@ async function clearRequestWorkflowFilter(){
 function requestWorkflowAction(r){
   const st=r.estado_atencion||r.estado||'';
   if(!hasFullAccess())return `<button class="btn secondary small" onclick="openRequestDetail('${r.id}')">Ver solicitud</button>`;
-  if(st==='REGISTRADA')return `<button class="btn small" onclick="openRequestDetail('${r.id}')">Revisar / aceptar</button>`;
+  if(st==='REGISTRADA')return `<button class="btn small" onclick="openRequestDetail('${r.id}')">Gestionar</button>`;
   if(st==='REGISTRADA POR ARCHIVO')return `<button class="btn small" onclick="openEditRequest('${r.id}')">Atender solicitud</button>`;
   if(st==='CARGO PENDIENTE DE ENTREGA')return `<button class="btn small" onclick="openRequestDetail('${r.id}')">Regularizar cargo</button>`;
   if(st==='ENTREGA PARCIAL')return `<button class="btn small" onclick="openEditRequest('${r.id}')">Continuar atención</button>`;
@@ -9559,8 +9473,8 @@ function renderRequests(){
       <th>Cargo</th>
       <th>Atiende el requerimiento</th>
       <th>F. solicitud</th>
-      <th>F. aceptación Archivo</th>
-      <th>Hora aceptación</th>
+      <th>F. ingreso a atención</th>
+      <th>Hora ingreso</th>
       <th>F. entrega préstamo</th>
       <th></th>
     </tr></thead>
@@ -9590,6 +9504,12 @@ function renderRequests(){
 }
 
 
+
+async function markPendingVerificationDone(rowIndex){
+  // Función conservada solo por compatibilidad con versiones antiguas.
+  showToast('La verificación separada fue eliminada. El expediente ya debe estar en PENDIENTE POR ATENDER.');
+  await loadStates();
+}
 
 async function openPendingManageRequest(rowIndex){
   const row=pendingVerifyRows?.[Number(rowIndex)];
@@ -9831,59 +9751,6 @@ async function openEditRequest(id){
   }
 }
 
-
-async function saveAndAcceptFromEdit(){
-  if(!hasFullAccess())return;
-
-  const id=window.__editingRequestId;
-  if(!id)return;
-
-  const obs=(el('rqObservacion')?.value||'').trim();
-  const atiende=(el('rqPrepareAtiende')?.value||'').trim();
-  const status=el('rqSaveStatus');
-  const btn=el('rqAcceptFromEditBtn');
-
-  if(!atiende){
-    if(status)status.textContent='Seleccione quién atenderá el requerimiento antes de aceptar la solicitud.';
-    el('rqPrepareAtiende')?.focus();
-    return;
-  }
-
-  btn.disabled=true;
-  btn.textContent='Guardando y aceptando...';
-
-  try{
-    const saved=await saveCurrentEditSilently();
-    if(!saved)return;
-
-    const acceptedBy=currentProfile?.nombre_personal||currentProfile?.email||session?.user?.email||'ARCHIVO';
-    const {data,error}=await sb.rpc(
-      'aceptar_solicitud_sin_cargo',
-      {
-        p_solicitud_id:id,
-        p_atiende:atiende,
-        p_observacion:obs||null
-      }
-    );
-
-    if(error)throw error;
-
-    closeNewRequestModal();
-
-    await loadRequests();
-    if(hasFullAccess())await loadRequestsByLawyer();
-
-    showToast(`Solicitud aceptada por ${data?.aceptado_por||acceptedBy} · atención asignada a ${data?.atiende||atiende}`);
-
-    await openEditRequest(id);
-
-  }catch(err){
-    if(status)status.textContent=err?.message||String(err);
-  }finally{
-    btn.disabled=false;
-    btn.textContent='Guardar y aceptar solicitud';
-  }
-}
 
 async function saveAndPrintCargoFromEdit(){
   if(!hasFullAccess())return;
@@ -10176,7 +10043,6 @@ function requestItemCanAdminClose(x){
   return [
     'SOLICITADO',
     'ACEPTADO',
-    'PENDIENTE DE VERIFICACIÓN',
     'PENDIENTE POR ATENDER'
   ].includes(state);
 }
@@ -10742,8 +10608,7 @@ function renderRequestActions(){
     if(el('rqDAtiende'))el('rqDAtiende').disabled=false;
     actions=`
       <button class="btn secondary" onclick="openAddItemsToExistingRequest()">+ Agregar expedientes</button>
-      <button class="btn" onclick="acceptRequestWithoutCargo()">Aceptar y asignar atención</button>
-      <span class="note">Antes de aceptar seleccione quién atenderá el requerimiento. El sistema guardará por separado quién aceptó y quién quedó asignado. NO genera cargo y NO cambia la ubicación física.</span>`;
+      <span class="note"><b>Ingreso automático a atención.</b> Esta solicitud no requiere aceptación manual de Archivo. Los expedientes disponibles pasan directamente a PENDIENTE POR ATENDER.</span>`;
   }
 
   const hasPendingAccepted=requestDetailRows.some(x=>x.estado_item==='ACEPTADO');
@@ -10798,141 +10663,7 @@ function renderRequestActions(){
 
   el('rqWorkflowActions').innerHTML=actions||'<span class="note">Sin acciones pendientes.</span>';
 }
-function pendingRegisterUniqueRequests(){
-  const map=new Map();
-  (pendingRegisterRows||[]).forEach(r=>{
-    const id=String(r.solicitud_id||'').trim();
-    if(!id)return;
-    if(!map.has(id))map.set(id,{id,numero:r.solicitud_numero||'—',solicitante:r.solicitante||'—',expedientes:0});
-    map.get(id).expedientes++;
-  });
-  return [...map.values()];
-}
-
-function updatePendingRegisterBulkUI(){
-  const visible=hasFullAccess() && selectedState==='PENDIENTES POR REGISTRAR';
-  const count=pendingRegisterSelectedRequestIds.size;
-  const countEl=el('pendingRegisterSelectedCount');
-  const btn=el('bulkAcceptRequestsBtn');
-  if(countEl){
-    countEl.classList.toggle('hidden',!visible);
-    countEl.textContent=`${count} solicitud${count===1?'':'es'} seleccionada${count===1?'':'s'}`;
-  }
-  if(btn){
-    btn.classList.toggle('hidden',!visible);
-    btn.disabled=!visible||count===0;
-  }
-  document.querySelectorAll('.pending-register-request-check').forEach(ch=>{
-    const id=String(ch.dataset.requestId||'');
-    ch.checked=!!id&&pendingRegisterSelectedRequestIds.has(id);
-  });
-  const all=el('pendingRegisterSelectAll');
-  if(all){
-    const ids=pendingRegisterUniqueRequests().map(x=>x.id);
-    const selected=ids.filter(id=>pendingRegisterSelectedRequestIds.has(id)).length;
-    all.checked=ids.length>0&&selected===ids.length;
-    all.indeterminate=selected>0&&selected<ids.length;
-  }
-}
-
-function togglePendingRegisterRequest(requestId,checked){
-  const id=String(requestId||'').trim();
-  if(!id)return;
-  if(checked)pendingRegisterSelectedRequestIds.add(id);
-  else pendingRegisterSelectedRequestIds.delete(id);
-  updatePendingRegisterBulkUI();
-}
-
-function toggleAllPendingRegisterRequests(checked){
-  pendingRegisterSelectedRequestIds.clear();
-  if(checked)pendingRegisterUniqueRequests().forEach(x=>pendingRegisterSelectedRequestIds.add(x.id));
-  updatePendingRegisterBulkUI();
-}
-
-function openBulkAcceptRequestsModal(){
-  if(!hasFullAccess())return;
-  const selected=pendingRegisterUniqueRequests().filter(x=>pendingRegisterSelectedRequestIds.has(x.id));
-  if(!selected.length)return;
-  fillArchiveStaffSelect('bulkAcceptAtiende');
-  el('bulkAcceptObs').value='';
-  el('bulkAcceptStatus').textContent='';
-  el('bulkAcceptSubmitBtn').disabled=false;
-  const totalExp=selected.reduce((a,x)=>a+Number(x.expedientes||0),0);
-  el('bulkAcceptRequestList').innerHTML=`<b>${selected.length}</b> solicitud${selected.length===1?'':'es'} · <b>${totalExp}</b> expediente${totalExp===1?'':'s'}<br>`+
-    selected.map(x=>`${esc(x.numero)} · ${esc(x.solicitante)} (${x.expedientes})`).join('<br>');
-  el('bulkAcceptRequestsModal').classList.add('show');
-}
-
-function closeBulkAcceptRequestsModal(){
-  el('bulkAcceptRequestsModal')?.classList.remove('show');
-}
-
-async function submitBulkAcceptRequests(){
-  if(!hasFullAccess())return;
-  const ids=[...pendingRegisterSelectedRequestIds];
-  const atiende=(el('bulkAcceptAtiende')?.value||'').trim();
-  const obs=(el('bulkAcceptObs')?.value||'').trim();
-  const status=el('bulkAcceptStatus');
-  const btn=el('bulkAcceptSubmitBtn');
-  if(!ids.length){status.textContent='Seleccione al menos una solicitud.';return;}
-  if(!atiende){status.textContent='Seleccione quién atenderá el requerimiento.';el('bulkAcceptAtiende')?.focus();return;}
-  btn.disabled=true;
-  const ok=[],failed=[];
-  for(let i=0;i<ids.length;i++){
-    status.textContent=`Aceptando ${i+1} de ${ids.length}...`;
-    const {data,error}=await sb.rpc('aceptar_solicitud_sin_cargo',{
-      p_solicitud_id:ids[i],p_atiende:atiende,p_observacion:obs||null
-    });
-    if(error)failed.push({id:ids[i],error:error.message}); else ok.push({id:ids[i],data});
-  }
-  if(failed.length)showToast(`${ok.length} aceptada(s) · ${failed.length} con error`);
-  else showToast(`${ok.length} solicitud${ok.length===1?'':'es'} aceptada${ok.length===1?'':'s'}`);
-  pendingRegisterSelectedRequestIds.clear();
-  await Promise.all([loadSummary(),loadPanel(),loadAll(),loadStates(),loadRequests(),loadRequestsByLawyer(),loadCargos(),loadHistory()]);
-  closeBulkAcceptRequestsModal();
-  await loadStateDetail('PENDIENTES POR REGISTRAR');
-  if(failed.length)alert(`No se pudieron aceptar ${failed.length} solicitud(es). Primer error: ${failed[0].error}`);
-}
-
-async function acceptRequestWithoutCargo(){
-  const obs=el('rqDObservacion').value.trim();
-  const atiende=(el('rqDAtiende')?.value||'').trim();
-
-  if(!hasFullAccess()){
-    el('rqActionStatus').textContent='Solo Archivo o Administrador puede aceptar solicitudes.';
-    return;
-  }
-
-  if(!atiende){
-    el('rqActionStatus').textContent='Seleccione quién atenderá el requerimiento antes de aceptar.';
-    el('rqDAtiende')?.focus();
-    return;
-  }
-
-  el('rqActionStatus').textContent='Aceptando y asignando solicitud...';
-
-  const acceptedBy=currentProfile?.nombre_personal||currentProfile?.email||session?.user?.email||'ARCHIVO';
-
-  const {data,error}=await sb.rpc('aceptar_solicitud_sin_cargo',{
-    p_solicitud_id:currentRequestId,
-    p_atiende:atiende,
-    p_observacion:obs||null
-  });
-
-  if(error){
-    el('rqActionStatus').textContent=error.message;
-    return;
-  }
-
-  showToast(`Solicitud aceptada por ${data?.aceptado_por||acceptedBy} · atención asignada a ${data?.atiende||atiende}`);
-
-  await Promise.all([
-    loadSummary(),loadPanel(),loadAll(),loadStates(),loadRequests(),
-    loadRequestsByLawyer(),loadCargos(),loadHistory()
-  ]);
-
-  await refreshRequestDetail();
-}
+// Aceptación manual eliminada: las solicitudes ingresan automáticamente a atención.
 
 function selectedAcceptedIds(){
   const ids=[...requestSelectedIds];
@@ -11065,16 +10796,13 @@ async function assignExistingCargoToAccepted(){
   await refreshRequestDetail();
 }
 
-// Compatibilidad con versiones anteriores del frontend:
-// "Verificar y atender" ahora SOLO acepta la solicitud; no genera cargo.
+// Compatibilidad visual con llamadas antiguas: ya no existe aceptación manual.
 async function verifyAndAttendRequest(){
-  return acceptRequestWithoutCargo();
+  if(el('rqActionStatus'))el('rqActionStatus').textContent='La solicitud ya ingresa automáticamente a PENDIENTE POR ATENDER.';
 }
-async function attendRequest(){
-  return acceptRequestWithoutCargo();
-}
+async function attendRequest(){ return verifyAndAttendRequest(); }
 async function deliverRequest(){
-  el('rqActionStatus').textContent='Primero acepte la solicitud y luego asigne un cargo nuevo o existente.';
+  if(el('rqActionStatus'))el('rqActionStatus').textContent='Seleccione los expedientes pendientes y genere el cargo.';
 }
 
 async function userReassignSelectedItems(){
@@ -11359,7 +11087,7 @@ async function confirmReturnItems(){
     ?'Solicitud cerrada: todos los expedientes fueron recibidos'
     :`${data?.devueltos||ids.length} expediente(s) recibidos por Archivo`);
 
-  if(isAdmin()){
+  if(hasFullAccess()){
     await loadReturnRequests();
   }
 
@@ -11384,7 +11112,6 @@ function masterStateOptions(){
   return [
     'CUSTODIA',
     'EN PRÉSTAMO',
-    'REASIGNADO',
     'DEVOLUCIÓN SOLICITADA',
     'DEVUELTO AL ARCHIVO',
     'PENDIENTE DE VERIFICACIÓN',
@@ -11540,16 +11267,19 @@ async function clearMasterFilters(){
 }
 
 function masterNormalizeRow(r){
+  const rawState=norm(r.estado_operativo||r.estado||'');
+  const normalizedState=rawState==='REASIGNADO'?'EN PRÉSTAMO':(r.estado_operativo||r.estado);
   return {
     ...r,
-    estado:r.estado_operativo||r.estado,
+    estado:normalizedState,
+    estado_operativo:normalizedState,
     responsable:r.responsable_operativo||r.responsable
   };
 }
 
 function masterRowIsPendingAttention(r){
   const state=norm(r?.estado_operativo||r?.estado||'');
-  return ['PENDIENTE DE VERIFICACIÓN','PENDIENTE POR ATENDER','ACEPTADO'].includes(state);
+  return ['PENDIENTE POR ATENDER','ACEPTADO'].includes(state);
 }
 
 async function enrichMasterPendingRequestData(rows){
@@ -12598,10 +12328,8 @@ function operationalStatus(r){
     return 'DEVOLUCIÓN SOLICITADA';
   }
 
-  // El expediente cambió de responsable.
-  if(action.includes('REASIGNACIÓN')){
-    return 'REASIGNADO';
-  }
+  // REASIGNACIÓN es un movimiento de custodia, no un estado físico.
+  // Después de reasignar, el expediente continúa EN PRÉSTAMO con otro responsable.
 
   // El cargo ya registró el préstamo al abogado.
   if(action.includes('EN PRÉSTAMO') ||
@@ -13624,7 +13352,7 @@ async function importCSV(ev){
 
 
 /* ===== ACTUALIZACIÓN AUTOMÁTICA DE VERSIÓN ===== */
-const APP_VERSION='20260828-1018-cierre-administrativo';
+const APP_VERSION='20260828-1505-flujo-unico-pendiente-atender';
 let __versionCheckRunning=false;
 
 async function checkForNewAppVersion(){
