@@ -9,7 +9,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="app-version" content="20260829-1138-exportar-tarjetas-estados">
+<meta name="app-version" content="20260829-1130-select-deselect-returned">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -1400,6 +1400,7 @@
 <!-- TARJETAS SOLICITUDES COMPACTAS -->
 <!-- CORRECCIÓN ESTADOS SIN TARJETAS SUPERIORES -->
 <!-- REGISTRO MAESTRO V5: PENDIENTE POR ATENDER INTEGRADO -->
+<!-- SELECCION Y DESELECCION DEVUELTOS -->
 </head>
 <body>
 <!-- Confirmaciones nativas del navegador eliminadas: las acciones se ejecutan directamente; se conservan validaciones y errores. -->
@@ -6947,14 +6948,15 @@ function renderReturnedArchiveDetail(){
   if(!hasFullAccess())return;
   const rows=returnedArchiveFilteredRows();
   const searchInfo=normalizeReturnedExpediente(el('returnedArchiveSearch')?.value||'');
-  // Si la búsqueda identifica un único expediente, dejarlo seleccionado automáticamente.
-  // Se prioriza el expediente completo (número + año); si solo se escribió el número,
-  // también se selecciona cuando existe una única coincidencia visible.
-  if(searchInfo.numero && rows.length===1){
+  // La autoselección ocurre solo al terminar una búsqueda.
+  // Una vez seleccionado, el usuario puede desmarcarlo manualmente sin que
+  // el sistema lo vuelva a marcar en cada renderización.
+  if(window.__returnedArchiveAutoSelect && searchInfo.numero && rows.length===1){
     const only=rows[0];
     const selectable=!only.listado_numero && ['SAN LUIS','BARRENECHEA'].includes(only.destino_archivo);
     if(selectable)returnedArchiveSelectedIds.add(only.id);
   }
+  window.__returnedArchiveAutoSelect=false;
   const totalSan=(returnedArchiveRows||[]).filter(r=>r.destino_archivo==='SAN LUIS').length;
   const totalBar=(returnedArchiveRows||[]).filter(r=>r.destino_archivo==='BARRENECHEA').length;
   const totalSin=(returnedArchiveRows||[]).filter(r=>!r.listado_numero).length;
@@ -7032,6 +7034,8 @@ function renderReturnedArchiveDetail(){
         </select>
       </div>
       <div class="returned-list-actions">
+        <button class="btn secondary" type="button" onclick="selectVisibleReturnedArchive()">Seleccionar visibles</button>
+        <button class="btn secondary" type="button" onclick="deselectVisibleReturnedArchive()">Deseleccionar visibles</button>
         <button class="btn secondary" type="button" onclick="openArchiveListsModal()">Ver listados</button>
         <button class="btn" id="addReturnedToListsBtn" type="button" onclick="addSelectedReturnedToLists()" ${selected.length?'':'disabled'}>
           + Agregar seleccionados al listado
@@ -7054,6 +7058,14 @@ function renderReturnedArchiveDetail(){
     if(el('returnedArchiveListStatus'))el('returnedArchiveListStatus').value=s.status||'';
     window.__returnedFilterState=null;
   }
+  const selectableVisible=rows.filter(r=>!r.listado_numero && ['SAN LUIS','BARRENECHEA'].includes(r.destino_archivo));
+  const selectAllBox=el('returnedArchiveSelectAll');
+  if(selectAllBox){
+    const selectedVisible=selectableVisible.filter(r=>returnedArchiveSelectedIds.has(r.id)).length;
+    selectAllBox.checked=selectableVisible.length>0 && selectedVisible===selectableVisible.length;
+    selectAllBox.indeterminate=selectedVisible>0 && selectedVisible<selectableVisible.length;
+  }
+
   if(window.__returnedRefocusSearch){
     window.__returnedRefocusSearch=false;
     const searchInput=el('returnedArchiveSearch');
@@ -7089,6 +7101,7 @@ function scheduleReturnedArchiveSearch(input){
   __returnedArchiveSearchTimer=setTimeout(()=>{
     window.__returnedFilterState={search:searchValue,destino,status};
     window.__returnedRefocusSearch=true;
+    window.__returnedArchiveAutoSelect=true;
     renderReturnedArchiveDetail();
   },350);
 }
@@ -7105,6 +7118,23 @@ function toggleAllReturnedArchive(checked){
       if(checked)returnedArchiveSelectedIds.add(r.id);else returnedArchiveSelectedIds.delete(r.id);
     }
   });
+  rememberReturnedArchiveFilters();
+  renderReturnedArchiveDetail();
+}
+
+function selectVisibleReturnedArchive(){
+  returnedArchiveFilteredRows().forEach(r=>{
+    if(!r.listado_numero && ['SAN LUIS','BARRENECHEA'].includes(r.destino_archivo)){
+      returnedArchiveSelectedIds.add(r.id);
+    }
+  });
+  rememberReturnedArchiveFilters();
+  renderReturnedArchiveDetail();
+}
+
+function deselectVisibleReturnedArchive(){
+  returnedArchiveFilteredRows().forEach(r=>returnedArchiveSelectedIds.delete(r.id));
+  window.__returnedArchiveAutoSelect=false;
   rememberReturnedArchiveFilters();
   renderReturnedArchiveDetail();
 }
@@ -13714,7 +13744,7 @@ async function importCSV(ev){
 
 
 /* ===== ACTUALIZACIÓN AUTOMÁTICA DE VERSIÓN ===== */
-const APP_VERSION='20260829-1138-exportar-tarjetas-estados';
+const APP_VERSION='20260829-1130-select-deselect-returned';
 let __versionCheckRunning=false;
 
 async function checkForNewAppVersion(){
