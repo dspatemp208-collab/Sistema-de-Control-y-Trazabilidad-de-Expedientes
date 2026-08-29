@@ -9,7 +9,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="app-version" content="20260829-1430-seleccion-fila-click">
+<meta name="app-version" content="20260829-1438-compacto-seleccion-global">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -1505,6 +1505,56 @@
   #tab-states .state-grid{grid-template-columns:1fr}
 }
 
+
+/* =========================================================
+   MÁS ESPACIO PARA LISTADOS + SELECCIÓN VISUAL EN FILAS
+   ========================================================= */
+/* Compactar la zona superior de los módulos sin reducir la legibilidad. */
+.module-sticky-piece.filters{
+  padding:9px 10px!important;
+  margin-bottom:7px!important;
+  gap:8px!important;
+}
+.module-sticky-piece.filters .field label{font-size:10px;margin-bottom:3px}
+.module-sticky-piece.filters .field input,
+.module-sticky-piece.filters .field select{padding:7px 9px}
+
+/* Estados: buscador y tarjetas más bajos para dejar más tabla visible. */
+#tab-states > .filters{
+  padding:8px 10px!important;
+  margin-bottom:6px!important;
+  gap:8px!important;
+}
+#tab-states > .filters .note{padding:7px 9px;font-size:10px;line-height:1.25}
+#tab-states > .filters .btn{padding:7px 10px}
+#tab-states .state-grid{
+  grid-template-columns:repeat(auto-fill,minmax(190px,1fr));
+  gap:6px;
+  margin-bottom:6px!important;
+}
+#tab-states .state-card{padding:8px 10px 7px;border-radius:10px}
+#tab-states .state-card .state-name{font-size:10.5px;min-height:18px;line-height:1.15}
+#tab-states .state-card .state-count{font-size:17px;margin-top:2px;line-height:1}
+#tab-states .state-card .state-meta{font-size:9px;margin-top:2px;line-height:1.15}
+#tab-states .state-progress{height:4px;margin-top:5px}
+#tab-states .state-card-actions{gap:5px;margin-top:5px}
+#tab-states .state-card .btn.small,
+#tab-states .state-card .btn.secondary.small{padding:5px 8px;font-size:10px}
+#tab-states .table-wrap{margin-top:6px}
+
+/* Solicitudes y cargos: reducir altura de resúmenes para priorizar filas. */
+#tab-requests .workflow-intro{padding:8px 10px;margin-bottom:7px}
+#tab-requests .request-workflow-kpis{gap:7px;margin-bottom:7px}
+#tab-requests .request-workflow-kpis .kpi{min-height:70px;padding:8px 10px}
+#tab-cargos .workflow-intro{padding:8px 10px;margin-bottom:7px}
+#tab-cargos .cargo-kpis{gap:7px;margin-bottom:7px}
+#tab-cargos .cargo-kpis .kpi{min-height:76px;padding:8px 10px}
+#tab-cargos .cargo-kpis .kpi .value{font-size:20px;margin-top:2px}
+
+/* Cualquier fila operativamente seleccionable usa el mismo lenguaje visual. */
+.row-click-select{cursor:pointer}
+.row-click-select:hover td{background:#f1f6fc}
+.row-click-select.record-selected-row:hover td{background:#cfe2ff!important}
 
 /* DEVUELTOS AL ARCHIVO: controles + cabecera fijos; solo se desplazan las filas */
 #tab-states .table-wrap.returned-archive-fixed-layout{
@@ -7103,10 +7153,12 @@ function renderGlobalLoanRows(){
 
   el('stateDetailTable').innerHTML=`<div class="state-loan-table-scroll"><table>
     <thead><tr>
+      <th><input type="checkbox" aria-label="Seleccionar visibles" onchange="toggleVisibleStateRows(this.checked)"></th>
       <th>Expediente</th><th>R.D.</th><th>Último folio</th><th>Responsable actual</th><th>Área</th>
       <th>Situación operativa</th><th>Fecha entrega</th><th>Últ. reasignación</th><th>Cargo</th><th>Solicitud</th><th></th>
     </tr></thead>
-    <tbody>${rows.map(x=>`<tr>
+    <tbody>${rows.map(x=>`<tr class="row-click-select ${selectedIds.has(x.id)?'record-selected-row':''}" onclick="toggleSelectFromRow(event,'${x.id}')" title="Clic en la fila para seleccionar o deseleccionar">
+      <td><input type="checkbox" data-state-row-select="${x.id}" ${selectedIds.has(x.id)?'checked':''} onchange="toggleSelect('${x.id}',this.checked,this)"></td>
       <td><b>${esc(x.expediente||'—')}</b></td>
       <td>${esc(x.rd||'—')}</td>
       <td>${esc(x.ultimo_folio||'—')}</td>
@@ -7160,8 +7212,10 @@ async function loadStateDetail(estado){
     if(!rows.length){el('stateDetailTable').innerHTML='<div class="empty">No hay expedientes pendientes por atender.</div>';return;}
 
     el('stateDetailTable').innerHTML=`<table><thead><tr>
+      <th><input type="checkbox" aria-label="Seleccionar visibles" onchange="toggleVisibleStateRows(this.checked)"></th>
       <th>Expediente</th><th>Extensión</th><th>R.D.</th><th>Último folio</th><th>Solicitud</th><th>Solicitante</th><th>Estado</th><th>F. solicitud</th><th>Observación</th><th></th>
-    </tr></thead><tbody>${rows.map((x,i)=>`<tr>
+    </tr></thead><tbody>${rows.map((x,i)=>`<tr class="row-click-select ${selectedIds.has(x.expediente_id)?'record-selected-row':''}" onclick="toggleSelectFromRow(event,'${x.expediente_id}')" title="Clic en la fila para seleccionar o deseleccionar">
+      <td><input type="checkbox" data-state-row-select="${x.expediente_id}" ${selectedIds.has(x.expediente_id)?'checked':''} onchange="toggleSelect('${x.expediente_id}',this.checked,this)"></td>
       <td><b>${esc(x.expediente||'—')}</b></td><td>${esc(x.extension||'—')}</td><td>${esc(x.rd||'—')}</td><td>${esc(x.ultimo_folio||'—')}</td>
       <td><b>${esc(x.solicitud_numero||'—')}</b></td><td>${esc(x.solicitante||'—')}</td><td><span class="pill pending">PENDIENTE POR ATENDER</span></td>
       <td>${fmtDate(x.fecha_solicitud)}</td><td>${esc(x.observacion||'')}</td><td><div style="display:flex;gap:6px;white-space:nowrap">
@@ -7224,6 +7278,7 @@ async function loadStateDetail(estado){
     el('stateDetailTable').innerHTML=`<table>
       <thead>
         <tr>
+          <th><input type="checkbox" aria-label="Seleccionar visibles" onchange="toggleVisibleStateRows(this.checked)"></th>
           <th>Expediente</th>
           <th>Extensión</th>
           <th>R.D.</th>
@@ -7237,7 +7292,8 @@ async function loadStateDetail(estado){
         </tr>
       </thead>
       <tbody>
-        ${rows.map(x=>`<tr>
+        ${rows.map(x=>`<tr class="row-click-select ${selectedIds.has(x.id)?'record-selected-row':''}" onclick="toggleSelectFromRow(event,'${x.id}')" title="Clic en la fila para seleccionar o deseleccionar">
+          <td><input type="checkbox" data-state-row-select="${x.id}" ${selectedIds.has(x.id)?'checked':''} onchange="toggleSelect('${x.id}',this.checked,this)"></td>
           <td><b>${esc(x.expediente||'—')}</b></td>
           <td>${esc(x.extension||'—')}</td>
           <td>${esc(x.rd||'—')}</td>
@@ -7414,7 +7470,7 @@ function renderReturnedArchiveDetail(){
       const listPill=listed
         ?`<span class="list-status ${r.listado_estado==='GENERADO'?'generated':'prep'}">${esc(r.listado_numero)} · ${esc(r.listado_estado||'')}</span>`
         :'<span class="list-status unlisted">SIN LISTAR</span>';
-      return `<tr>
+      return `<tr class="${selectable?'row-click-select ':''}${checked?'record-selected-row':''}" ${selectable?`onclick="toggleReturnedArchiveFromRow(event,'${r.id}',true)" title="Clic en la fila para seleccionar o deseleccionar"`:''}>
         <td style="text-align:center"><input type="checkbox" ${checked?'checked':''} ${selectable?'':'disabled'}
           onchange="toggleReturnedArchive('${r.id}',this.checked)"></td>
         <td><b>${esc(r.expediente||'—')}</b></td>
@@ -9605,9 +9661,10 @@ function syncReturnRequestBulkUI(){
   }
 }
 
-function toggleReturnRequestSelection(key,checked){
+function toggleReturnRequestSelection(key,checked,checkbox){
   if(checked)returnRequestSelectedKeys.add(key);
   else returnRequestSelectedKeys.delete(key);
+  checkbox?.closest('tr')?.classList.toggle('record-selected-row',!!checked);
   syncReturnRequestBulkUI();
 }
 
@@ -9773,11 +9830,11 @@ function renderReturnRequests(){
         const days=returnBusinessDays(x.fecha_solicitud_devolucion);
         const key=returnRequestKey(x);
         const checked=returnRequestSelectedKeys.has(key)?'checked':'';
-        return `<tr>
+        return `<tr class="row-click-select ${returnRequestSelectedKeys.has(key)?'record-selected-row':''}" onclick="toggleReturnRequestFromRow(event,'${key}')" title="Clic en la fila para seleccionar o deseleccionar">
           <td style="text-align:center">
             <input type="checkbox" ${checked}
                    aria-label="Seleccionar ${esc(x.expediente||'expediente')}"
-                   onchange="toggleReturnRequestSelection('${key}',this.checked)">
+                   onchange="toggleReturnRequestSelection('${key}',this.checked,this)">
           </td>
           <td><b>${esc(x.expediente)}</b></td>
           <td>${esc(x.extension||'—')}</td>
@@ -10853,7 +10910,7 @@ function renderRequestDetailItems(){
     </tr></thead>
     <tbody>${data.map(x=>{
       const selectable=requestItemSelectable(x);
-      return `<tr>
+      return `<tr class="${selectable?'row-click-select ':''}${requestSelectedIds.has(x.expediente_id)?'record-selected-row':''}" ${selectable?`onclick="toggleRequestItemFromRow(event,'${x.expediente_id}',true)" title="Clic en la fila para seleccionar o deseleccionar"`:''}>
         <td><input type="checkbox" ${selectable?'':'disabled'}
           ${requestSelectedIds.has(x.expediente_id)?'checked':''}
           onchange="toggleRequestItem('${x.expediente_id}',this.checked)"></td>
@@ -12545,7 +12602,7 @@ function renderCargos(){
       ${visibleRows.map(c=>{
         const selected=c.numero===selectedCargoNumero;
 
-        return `<tr class="${selected?'cargo-selected-row':''}">
+        return `<tr class="row-click-select ${selected?'cargo-selected-row record-selected-row':''}" onclick="selectCargoFromRow(event,'${String(c.numero).replace(/'/g,"\'")}')" title="Clic en la fila para seleccionar este cargo">
           <td>
             <input
               type="radio"
@@ -12672,6 +12729,48 @@ function toggleSelectFromRow(event,id,disabled=false){
 
   updateSelectionUI();
 }
+function rowClickHasInteractiveTarget(event){
+  return !!event?.target?.closest('input,button,a,select,textarea,label');
+}
+
+function toggleVisibleStateRows(checked){
+  const boxes=[...document.querySelectorAll('#stateDetailTable input[data-state-row-select]:not(:disabled)')];
+  boxes.forEach(cb=>{
+    const id=cb.dataset.stateRowSelect;
+    if(!id)return;
+    cb.checked=!!checked;
+    if(checked)selectedIds.add(id);else selectedIds.delete(id);
+    cb.closest('tr')?.classList.toggle('record-selected-row',!!checked);
+  });
+  updateSelectionUI();
+}
+
+function toggleRequestItemFromRow(event,id,selectable=true){
+  if(!selectable || rowClickHasInteractiveTarget(event))return;
+  toggleRequestItem(id,!requestSelectedIds.has(id));
+}
+
+function toggleReturnedArchiveFromRow(event,id,selectable=true){
+  if(!selectable || rowClickHasInteractiveTarget(event))return;
+  toggleReturnedArchive(id,!returnedArchiveSelectedIds.has(id));
+}
+
+function toggleReturnRequestFromRow(event,key){
+  if(rowClickHasInteractiveTarget(event))return;
+  const checked=!returnRequestSelectedKeys.has(key);
+  if(checked)returnRequestSelectedKeys.add(key);else returnRequestSelectedKeys.delete(key);
+  const row=event?.currentTarget;
+  row?.classList.toggle('record-selected-row',checked);
+  const cb=row?.querySelector('input[type="checkbox"]:not(:disabled)');
+  if(cb)cb.checked=checked;
+  syncReturnRequestBulkUI();
+}
+
+function selectCargoFromRow(event,numero){
+  if(rowClickHasInteractiveTarget(event))return;
+  selectCargoForPrint(numero);
+}
+
 function toggleAllRows(checked,source){
   const rows=source==='all'?allRows:(source==='states'?stateDetailRows:panelRows);
   rows.filter(r=>!r._internal_reassign_requested)
@@ -14346,7 +14445,7 @@ function initUniversalModuleSticky(){
 
 
 /* ===== ACTUALIZACIÓN AUTOMÁTICA DE VERSIÓN ===== */
-const APP_VERSION='20260829-1430-seleccion-fila-click';
+const APP_VERSION='20260829-1438-compacto-seleccion-global';
 let __versionCheckRunning=false;
 
 async function checkForNewAppVersion(){
