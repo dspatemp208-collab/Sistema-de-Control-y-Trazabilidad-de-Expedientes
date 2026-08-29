@@ -9,7 +9,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="app-version" content="20260829-1228-maestro-prestamo-inmovilizados">
+<meta name="app-version" content="20260829-1235-tarjetas-usuario-mini">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -1226,32 +1226,48 @@
   min-width:0;
 }
 
-/* Tarjetas de Mis expedientes: 3 por fila en escritorio, no 6 miniaturas. */
+/* Tarjetas de Mis expedientes: mini, compactas y con la cantidad al costado. */
 .app.limited-user .user-personal-kpis{
-  grid-template-columns:repeat(3,minmax(220px,1fr));
-  gap:10px;
+  grid-template-columns:repeat(4,minmax(155px,1fr));
+  gap:7px;
   width:100%;
+  margin-bottom:8px;
 }
 .app.limited-user .user-personal-kpis .kpi{
-  min-height:105px;
-  padding:12px 14px;
-  display:flex;
-  flex-direction:column;
-  justify-content:space-between;
+  min-height:62px;
+  padding:8px 10px;
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  grid-template-areas:
+    "label value"
+    "action action";
+  align-items:start;
+  row-gap:4px;
+  column-gap:8px;
 }
 .app.limited-user .user-personal-kpis .kpi .label{
-  font-size:11px;
-  line-height:1.2;
+  grid-area:label;
+  font-size:10px;
+  line-height:1.15;
+  margin:0;
+  min-width:0;
 }
 .app.limited-user .user-personal-kpis .kpi .value{
-  font-size:24px;
-  margin-top:4px;
+  grid-area:value;
+  font-size:17px;
+  margin:0;
   line-height:1;
+  justify-self:end;
+  align-self:start;
+  white-space:nowrap;
 }
 .app.limited-user .user-personal-kpis .kpi-view{
-  margin-top:8px;
-  font-size:11px;
+  grid-area:action;
+  margin-top:0;
+  font-size:10px;
+  line-height:1.1;
   text-decoration:none;
+  justify-self:start;
 }
 
 /* Mis solicitudes también debe ocupar todo el ancho. */
@@ -1269,10 +1285,12 @@
   max-width:100%;
 }
 
-@media(max-width:1050px){
-  .app.limited-user .user-personal-kpis,
+@media(max-width:900px){
+  .app.limited-user .user-personal-kpis{
+    grid-template-columns:repeat(3,minmax(145px,1fr));
+  }
   .app.limited-user .user-request-kpis{
-    grid-template-columns:repeat(2,minmax(200px,1fr));
+    grid-template-columns:repeat(2,minmax(190px,1fr));
   }
 }
 @media(max-width:680px){
@@ -1280,13 +1298,25 @@
     padding-left:12px;
     padding-right:12px;
   }
-  .app.limited-user .user-personal-kpis,
+  .app.limited-user .user-personal-kpis{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+  }
   .app.limited-user .user-request-kpis{
     grid-template-columns:1fr;
+  }
+  .app.limited-user .user-personal-kpis .kpi{
+    min-height:58px;
+    padding:7px 9px;
+  }
+  .app.limited-user .user-personal-kpis .kpi .value{
+    font-size:16px;
   }
   .app.limited-user #tab-requests .filters{
     grid-template-columns:1fr;
   }
+}
+@media(max-width:430px){
+  .app.limited-user .user-personal-kpis{grid-template-columns:1fr}
 }
 
 
@@ -14094,7 +14124,7 @@ function initUniversalModuleSticky(){
 
 
 /* ===== ACTUALIZACIÓN AUTOMÁTICA DE VERSIÓN ===== */
-const APP_VERSION='20260829-1228-maestro-prestamo-inmovilizados';
+const APP_VERSION='20260829-1235-tarjetas-usuario-mini';
 let __versionCheckRunning=false;
 
 async function checkForNewAppVersion(){
