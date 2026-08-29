@@ -9,7 +9,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="app-version" content="20260829-1438-compacto-seleccion-global">
+<meta name="app-version" content="20260829-1537-estados-sin-buscador">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -2036,19 +2036,6 @@
 
 
   <section id="tab-states" class="hidden">
-    <div class="card filters">
-      <div class="field">
-        <label>Buscar estado</label>
-        <input id="stateSearch" placeholder="Ej.: EN PRÉSTAMO, DEVUELTOS AL ARCHIVO..." oninput="renderStates()">
-      </div>
-      <div class="note">
-        Los estados físicos se contabilizan una sola vez. Las bandejas de trabajo se muestran aparte para evitar duplicidades.
-      </div>
-      <div style="display:flex;align-items:flex-end">
-        <button class="btn secondary" onclick="clearStateSelection()">Ver todos</button>
-      </div>
-    </div>
-
     <div id="stateGrid" class="state-grid">
       <div class="empty">Cargando estados...</div>
     </div>
@@ -6945,7 +6932,7 @@ async function loadStates(){
 
 function renderStates(){
   if(!el('stateGrid'))return;
-  const q=norm(el('stateSearch')?.value||'');
+  const q='';
 
   const card=(x,meta)=>{
     const stateArg=x.estado.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
@@ -14315,7 +14302,7 @@ function moduleStickySpecs(){
     },
     {
       section:'tab-states',
-      pieces:['__statesFilters','stateGrid'],
+      pieces:['stateGrid'],
       tables:['__statesTable']
     },
     {
@@ -14349,7 +14336,6 @@ function moduleStickySpecs(){
 function resolveModuleStickyPseudoIds(){
   const states=el('tab-states');
   if(states){
-    const x=states.querySelector(':scope > .filters'); if(x)x.dataset.stickyAlias='__statesFilters';
     const t=states.querySelector(':scope > .table-wrap'); if(t)t.dataset.stickyAlias='__statesTable';
   }
   const requests=el('tab-requests');
@@ -14445,7 +14431,7 @@ function initUniversalModuleSticky(){
 
 
 /* ===== ACTUALIZACIÓN AUTOMÁTICA DE VERSIÓN ===== */
-const APP_VERSION='20260829-1438-compacto-seleccion-global';
+const APP_VERSION='20260829-1537-estados-sin-buscador';
 let __versionCheckRunning=false;
 
 async function checkForNewAppVersion(){
