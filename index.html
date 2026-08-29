@@ -9,7 +9,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="app-version" content="20260829-1323-pendientes-ver-expedientes">
+<meta name="app-version" content="20260829-1424-filtro-estados-registro-maestro">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -726,7 +726,20 @@
 .master-multi-panel{
   position:absolute;left:0;right:0;top:calc(100% + 5px);z-index:45;
   padding:9px;border:1px solid var(--line);border-radius:9px;background:#fff;
-  box-shadow:0 12px 30px rgba(15,23,42,.16);max-height:320px;overflow:auto
+  box-shadow:0 12px 30px rgba(15,23,42,.16);max-height:230px;overflow:auto
+}
+/* Registro maestro: al abrir el selector múltiple se reserva su espacio.
+   Así el desplegable no se superpone al título ni a las filas de la tabla. */
+#allAdvancedFilters.state-panel-open{
+  padding-bottom:240px;
+}
+@media(max-height:760px){
+  .master-multi-panel{max-height:185px}
+  #allAdvancedFilters.state-panel-open{padding-bottom:195px}
+}
+@media(max-width:700px){
+  #allAdvancedFilters.state-panel-open{padding-bottom:220px}
+  .master-multi-panel{max-height:210px}
 }
 .master-multi-tools{display:flex;gap:6px;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--line)}
 .master-state-check{display:flex;align-items:center;gap:8px;padding:6px 4px;font-size:11px;cursor:pointer}
@@ -11878,11 +11891,23 @@ function updateMasterStateFilterText(){
 function toggleMasterStatePanel(ev){
   if(ev)ev.stopPropagation();
   renderMasterStateFilter();
-  el('allStateMultiPanel')?.classList.toggle('hidden');
+  const panel=el('allStateMultiPanel');
+  const advanced=el('allAdvancedFilters');
+  if(!panel)return;
+  const opening=panel.classList.contains('hidden');
+  panel.classList.toggle('hidden',!opening);
+  advanced?.classList.toggle('state-panel-open',opening);
+  requestAnimationFrame(()=>{
+    try{ syncStickyLayout(); }catch(_e){}
+  });
 }
 
 function closeMasterStatePanel(){
   el('allStateMultiPanel')?.classList.add('hidden');
+  el('allAdvancedFilters')?.classList.remove('state-panel-open');
+  requestAnimationFrame(()=>{
+    try{ syncStickyLayout(); }catch(_e){}
+  });
 }
 
 function changeMasterStateCheckbox(input){
@@ -14266,7 +14291,7 @@ function initUniversalModuleSticky(){
 
 
 /* ===== ACTUALIZACIÓN AUTOMÁTICA DE VERSIÓN ===== */
-const APP_VERSION='20260829-1323-pendientes-ver-expedientes';
+const APP_VERSION='20260829-1424-filtro-estados-registro-maestro';
 let __versionCheckRunning=false;
 
 async function checkForNewAppVersion(){
