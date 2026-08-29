@@ -9,7 +9,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="app-version" content="20260829-1008-estados-simplificados">
+<meta name="app-version" content="20260829-1015-registro-maestro-fijo">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -1339,6 +1339,58 @@
 .archive-list-panel-head{position:sticky;top:0;background:#fff;padding:10px;border-bottom:1px solid #e2e8f0;z-index:1}
 @media(max-width:900px){.archive-list-modal-grid{grid-template-columns:1fr}.archive-list-panel{max-height:none}}
 /* ===== FIN LISTADOS DE EXPEDIENTES DEVUELTOS ===== */
+
+
+/* ===== REGISTRO MAESTRO: CABECERA DE BÚSQUEDA FIJA ===== */
+#tab-all{
+  position:relative;
+}
+#tab-all > .card:first-child{
+  position:sticky;
+  top:0;
+  z-index:28;
+  margin-bottom:10px !important;
+  background:var(--block);
+  box-shadow:0 6px 16px rgba(23,54,93,.10);
+}
+#tab-all > .table-wrap{
+  max-height:calc(100vh - 250px);
+  overflow:auto;
+}
+#tab-all > .table-wrap .table-head{
+  position:sticky;
+  top:0;
+  z-index:24;
+  background:var(--block);
+}
+@media(max-height:700px){
+  #tab-all > .table-wrap{max-height:52vh}
+}
+/* ===== FIN REGISTRO MAESTRO FIJO ===== */
+
+
+/* Compactar tarjetas en pestaña Estados */
+#tab-states .states-kpis{grid-template-columns:repeat(3,minmax(180px,1fr));gap:8px;margin-bottom:10px}
+#tab-states .states-kpis .kpi{padding:10px 12px;min-height:92px}
+#tab-states .states-kpis .kpi .label{font-size:10px;line-height:1.2}
+#tab-states .states-kpis .kpi .value{font-size:20px;margin-top:2px;line-height:1.05}
+#tab-states .states-kpis .kpi .note{font-size:11px;margin-top:4px}
+#tab-states .state-grid{grid-template-columns:repeat(auto-fill,minmax(205px,1fr));gap:8px;margin-bottom:10px}
+#tab-states .state-card{padding:12px 12px 10px;border-radius:12px}
+#tab-states .state-card .state-name{font-size:11px;min-height:22px;line-height:1.2}
+#tab-states .state-card .state-count{font-size:18px;margin-top:3px;line-height:1.05}
+#tab-states .state-card .state-meta{font-size:10px;margin-top:3px;line-height:1.25}
+#tab-states .state-progress{height:5px;margin-top:7px}
+#tab-states .state-card .btn.small,
+#tab-states .state-card .btn.secondary.small{padding:6px 10px;font-size:11px}
+#tab-states .table-wrap{margin-top:10px}
+@media(max-width:900px){
+  #tab-states .states-kpis{grid-template-columns:1fr}
+  #tab-states .state-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:600px){
+  #tab-states .state-grid{grid-template-columns:1fr}
+}
 
 </style>
 <!-- ESTADO REASIGNADO ACTIVO -->
@@ -13508,7 +13560,7 @@ async function importCSV(ev){
 
 
 /* ===== ACTUALIZACIÓN AUTOMÁTICA DE VERSIÓN ===== */
-const APP_VERSION='20260829-1008-estados-simplificados';
+const APP_VERSION='20260829-1015-registro-maestro-fijo';
 let __versionCheckRunning=false;
 
 async function checkForNewAppVersion(){
