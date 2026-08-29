@@ -9,7 +9,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="app-version" content="20260829-1125-solicitante-registro-maestro">
+<meta name="app-version" content="20260829-1138-registro-maestro-reasignado-solicitante-verificar">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -11306,9 +11306,10 @@ function masterStateOptions(){
   return [
     'CUSTODIA',
     'EN PRÉSTAMO',
+    'REASIGNADO',
     'DEVOLUCIÓN SOLICITADA',
     'DEVUELTO AL ARCHIVO',
-    'PENDIENTE DE VERIFICACIÓN',
+    'PENDIENTE POR ATENDER',
     'EN TRÁMITE'
   ];
 }
@@ -11461,8 +11462,7 @@ async function clearMasterFilters(){
 }
 
 function masterNormalizeRow(r){
-  const rawState=norm(r.estado_operativo||r.estado||'');
-  const normalizedState=rawState==='REASIGNADO'?'EN PRÉSTAMO':(r.estado_operativo||r.estado);
+  const normalizedState=r.estado_operativo||r.estado||'';
   return {
     ...r,
     estado:normalizedState,
@@ -11471,18 +11471,34 @@ function masterNormalizeRow(r){
   };
 }
 
+function masterApplyLatestOperationalState(rows){
+  return (rows||[]).map(r=>{
+    const state=operationalStatus(r)||r.estado_operativo||r.estado||'';
+    return {...r,estado:state,estado_operativo:state};
+  });
+}
+
+function masterShowRequester(r){
+  // El nombre del solicitante solo se muestra cuando el expediente
+  // todavía tiene la ubicación/responsable POR VERIFICAR.
+  return norm(r?.responsable||'').includes('POR VERIFICAR');
+}
+
 function masterRowIsPendingAttention(r){
   const state=norm(r?.estado_operativo||r?.estado||'');
   return ['PENDIENTE POR ATENDER','ACEPTADO'].includes(state);
 }
 
 async function enrichMasterPendingRequestData(rows){
-  // En Registro Maestro debe mostrarse el solicitante de la ÚLTIMA solicitud
-  // asociada al expediente, sin importar su estado actual.
+  // En Registro Maestro el solicitante se muestra únicamente cuando
+  // el expediente está POR VERIFICAR. En los demás estados no se mezcla
+  // el solicitante histórico con el responsable actual.
   if(!Array.isArray(rows)||!rows.length||!sb||!session)return rows||[];
 
   const expedienteIds=[...new Set(
-    rows.map(r=>String(r.id||r.expediente_id||'')).filter(Boolean)
+    rows.filter(masterShowRequester)
+      .map(r=>String(r.id||r.expediente_id||''))
+      .filter(Boolean)
   )];
   if(!expedienteIds.length)return rows;
 
@@ -11526,6 +11542,16 @@ async function enrichMasterPendingRequestData(rows){
     });
 
     return rows.map(r=>{
+      if(!masterShowRequester(r)){
+        return {
+          ...r,
+          solicitante_pendiente:'',
+          solicitud_pendiente_numero:'',
+          solicitud_pendiente_fecha:'',
+          solicitud_pendiente_id:''
+        };
+      }
+
       const id=String(r.id||r.expediente_id||'');
       const req=latestByExp.get(id);
       if(!req)return r;
@@ -11619,7 +11645,10 @@ async function loadAll(){
   updateMasterMonthDayOptions(result.resumen_meses||[],result.resumen_dias||[]);
   renderMasterDateSummary(result.resumen_meses||[],result.resumen_dias||[]);
 
-  allRows=await enrichMasterPendingRequestData(rows.map(masterNormalizeRow));
+  let masterRows=rows.map(masterNormalizeRow);
+  masterRows=await attachLatestMovementToRecords(masterRows);
+  masterRows=masterApplyLatestOperationalState(masterRows);
+  allRows=await enrichMasterPendingRequestData(masterRows);
   allCountValue=Number(result.total_encontrados||0);
   allTotalGeneral=Number(result.total_general||0);
 
@@ -11685,7 +11714,10 @@ async function fetchMasterFilteredRows(){
     const result=data||{};
     const rows=Array.isArray(result.rows)?result.rows:[];
 
-    const normalized=await enrichMasterPendingRequestData(rows.map(masterNormalizeRow));
+    let normalized=rows.map(masterNormalizeRow);
+    normalized=await attachLatestMovementToRecords(normalized);
+    normalized=masterApplyLatestOperationalState(normalized);
+    normalized=await enrichMasterPendingRequestData(normalized);
     all.push(...normalized);
 
     if(rows.length<BATCH)break;
@@ -12613,11 +12645,11 @@ function recordTable(data,withOwner=false,source='panel'){
       :''}
 
     <td>${rowStatus(r)}</td>
-    ${source==='all'?`<td>${r.solicitante_pendiente
+    ${source==='all'?`<td>${masterShowRequester(r) && r.solicitante_pendiente
       ?`<b>${esc(r.solicitante_pendiente)}</b>${r.solicitud_pendiente_numero
         ?`<div style="font-size:10px;color:var(--muted);margin-top:3px">${esc(r.solicitud_pendiente_numero)}</div>`
         :''}`
-      :'—'}</td><td>${r.solicitud_pendiente_fecha?fmtDate(r.solicitud_pendiente_fecha):'—'}</td>`:''}
+      :'—'}</td><td>${r.fecha_solicitud?fmtDate(r.fecha_solicitud):(r.solicitud_pendiente_fecha?fmtDate(r.solicitud_pendiente_fecha):'—')}</td>`:''}
     ${limited?`<td>${movementLabel(r)}</td>`:''}
     <td>${fmtDate(r.fecha_entrega)}</td>
     <td>${fmtDate(r.fecha_devolucion)}</td>
@@ -13575,7 +13607,7 @@ async function importCSV(ev){
 
 
 /* ===== ACTUALIZACIÓN AUTOMÁTICA DE VERSIÓN ===== */
-const APP_VERSION='20260829-1125-solicitante-registro-maestro';
+const APP_VERSION='20260829-1138-registro-maestro-reasignado-solicitante-verificar';
 let __versionCheckRunning=false;
 
 async function checkForNewAppVersion(){
