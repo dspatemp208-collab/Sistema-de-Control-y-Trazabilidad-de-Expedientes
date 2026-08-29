@@ -2,12 +2,14 @@
 <!-- DEPURACIÓN PRIORIDAD ALTA: FLUJO DIRECTO + ESTADOS FÍSICOS CONSOLIDADOS -->
 <!-- SELECCION QUIEN ATIENDE HABILITADA PARA ARCHIVO/ADMIN -->
 <!-- REGISTRO MAESTRO: SOLICITANTE PENDIENTE POR ATENDER ACTIVO -->
+<!-- FONDOS DE BLOQUES AJUSTADOS A PALETA SUAVE -->
+<!-- ESTADOS: SIN POR REVISAR Y SIN TITULOS DE GRUPO -->
 
 <html lang="es">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="app-version" content="20260828-1528-prestamos-globales-admin-archivo">
+<meta name="app-version" content="20260829-1008-estados-simplificados">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -15,7 +17,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
-:root{--navy:#17365d;--blue:#1f4e78;--sky:#d9eaf7;--bg:#f4f7fb;--line:#d7e0ea;--text:#1f2937;--muted:#64748b;--ok:#e2f0d9;--warn:#fff2cc;--danger:#f4cccc;--white:#fff;--shadow:0 8px 24px rgba(23,54,93,.08)}
+:root{--navy:#17365d;--blue:#1f4e78;--sky:#d9eaf7;--bg:#f4f7fb;--line:#d7e0ea;--text:#1f2937;--muted:#64748b;--ok:#e2f0d9;--warn:#fff2cc;--danger:#f4cccc;--white:#fff;--shadow:0 8px 24px rgba(23,54,93,.08);--block:#fbfcff;--block-soft:#f8fbff;--block-muted:#f8fafc;--block-warm:#fffaf3;--block-danger:#fff7f7}
 *{box-sizing:border-box}body{margin:0;font-family:Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--text)}
 .app{display:grid;grid-template-columns:285px 1fr;min-height:100vh}
 .sidebar{background:var(--navy);color:white;padding:18px 14px;overflow:auto;position:sticky;top:0;height:100vh}
@@ -24,22 +26,22 @@
 .main{padding:22px;min-width:0}.topbar{display:flex;justify-content:space-between;align-items:center;gap:15px;margin-bottom:16px;flex-wrap:wrap}.title h1{margin:0;font-size:24px;color:var(--navy)}.title p{margin:4px 0 0;color:var(--muted);font-size:13px}
 .actions{display:flex;gap:8px;flex-wrap:wrap}.btn{border:0;border-radius:8px;padding:9px 13px;font-weight:650;cursor:pointer;background:var(--blue);color:white}.btn.secondary{background:white;color:var(--navy);border:1px solid var(--line)}.btn.small{padding:6px 9px;font-size:12px}.btn:disabled{opacity:.55;cursor:not-allowed}
 .tabs{display:flex;gap:7px;margin-bottom:14px;flex-wrap:wrap}.tab{border:1px solid var(--line);background:white;color:var(--muted);padding:8px 13px;border-radius:8px;cursor:pointer;font-weight:650}.tab.active{background:var(--navy);color:white;border-color:var(--navy)}
-.card{background:white;border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow)}.filters{display:grid;grid-template-columns:minmax(260px,2fr) minmax(220px,1fr) auto;gap:12px;padding:14px;margin-bottom:14px}
+.card{background:var(--block);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow)}.filters{display:grid;grid-template-columns:minmax(260px,2fr) minmax(220px,1fr) auto;gap:12px;padding:14px;margin-bottom:14px;background:var(--block-soft)}
 .field label{display:block;font-size:11px;font-weight:700;color:var(--muted);margin-bottom:5px;text-transform:uppercase}.field input,.field select,.field textarea{width:100%;border:1px solid var(--line);border-radius:7px;padding:9px 10px;font:inherit;background:white}.field textarea{min-height:72px;resize:vertical}
 .kpis{display:grid;grid-template-columns:repeat(4,minmax(150px,1fr));gap:12px;margin-bottom:14px}
 .kpi-view{margin-top:9px;border:0;background:transparent;padding:0;color:var(--navy);font:inherit;font-size:12px;font-weight:750;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
 .kpi-view:hover{opacity:.75}
 .kpi.quick-active{outline:2px solid var(--navy);outline-offset:1px}
 .kpi.quick-active.warn{outline-color:#a15c00}
-.kpi.quick-active.danger{outline-color:#a61b1b}.kpi{padding:14px 16px}.kpi .label{font-size:11px;text-transform:uppercase;font-weight:800;color:var(--muted)}.kpi .value{font-size:28px;font-weight:800;color:var(--navy);margin-top:4px}.kpi.warn .value{color:#a15c00}.kpi.danger .value{color:#a61b1b}
+.kpi.quick-active.danger{outline-color:#a61b1b}.kpi{padding:14px 16px;background:var(--block-soft)}.kpi .label{font-size:11px;text-transform:uppercase;font-weight:800;color:var(--muted)}.kpi .value{font-size:28px;font-weight:800;color:var(--navy);margin-top:4px}.kpi.warn{background:var(--block-warm)}.kpi.danger{background:var(--block-danger)}.kpi.warn .value{color:#a15c00}.kpi.danger .value{color:#a61b1b}
 .table-wrap{overflow:auto}.table-head{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid var(--line);gap:10px}.table-head strong{color:var(--navy)}table{border-collapse:collapse;width:100%;font-size:12px}th{position:sticky;top:0;background:var(--navy);color:white;text-align:left;padding:9px 8px;white-space:nowrap}td{padding:8px;border-bottom:1px solid #edf1f5;vertical-align:top}tr:hover td{background:#f8fbff}
 .pill{display:inline-block;padding:3px 7px;border-radius:999px;font-weight:700;font-size:10px;background:#e8eef6}.pill.loan{background:var(--warn)}.pill.returned{background:var(--ok)}.pill.alert{background:var(--danger);color:#8a1414}.empty{padding:30px;text-align:center;color:var(--muted)}
-.summary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:10px}.summary-card{padding:12px 14px;display:flex;justify-content:space-between;align-items:center;cursor:pointer}.summary-card h3{margin:0;font-size:13px}.summary-card small{display:block;color:var(--muted);margin-top:3px}.summary-num{font-size:22px;font-weight:800;color:var(--navy)}
+.summary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:10px}.summary-card{padding:12px 14px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;background:var(--block-soft)}.summary-card h3{margin:0;font-size:13px}.summary-card small{display:block;color:var(--muted);margin-top:3px}.summary-num{font-size:22px;font-weight:800;color:var(--navy)}
 .modal{display:none;position:fixed;inset:0;background:rgba(15,23,42,.60);z-index:30;align-items:center;justify-content:center;padding:18px}.modal.show{display:flex}.modal-box{background:white;border-radius:14px;max-width:1050px;width:100%;max-height:92vh;overflow:auto;padding:18px;box-shadow:0 24px 80px rgba(0,0,0,.25)}.modal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.modal-head h2{margin:0;color:var(--navy)}.form-grid{display:grid;grid-template-columns:repeat(5,minmax(150px,1fr));gap:10px}.span2{grid-column:span 2}.span4{grid-column:span 4}.modal-foot{display:flex;justify-content:flex-end;gap:8px;margin-top:14px;border-top:1px solid var(--line);padding-top:13px}
-.note{font-size:12px;color:var(--muted);padding:10px 12px;background:#f8fafc;border:1px solid var(--line);border-radius:8px}.hidden{display:none!important}.toast{position:fixed;right:22px;bottom:22px;z-index:60;background:var(--navy);color:#fff;padding:11px 15px;border-radius:9px;box-shadow:0 8px 24px rgba(23,54,93,.22);font-size:12px;font-weight:700;opacity:0;transform:translateY(8px);pointer-events:none;transition:.18s}.toast.show{opacity:1;transform:translateY(0)}
-.statusbar{font-size:12px;color:var(--muted);padding:8px 12px;margin-bottom:12px;background:#fff;border:1px solid var(--line);border-radius:8px}.pager{display:flex;align-items:center;gap:7px}.pager span{font-size:12px;color:var(--muted)}
-.history-summary{display:grid;grid-template-columns:repeat(4,minmax(130px,1fr));gap:10px;margin-bottom:14px}.history-summary .mini{background:#f8fafc;border:1px solid var(--line);border-radius:9px;padding:10px 12px}.history-summary .mini span{display:block;font-size:10px;text-transform:uppercase;font-weight:800;color:var(--muted);margin-bottom:4px}.history-summary .mini b{color:var(--navy);font-size:14px}
-.timeline{position:relative;margin:12px 0 4px;padding-left:24px}.timeline:before{content:"";position:absolute;left:8px;top:4px;bottom:4px;width:2px;background:#cbd5e1}.timeline-item{position:relative;background:#fff;border:1px solid var(--line);border-radius:10px;padding:11px 13px;margin-bottom:10px}.timeline-item:before{content:"";position:absolute;left:-21px;top:16px;width:10px;height:10px;border-radius:50%;background:var(--blue);border:2px solid #fff;box-shadow:0 0 0 2px #cbd5e1}.timeline-item .t-date{font-size:11px;color:var(--muted);font-weight:700}.timeline-item .t-action{font-size:13px;color:var(--navy);font-weight:800;margin:3px 0}.timeline-item .t-detail{font-size:12px;color:var(--text);line-height:1.45}.timeline-item .t-meta{font-size:11px;color:var(--muted);margin-top:5px}
+.note{font-size:12px;color:var(--muted);padding:10px 12px;background:var(--block-muted);border:1px solid var(--line);border-radius:8px}.hidden{display:none!important}.toast{position:fixed;right:22px;bottom:22px;z-index:60;background:var(--navy);color:#fff;padding:11px 15px;border-radius:9px;box-shadow:0 8px 24px rgba(23,54,93,.22);font-size:12px;font-weight:700;opacity:0;transform:translateY(8px);pointer-events:none;transition:.18s}.toast.show{opacity:1;transform:translateY(0)}
+.statusbar{font-size:12px;color:var(--muted);padding:8px 12px;margin-bottom:12px;background:var(--block-muted);border:1px solid var(--line);border-radius:8px}.pager{display:flex;align-items:center;gap:7px}.pager span{font-size:12px;color:var(--muted)}
+.history-summary{display:grid;grid-template-columns:repeat(4,minmax(130px,1fr));gap:10px;margin-bottom:14px}.history-summary .mini{background:var(--block-soft);border:1px solid var(--line);border-radius:9px;padding:10px 12px}.history-summary .mini span{display:block;font-size:10px;text-transform:uppercase;font-weight:800;color:var(--muted);margin-bottom:4px}.history-summary .mini b{color:var(--navy);font-size:14px}
+.timeline{position:relative;margin:12px 0 4px;padding-left:24px}.timeline:before{content:"";position:absolute;left:8px;top:4px;bottom:4px;width:2px;background:#cbd5e1}.timeline-item{position:relative;background:var(--block-soft);border:1px solid var(--line);border-radius:10px;padding:11px 13px;margin-bottom:10px}.timeline-item:before{content:"";position:absolute;left:-21px;top:16px;width:10px;height:10px;border-radius:50%;background:var(--blue);border:2px solid #fff;box-shadow:0 0 0 2px #cbd5e1}.timeline-item .t-date{font-size:11px;color:var(--muted);font-weight:700}.timeline-item .t-action{font-size:13px;color:var(--navy);font-weight:800;margin:3px 0}.timeline-item .t-detail{font-size:12px;color:var(--text);line-height:1.45}.timeline-item .t-meta{font-size:11px;color:var(--muted);margin-top:5px}
 .auth-box{max-width:470px}.auth-logo{font-size:22px;color:var(--navy);font-weight:850;margin-bottom:3px}.config-help{font-size:11px;color:var(--muted);line-height:1.5;margin-top:7px}
 @media(max-width:980px){.app{grid-template-columns:1fr}.sidebar{position:relative;height:auto}.main{padding:14px}.kpis{grid-template-columns:repeat(2,1fr)}.form-grid{grid-template-columns:repeat(2,1fr)}.span4{grid-column:span 2}}
 @media(max-width:600px){.filters{grid-template-columns:1fr}.kpis{grid-template-columns:1fr}.form-grid{grid-template-columns:1fr}.span2,.span4{grid-column:span 1}.history-summary{grid-template-columns:repeat(2,1fr)}}
@@ -58,7 +60,7 @@
 .record-mode{display:flex;gap:8px;margin:0 0 14px;flex-wrap:wrap}
 .record-mode .mode-btn{border:1px solid var(--line);background:#fff;color:var(--navy);padding:8px 12px;border-radius:8px;font-weight:750;cursor:pointer}
 .record-mode .mode-btn.active{background:var(--navy);color:#fff;border-color:var(--navy)}
-.batch-box{border:1px solid var(--line);border-radius:10px;padding:12px;margin-top:12px;background:#fbfdff}
+.batch-box{border:1px solid var(--line);border-radius:10px;padding:12px;margin-top:12px;background:var(--block-soft)}
 .batch-head{display:grid;grid-template-columns:1.2fr .65fr .85fr .7fr 1.2fr 44px;gap:6px;font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;margin-bottom:5px}
 .batch-row{display:grid;grid-template-columns:1.2fr .65fr .85fr .7fr 1.2fr 44px;gap:6px;margin-bottom:6px;align-items:center}
 .batch-row input{width:100%;border:1px solid var(--line);border-radius:7px;padding:8px;font:inherit;background:white}
@@ -75,7 +77,7 @@
 
 .states-kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px}
 .state-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(245px,1fr));gap:10px;margin-bottom:14px}
-.state-card{padding:14px;cursor:pointer;transition:.15s ease;border:1px solid var(--line)}
+.state-card{padding:14px;cursor:pointer;transition:.15s ease;border:1px solid var(--line);background:var(--block-soft)}
 .state-card:hover{transform:translateY(-1px)}
 .state-card.selected{outline:2px solid var(--navy);outline-offset:-2px}
 .state-card .state-name{font-size:12px;font-weight:850;color:var(--navy);min-height:30px}
@@ -101,7 +103,7 @@
 .admin-close-warning{padding:10px 12px;border:1px solid #f0d7a2;border-radius:10px;background:#fffaf0;color:#6b4c12;font-size:12px}
 
 .req-summary{display:grid;grid-template-columns:repeat(4,minmax(120px,1fr));gap:8px;margin:10px 0}
-.req-summary .mini{border:1px solid var(--line);border-radius:8px;padding:9px;background:#fbfdff}
+.req-summary .mini{border:1px solid var(--line);border-radius:8px;padding:9px;background:var(--block-soft)}
 .req-summary .mini b{display:block;font-size:18px;margin-top:3px}
 .req-actions{display:flex;gap:6px;flex-wrap:wrap}
 .req-detail-controls{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:12px 0}
@@ -129,7 +131,7 @@
 
 
 .lawyer-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px;margin-bottom:14px}
-.lawyer-card{border:1px solid var(--line);border-radius:10px;padding:14px;background:#fff}
+.lawyer-card{border:1px solid var(--line);border-radius:10px;padding:14px;background:var(--block-soft)}
 .lawyer-card h3{font-size:13px;color:var(--navy);margin:0 0 8px}
 .lawyer-stats{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;font-size:11px;color:var(--muted)}
 .lawyer-stats b{display:block;font-size:17px;color:var(--text);margin-top:2px}
@@ -138,7 +140,7 @@
 
 
 .request-draft-box{margin-top:10px;border:1px solid var(--line);border-radius:9px;overflow:hidden}
-.request-draft-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 11px;background:#f8fafc;border-bottom:1px solid var(--line)}
+.request-draft-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 11px;background:var(--block-muted);border-bottom:1px solid var(--line)}
 .request-draft-box table{margin:0}
 .request-draft-empty{padding:18px;text-align:center;color:var(--muted)}
 
@@ -173,9 +175,9 @@
 .alerts-badge.zero{background:#64748b}
 .notification-list{display:flex;flex-direction:column;gap:9px;margin-top:12px}
 .notification-item{
-  border:1px solid #d8e1ec;border-radius:10px;padding:12px;background:#fff
+  border:1px solid #d8e1ec;border-radius:10px;padding:12px;background:var(--block-soft)
 }
-.notification-item.unread{border-left:5px solid #173f6b;background:#f7fbff}
+.notification-item.unread{border-left:5px solid #173f6b;background:#eef6ff}
 .notification-head{
   display:flex;align-items:flex-start;justify-content:space-between;gap:12px
 }
@@ -1288,6 +1290,7 @@
 /* ===== FIN LISTADOS DE EXPEDIENTES DEVUELTOS ===== */
 
 </style>
+<!-- ESTADO REASIGNADO ACTIVO -->
 </head>
 <body>
 <!-- Confirmaciones nativas del navegador eliminadas: las acciones se ejecutan directamente; se conservan validaciones y errores. -->
@@ -1331,6 +1334,7 @@
     <button class="tab" data-tab="summary" onclick="switchTab('summary',this)">Resumen</button>
     <button class="tab" data-tab="states" onclick="switchTab('states',this);loadStates();if(hasFullAccess())loadReturnRequests()">Estados</button>
     <button class="tab" data-tab="requests" onclick="switchTab('requests',this);loadRequests()">Solicitudes</button>
+    <button class="tab hidden-by-role" id="tabBtnNewRequest" type="button" onclick="openNewRequestModal()">+ Nueva solicitud</button>
     <button class="tab" id="tabBtnRequestsByLawyer" data-tab="requestsByLawyer" onclick="switchTab('requestsByLawyer',this);loadRequestsByLawyer()">Solicitudes por abogado</button>
     <button class="tab" data-tab="all" onclick="switchTab('all',this);loadAll()">Registro maestro</button>
     <button class="tab" data-tab="cargos" onclick="switchTab('cargos',this);loadCargos()">Cargos</button>
@@ -1726,7 +1730,7 @@
           <span class="workflow-step"><b>6</b> Cerrar devolución</span>
         </div>
       </div>
-      <button class="btn" onclick="openNewRequestModal()">+ Nueva solicitud</button>
+      <button class="btn" id="requestNewRequestBtn" onclick="openNewRequestModal()">+ Nueva solicitud</button>
     </div>
 
     <div class="request-workflow-kpis" id="fullRequestKpis">
@@ -3332,6 +3336,10 @@ function applyRoleUI(){
   setVisible('requestOriginField',admin);
   setVisible('rqDOrigenBox',admin);
   setVisible('rqDRegistradoPorBox',admin);
+  // En USUARIO, Nueva solicitud queda al mismo nivel que Mis expedientes y Mis solicitudes.
+  setVisible('tabBtnNewRequest',limited);
+  // Evita duplicar la acción dentro de la bandeja operativa para USUARIO.
+  setVisible('requestNewRequestBtn',!limited);
 
   // El buscador para solicitar es útil sobre todo para abogados.
   setVisible('searchRequestBtn',true);
@@ -6340,15 +6348,13 @@ async function loadStates(){
     if(['CUSTODIA','DEVUELTO','DEVUELTO AL ARCHIVO'].includes(st))totalDevueltos+=Number(x.total||0);
   });
 
-  // Estados físicos exclusivos: su suma siempre debe coincidir con el total maestro.
-  const totalPorRevisar=Math.max(0,totalExpedientes-totalEnPrestamo-totalDevueltos);
+  // Estados principales visibles del panel.
   stateRows=[
     {estado:'EN PRÉSTAMO',total:totalEnPrestamo,historial:false},
-    {estado:'DEVUELTOS AL ARCHIVO',total:totalDevueltos,historial:false},
-    {estado:'POR REVISAR',total:totalPorRevisar,historial:false}
+    {estado:'DEVUELTOS AL ARCHIVO',total:totalDevueltos,historial:false}
   ];
 
-  // Bandejas de trabajo y movimientos. No se suman al total físico porque pueden
+  // Bandejas y movimientos operativos. No se suman al total físico porque pueden
   // referirse a expedientes ya contabilizados en uno de los estados anteriores.
   stateWorkRows=[
     {estado:'PENDIENTE POR ATENDER',total:pendingAttentionRows.length,tipo:'bandeja'},
@@ -6362,7 +6368,7 @@ async function loadStates(){
   el('statesTopCount').textContent=top.total;
   el('statesTopName').textContent=stateDisplayName(top.estado);
 
-  if(selectedState==='PENDIENTES POR REGISTRAR' || selectedState==='REASIGNADO'){
+  if(['PENDIENTES POR REGISTRAR','REASIGNADO','POR REVISAR'].includes(selectedState)){
     selectedState=null;
   }
 
@@ -6394,15 +6400,12 @@ function renderStates(){
 
   let html='';
   if(physical.length){
-    html+=`<div style="grid-column:1/-1;font-weight:800;color:#17365d;margin:2px 0 0">ESTADO FÍSICO ACTUAL</div>`;
     html+=physical.map(x=>card(x,
       x.estado==='EN PRÉSTAMO'?'Todos los préstamos activos aún fuera de Archivo':
-      x.estado==='DEVUELTOS AL ARCHIVO'?'Custodia física en Archivo':
-      'Estado físico que requiere revisión')).join('');
+      'Custodia física en Archivo')).join('');
   }
 
   if(work.length||showReturn){
-    html+=`<div style="grid-column:1/-1;font-weight:800;color:#17365d;margin:10px 0 0">BANDEJAS DE TRABAJO Y MOVIMIENTOS</div>`;
     html+=work.map(x=>card(x,
       x.estado==='PENDIENTE POR ATENDER'?'Solicitud lista para preparar y generar cargo':
       'Movimiento de custodia; el expediente continúa EN PRÉSTAMO')).join('');
@@ -6550,19 +6553,6 @@ async function loadStateDetail(estado){
   // Compatibilidad con enlaces antiguos: la verificación ya no es una bandeja separada.
   if(estado==='PENDIENTE DE VERIFICACIÓN'){
     return loadStateDetail('PENDIENTE POR ATENDER');
-  }
-
-  if(estado==='POR REVISAR'){
-    el('stateDetailTitle').textContent='Expedientes con estado físico por revisar';
-    el('stateDetailTable').innerHTML='<div class="empty">Cargando expedientes por revisar...</div>';
-    const {data,error}=await sb.rpc('listar_expedientes_por_revisar_v2');
-    if(error){el('stateDetailTable').innerHTML=`<div class="empty">${esc(error.message)}</div>`;return;}
-    stateDetailRows=data||[];
-    stateDetailRows=await attachLatestMovementToRecords(stateDetailRows);
-    stateDetailCount=stateDetailRows.length;
-    el('stateDetailCount').textContent=`${stateDetailCount} expedientes`;
-    el('stateDetailTable').innerHTML=recordTable(stateDetailRows,true,'states');
-    return;
   }
 
   if(estado==='EN PRÉSTAMO'){
@@ -12439,8 +12429,11 @@ function operationalStatus(r){
     return 'DEVOLUCIÓN SOLICITADA';
   }
 
-  // REASIGNACIÓN es un movimiento de custodia, no un estado físico.
-  // Después de reasignar, el expediente continúa EN PRÉSTAMO con otro responsable.
+  // Cuando el último movimiento es una reasignación ya aceptada,
+  // en la columna ESTADO debe figurar REASIGNADO.
+  if(action.includes('REASIGNACIÓN')){
+    return 'REASIGNADO';
+  }
 
   // El cargo ya registró el préstamo al abogado.
   if(action.includes('EN PRÉSTAMO') ||
@@ -13463,7 +13456,7 @@ async function importCSV(ev){
 
 
 /* ===== ACTUALIZACIÓN AUTOMÁTICA DE VERSIÓN ===== */
-const APP_VERSION='20260828-1528-prestamos-globales-admin-archivo';
+const APP_VERSION='20260829-1008-estados-simplificados';
 let __versionCheckRunning=false;
 
 async function checkForNewAppVersion(){
