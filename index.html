@@ -9,7 +9,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="app-version" content="20260829-1128-cabecera-fija-devueltos">
+<meta name="app-version" content="20260829-1228-maestro-prestamo-inmovilizados">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -1471,12 +1471,140 @@
   }
 }
 
+
+/* =========================================================
+   CONTROLES Y CABECERAS FIJAS EN TODOS LOS MÓDULOS
+   - Los controles superiores se apilan debajo de la cabecera principal.
+   - Las tablas usan el espacio restante de la pantalla.
+   - Solo se desplazan las filas; los encabezados permanecen visibles.
+   ========================================================= */
+.module-sticky-piece{
+  position:sticky;
+  z-index:27;
+  background:var(--bg);
+}
+.module-sticky-piece.card,
+.module-sticky-piece.filters,
+.module-sticky-piece.workflow-intro,
+.module-sticky-piece.kpis,
+.module-sticky-piece.state-grid,
+.module-sticky-piece.request-workflow-kpis,
+.module-sticky-piece.cargo-kpis{
+  box-shadow:0 3px 10px rgba(23,54,93,.045);
+}
+.module-data-scroll{
+  overflow:auto!important;
+  overscroll-behavior:contain;
+  min-height:180px;
+}
+.module-data-scroll th{
+  position:sticky!important;
+  top:0!important;
+  z-index:36!important;
+  background:var(--navy)!important;
+  color:#fff!important;
+}
+@media(max-width:980px){
+  .module-data-scroll{min-height:150px}
+}
+
+
+
+/* =========================================================
+   REGISTRO MAESTRO + EN PRÉSTAMO: BANDEJAS INMOVILIZADAS
+   Solo se desplazan las filas; filtros y cabeceras permanecen visibles.
+   ========================================================= */
+#tab-all:not(.hidden){
+  height:calc(100vh - var(--main-fixed-header-h) - 14px);
+  min-height:360px;
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+}
+#tab-all > .card:first-child{
+  position:relative!important;
+  top:auto!important;
+  flex:0 0 auto;
+  z-index:28;
+  margin-bottom:10px!important;
+}
+#tab-all > .table-wrap{
+  flex:1 1 auto;
+  min-height:0!important;
+  max-height:none!important;
+  overflow:auto!important;
+  margin-top:0;
+}
+#tab-all > .table-wrap > .table-head{
+  position:sticky!important;
+  top:0!important;
+  z-index:38!important;
+  background:var(--block)!important;
+}
+#tab-all > .table-wrap th{
+  position:sticky!important;
+  top:45px!important;
+  z-index:37!important;
+  background:var(--navy)!important;
+  color:#fff!important;
+}
+
+/* Estado EN PRÉSTAMO: título + filtros inmóviles, filas desplazables */
+#tab-states .table-wrap.state-loan-fixed-layout{
+  display:flex;
+  flex-direction:column;
+  overflow:hidden!important;
+  max-height:calc(100vh - var(--main-fixed-header-h) - 22px)!important;
+  min-height:390px;
+}
+#tab-states .table-wrap.state-loan-fixed-layout > .table-head{
+  flex:0 0 auto;
+  position:relative!important;
+  top:auto!important;
+  z-index:34;
+  background:var(--block);
+}
+#tab-states .table-wrap.state-loan-fixed-layout #stateLoanFilters{
+  flex:0 0 auto;
+  background:#f8fafc!important;
+  z-index:33;
+}
+#tab-states .table-wrap.state-loan-fixed-layout #stateDetailTable{
+  flex:1 1 auto;
+  min-height:0;
+  overflow:hidden;
+  display:flex;
+  flex-direction:column;
+}
+#tab-states .state-loan-table-scroll{
+  flex:1 1 auto;
+  min-height:210px;
+  overflow:auto;
+  overscroll-behavior:contain;
+}
+#tab-states .state-loan-table-scroll th{
+  position:sticky!important;
+  top:0!important;
+  z-index:40!important;
+  background:var(--navy)!important;
+  color:#fff!important;
+}
+@media(max-width:980px){
+  #tab-all:not(.hidden){height:calc(100vh - var(--main-fixed-header-h) - 10px)}
+  #tab-states .table-wrap.state-loan-fixed-layout{
+    max-height:calc(100vh - var(--main-fixed-header-h) - 14px)!important;
+    min-height:330px;
+  }
+}
+/* ===== FIN BANDEJAS INMOVILIZADAS ===== */
+
 </style>
 <!-- ESTADO REASIGNADO ACTIVO -->
 <!-- TARJETAS SOLICITUDES COMPACTAS -->
 <!-- CORRECCIÓN ESTADOS SIN TARJETAS SUPERIORES -->
 <!-- REGISTRO MAESTRO V5: PENDIENTE POR ATENDER INTEGRADO -->
 <!-- SELECCION Y DESELECCION DEVUELTOS -->
+<!-- REGISTRO MAESTRO Y EN PRESTAMO INMOVILIZADOS -->
 </head>
 <body>
 <!-- Confirmaciones nativas del navegador eliminadas: las acciones se ejecutan directamente; se conservan validaciones y errores. -->
@@ -6755,7 +6883,7 @@ function renderGlobalLoanRows(){
     return;
   }
 
-  el('stateDetailTable').innerHTML=`<div style="overflow:auto"><table>
+  el('stateDetailTable').innerHTML=`<div class="state-loan-table-scroll"><table>
     <thead><tr>
       <th>Expediente</th><th>R.D.</th><th>Último folio</th><th>Responsable actual</th><th>Área</th>
       <th>Situación operativa</th><th>Fecha entrega</th><th>Últ. reasignación</th><th>Cargo</th><th>Solicitud</th><th></th>
@@ -6784,7 +6912,8 @@ function hideGlobalLoanFilters(){
 }
 
 async function loadStateDetail(estado){
-  el('stateDetailTable')?.closest('.table-wrap')?.classList.remove('returned-archive-fixed-layout');
+  const stateDetailWrap=el('stateDetailTable')?.closest('.table-wrap');
+  stateDetailWrap?.classList.remove('returned-archive-fixed-layout','state-loan-fixed-layout');
   selectedState=estado;
   if(estado!=='EN PRÉSTAMO')hideGlobalLoanFilters();
   renderStates();
@@ -6831,6 +6960,7 @@ async function loadStateDetail(estado){
   }
 
   if(estado==='EN PRÉSTAMO'){
+    stateDetailWrap?.classList.add('state-loan-fixed-layout');
     el('stateDetailTitle').textContent=hasFullAccess()
       ?'Todos los préstamos activos · custodia física fuera de Archivo'
       :'Mis expedientes físicamente EN PRÉSTAMO';
@@ -12908,7 +13038,7 @@ function renderHistory(){
   if(!historyRows.length){el('historyTable').innerHTML='<div class="empty">No hay movimientos para mostrar.</div>';return}
   el('historyTable').innerHTML=`<table><thead><tr><th>Fecha / hora</th><th>Expediente</th><th>Extensión</th><th>Acción</th><th>Desde</th><th>Hacia</th><th>Cargo</th><th>Detalle</th></tr></thead><tbody>${historyRows.map(h=>`<tr><td><div class="datetime-cell"><span class="datetime-date">${fmtDate(h.created_at)}</span><span class="datetime-time">${fmtTime(h.created_at)}</span></div></td><td><b>${esc(h.expediente)}</b></td><td>${h.extension?esc(h.extension):'—'}</td><td>${esc(h.accion)}</td><td>${esc(h.desde)}</td><td>${esc(h.hacia)}</td><td>${esc(h.cargo)}</td><td>${esc(h.detalle)}</td></tr>`).join('')}</tbody></table>`
 }
-function switchTab(name,btn){['panel','summary','states','requests','requestsByLawyer','all','cargos','history'].forEach(x=>el('tab-'+x).classList.toggle('hidden',x!==name));document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));if(btn)btn.classList.add('active')}
+function switchTab(name,btn){['panel','summary','states','requests','requestsByLawyer','all','cargos','history'].forEach(x=>el('tab-'+x).classList.toggle('hidden',x!==name));document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));if(btn)btn.classList.add('active');setTimeout(adjustUniversalModuleSticky,0)}
 
 
 function autoCargoNumber(){ return ''; }
@@ -13821,8 +13951,150 @@ async function importCSV(ev){
 }
 
 
+
+/* ===== CABECERAS / CONTROLES FIJOS EN TODOS LOS MÓDULOS ===== */
+let __moduleStickyResizeObserver=null;
+
+function moduleStickySpecs(){
+  return [
+    {
+      section:'tab-panel',
+      pieces:['ownerDetailFilters','ownerSelectedContext','fullAccessKpis','userPersonalKpis'],
+      tables:['panelDetailWrap']
+    },
+    {
+      section:'tab-states',
+      pieces:['__statesFilters','stateGrid'],
+      tables:['__statesTable']
+    },
+    {
+      section:'tab-requests',
+      pieces:['__requestsWorkflow','fullRequestKpis','userRequestKpis','__requestsFilters'],
+      tables:['__requestsTableWrap']
+    },
+    {
+      section:'tab-requestsByLawyer',
+      pieces:['__lawyerFilters'],
+      tables:[]
+    },
+    {
+      section:'tab-all',
+      pieces:['__masterFilters'],
+      tables:['__masterTableWrap']
+    },
+    {
+      section:'tab-cargos',
+      pieces:['__cargoWorkflow','__cargoKpis','__cargoFilters','__cargoSelected'],
+      tables:['__cargoTableWrap']
+    },
+    {
+      section:'tab-history',
+      pieces:['__historyFilters'],
+      tables:['__historyTableWrap']
+    }
+  ];
+}
+
+function resolveModuleStickyPseudoIds(){
+  const states=el('tab-states');
+  if(states){
+    const x=states.querySelector(':scope > .filters'); if(x)x.dataset.stickyAlias='__statesFilters';
+    const t=states.querySelector(':scope > .table-wrap'); if(t)t.dataset.stickyAlias='__statesTable';
+  }
+  const requests=el('tab-requests');
+  if(requests){
+    const w=requests.querySelector(':scope > .workflow-intro'); if(w)w.dataset.stickyAlias='__requestsWorkflow';
+    const f=requests.querySelector(':scope > .filters'); if(f)f.dataset.stickyAlias='__requestsFilters';
+    const t=requests.querySelector(':scope > .table-wrap'); if(t)t.dataset.stickyAlias='__requestsTableWrap';
+  }
+  const law=el('tab-requestsByLawyer');
+  if(law){const f=law.querySelector(':scope > .filters');if(f)f.dataset.stickyAlias='__lawyerFilters'}
+  const master=el('tab-all');
+  if(master){
+    const cards=master.querySelectorAll(':scope > .card');
+    if(cards[0])cards[0].dataset.stickyAlias='__masterFilters';
+    if(cards[1])cards[1].dataset.stickyAlias='__masterTableWrap';
+  }
+  const cargos=el('tab-cargos');
+  if(cargos){
+    const w=cargos.querySelector(':scope > .workflow-intro');if(w)w.dataset.stickyAlias='__cargoWorkflow';
+    const k=cargos.querySelector(':scope > .cargo-kpis');if(k)k.dataset.stickyAlias='__cargoKpis';
+    const f=cargos.querySelector(':scope > .filters');if(f)f.dataset.stickyAlias='__cargoFilters';
+    const cards=[...cargos.querySelectorAll(':scope > .card')];
+    const selected=cards.find(x=>x.querySelector('#selectedCargoLabel'));if(selected)selected.dataset.stickyAlias='__cargoSelected';
+    const table=cards.find(x=>x.classList.contains('table-wrap'));if(table)table.dataset.stickyAlias='__cargoTableWrap';
+  }
+  const hist=el('tab-history');
+  if(hist){
+    const f=hist.querySelector(':scope > .filters');if(f)f.dataset.stickyAlias='__historyFilters';
+    const t=hist.querySelector(':scope > .table-wrap');if(t)t.dataset.stickyAlias='__historyTableWrap';
+  }
+}
+
+function stickyAliasElement(id){
+  return el(id)||document.querySelector(`[data-sticky-alias="${id}"]`);
+}
+
+function adjustUniversalModuleSticky(){
+  const mainHeader=document.querySelector('.main-sticky-header');
+  const headerH=mainHeader?Math.ceil(mainHeader.getBoundingClientRect().height):0;
+  const viewportH=window.innerHeight||900;
+  const baseTop=headerH+6;
+
+  moduleStickySpecs().forEach(spec=>{
+    const section=el(spec.section);
+    if(!section)return;
+    let offset=0;
+    spec.pieces.forEach(id=>{
+      const node=stickyAliasElement(id);
+      if(!node)return;
+      node.classList.add('module-sticky-piece');
+      node.style.top=(baseTop+offset)+'px';
+      if(!node.classList.contains('hidden') && getComputedStyle(node).display!=='none'){
+        offset+=Math.ceil(node.getBoundingClientRect().height)+6;
+      }
+    });
+
+    spec.tables.forEach(id=>{
+      const table=stickyAliasElement(id);
+      if(!table)return;
+      table.classList.add('module-data-scroll');
+      const available=Math.max(190,viewportH-baseTop-offset-18);
+      // Registro Maestro y las vistas especiales de Estados administran
+      // internamente su propio alto para que filtros/cabeceras queden inmóviles.
+      const isMasterTable=spec.section==='tab-all';
+      const isSpecialStateTable=spec.section==='tab-states' &&
+        (table.classList.contains('returned-archive-fixed-layout') || table.classList.contains('state-loan-fixed-layout'));
+      if(isMasterTable){
+        table.style.maxHeight='none';
+      }else if(!isSpecialStateTable){
+        table.style.maxHeight=available+'px';
+      }
+    });
+  });
+}
+
+function initUniversalModuleSticky(){
+  resolveModuleStickyPseudoIds();
+  adjustUniversalModuleSticky();
+  window.addEventListener('resize',()=>requestAnimationFrame(adjustUniversalModuleSticky));
+  if('ResizeObserver' in window){
+    __moduleStickyResizeObserver=new ResizeObserver(()=>requestAnimationFrame(adjustUniversalModuleSticky));
+    document.querySelectorAll('.module-sticky-piece,.main-sticky-header').forEach(x=>__moduleStickyResizeObserver.observe(x));
+  }
+  // Recalcula cuando cambian filtros, tarjetas o contenido visible.
+  const main=document.querySelector('main.main');
+  if(main && 'MutationObserver' in window){
+    const mo=new MutationObserver(()=>requestAnimationFrame(adjustUniversalModuleSticky));
+    mo.observe(main,{subtree:true,attributes:true,attributeFilter:['class','style']});
+    window.__moduleStickyMutationObserver=mo;
+  }
+}
+/* ===== FIN CABECERAS / CONTROLES FIJOS ===== */
+
+
 /* ===== ACTUALIZACIÓN AUTOMÁTICA DE VERSIÓN ===== */
-const APP_VERSION='20260829-1128-cabecera-fija-devueltos';
+const APP_VERSION='20260829-1228-maestro-prestamo-inmovilizados';
 let __versionCheckRunning=false;
 
 async function checkForNewAppVersion(){
@@ -13877,6 +14149,7 @@ document.addEventListener('visibilitychange',()=>{
 });
 /* ===== FIN ACTUALIZACIÓN AUTOMÁTICA ===== */
 
+initUniversalModuleSticky();
 connect();
 </script>
 </body>
