@@ -9,7 +9,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="app-version" content="20260829-1130-select-deselect-returned">
+<meta name="app-version" content="20260829-1128-cabecera-fija-devueltos">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -1393,6 +1393,82 @@
 }
 @media(max-width:600px){
   #tab-states .state-grid{grid-template-columns:1fr}
+}
+
+
+/* DEVUELTOS AL ARCHIVO: controles + cabecera fijos; solo se desplazan las filas */
+#tab-states .table-wrap.returned-archive-fixed-layout{
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+  max-height:calc(100vh - 315px);
+  min-height:430px;
+}
+#tab-states .table-wrap.returned-archive-fixed-layout > .table-head{
+  flex:0 0 auto;
+  background:var(--block);
+  z-index:24;
+}
+#tab-states .table-wrap.returned-archive-fixed-layout #stateLoanFilters{
+  flex:0 0 auto;
+}
+#tab-states .table-wrap.returned-archive-fixed-layout #stateDetailTable{
+  display:flex;
+  flex-direction:column;
+  flex:1 1 auto;
+  min-height:0;
+  overflow:hidden;
+}
+#tab-states .table-wrap.returned-archive-fixed-layout .returned-list-toolbar{
+  flex:0 0 auto;
+  margin:10px 12px 8px;
+  padding:10px;
+}
+#tab-states .table-wrap.returned-archive-fixed-layout .archive-list-summary{
+  flex:0 0 auto;
+  margin:0 12px 8px;
+}
+#tab-states .returned-table-scroll{
+  flex:1 1 auto;
+  min-height:220px;
+  overflow:auto;
+  overscroll-behavior:contain;
+  border-top:1px solid var(--line);
+  background:var(--block);
+}
+#tab-states .returned-table-scroll table{
+  margin:0;
+  min-width:1120px;
+}
+#tab-states .returned-table-scroll thead th{
+  position:sticky;
+  top:0;
+  z-index:35;
+  background:var(--navy);
+  color:#fff;
+  box-shadow:0 1px 0 rgba(255,255,255,.12),0 2px 5px rgba(15,23,42,.12);
+}
+#tab-states .returned-table-scroll tbody td{
+  background:var(--block);
+}
+#tab-states .returned-table-scroll tbody tr:hover td{
+  background:#f6f9fd;
+}
+@media(max-height:760px){
+  #tab-states .table-wrap.returned-archive-fixed-layout{
+    max-height:calc(100vh - 255px);
+    min-height:360px;
+  }
+  #tab-states .returned-table-scroll{min-height:180px}
+}
+@media(max-width:900px){
+  #tab-states .table-wrap.returned-archive-fixed-layout{
+    max-height:72vh;
+    min-height:380px;
+  }
+  #tab-states .table-wrap.returned-archive-fixed-layout .returned-list-toolbar{
+    align-items:stretch;
+  }
 }
 
 </style>
@@ -6708,6 +6784,7 @@ function hideGlobalLoanFilters(){
 }
 
 async function loadStateDetail(estado){
+  el('stateDetailTable')?.closest('.table-wrap')?.classList.remove('returned-archive-fixed-layout');
   selectedState=estado;
   if(estado!=='EN PRÉSTAMO')hideGlobalLoanFilters();
   renderStates();
@@ -6946,6 +7023,7 @@ async function loadReturnedArchiveForLists(){
 
 function renderReturnedArchiveDetail(){
   if(!hasFullAccess())return;
+  el('stateDetailTable')?.closest('.table-wrap')?.classList.add('returned-archive-fixed-layout');
   const rows=returnedArchiveFilteredRows();
   const searchInfo=normalizeReturnedExpediente(el('returnedArchiveSearch')?.value||'');
   // La autoselección ocurre solo al terminar una búsqueda.
@@ -7048,7 +7126,7 @@ function renderReturnedArchiveDetail(){
       <div class="mini"><b>${totalSin}</b> SIN LISTAR</div>
       <div class="mini"><b>${selected.length}</b> seleccionados · SL ${selectedSan} / BA ${selectedBar}</div>
     </div>
-    ${table}`;
+    <div class="returned-table-scroll">${table}</div>`;
 
   // Restaurar filtros luego de reconstruir el HTML.
   if(window.__returnedFilterState){
@@ -13744,7 +13822,7 @@ async function importCSV(ev){
 
 
 /* ===== ACTUALIZACIÓN AUTOMÁTICA DE VERSIÓN ===== */
-const APP_VERSION='20260829-1130-select-deselect-returned';
+const APP_VERSION='20260829-1128-cabecera-fija-devueltos';
 let __versionCheckRunning=false;
 
 async function checkForNewAppVersion(){
