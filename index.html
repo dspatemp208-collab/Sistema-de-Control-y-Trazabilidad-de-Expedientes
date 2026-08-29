@@ -9,7 +9,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="app-version" content="20260829-1322-pendientes-usuario-letra-mayor">
+<meta name="app-version" content="20260829-1323-pendientes-ver-expedientes">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -1897,7 +1897,7 @@
       <div class="card kpi" id="userKpiPendingAttentionCard">
         <div class="label">Pendientes por atender</div>
         <div class="value" id="uKPendingAttention">0</div>
-        <button class="kpi-view" onclick="openMyPendingAttentionFromPanel()">Ver solicitudes</button>
+        <button class="kpi-view" onclick="showUserCard('PENDIENTES_POR_ATENDER')">Ver expedientes</button>
       </div>
 
       <div class="card kpi warn" id="userKpiReturnRequestedCard">
@@ -5489,6 +5489,7 @@ function updateOwnerPanelVisibility(){
       el('ownerStateFilter').innerHTML=`
         <option value="TODOS">TODOS MIS EXPEDIENTES</option>
         <option value="PRESTAMO">EN PRÉSTAMO</option>
+        <option value="PENDIENTES_POR_ATENDER">PENDIENTES POR ATENDER</option>
         <option value="DEVOLUCION_SOLICITADA">DEVOLUCIÓN SOLICITADA</option>
         <option value="REASIGNADOS_POR_MI">REASIGNADOS POR MÍ</option>
         <option value="REASIGNADOS_A_MI">REASIGNADOS A MÍ</option>
@@ -6239,6 +6240,7 @@ function userPanelLabel(){
   const labels={
     TODOS:'Todos mis expedientes',
     PRESTAMO:'En préstamo',
+    PENDIENTES_POR_ATENDER:'Pendientes por atender',
     DEVOLUCION_SOLICITADA:'Devolución solicitada',
     REASIGNADOS_POR_MI:'Reasignados por mí',
     REASIGNADOS_A_MI:'Reasignados a mí',
@@ -6252,6 +6254,7 @@ function updateUserPersonalKpiUI(){
   const map={
     TODOS:'userKpiAllCard',
     PRESTAMO:'userKpiLoanCard',
+    PENDIENTES_POR_ATENDER:'userKpiPendingAttentionCard',
     DEVOLUCION_SOLICITADA:'userKpiReturnRequestedCard',
     REASIGNADOS_POR_MI:'userKpiReassignedByCard',
     REASIGNADOS_A_MI:'userKpiReassignedToCard',
@@ -6320,7 +6323,7 @@ async function changeOwnerStateFilter(value){
 
   if(isLimitedUser()){
     const valid=[
-      'TODOS','PRESTAMO','DEVOLUCION_SOLICITADA','REASIGNADOS_POR_MI',
+      'TODOS','PRESTAMO','PENDIENTES_POR_ATENDER','DEVOLUCION_SOLICITADA','REASIGNADOS_POR_MI',
       'REASIGNADOS_A_MI','DEVUELTOS','ALERTAS_30'
     ];
     userPanelMode=valid.includes(value)?value:'TODOS';
@@ -6404,6 +6407,65 @@ async function loadPanel(){
   // USUARIO / ABOGADO: panel personal por último movimiento.
   if(isLimitedUser()){
     const search=cleanSearch(el('searchInput')?.value||'');
+
+    if(userPanelMode==='PENDIENTES_POR_ATENDER'){
+      const {data,error}=await sb.rpc('listar_pendientes_por_atender_inclusivo');
+
+      if(error){
+        console.warn('listar_pendientes_por_atender_inclusivo:',error.message);
+        el('panelTable').innerHTML=
+          `<div class="empty">
+            No se pudieron cargar los expedientes pendientes por atender.<br>
+            <b>${esc(error.message)}</b>
+          </div>`;
+        return;
+      }
+
+      const currentUser=norm(currentProfile?.nombre_personal||'');
+      let all=(data||[]).filter(r=>norm(r.solicitante||'')===currentUser);
+
+      if(search){
+        all=all.filter(r=>[
+          r.expediente,r.extension,r.rd,r.ultimo_folio,
+          r.solicitud_numero,r.asunto,r.observacion,r.solicitante
+        ].some(v=>norm(v||'').includes(norm(search))));
+      }
+
+      panelCount=all.length;
+      panelRows=all.slice(from,to+1);
+
+      el('panelTitle').textContent=
+        `${userPanelLabel()} · ${currentProfile?.nombre_personal||'Mi espacio personal'}`;
+      el('pageInfo').textContent=`${page+1} · ${panelCount} registros`;
+
+      if(!panelRows.length){
+        el('panelTable').innerHTML='<div class="empty">No hay expedientes pendientes por atender.</div>';
+      }else{
+        el('panelTable').innerHTML=`<table>
+          <thead><tr>
+            <th>Expediente</th><th>Extensión</th><th>R.D.</th><th>Último folio</th>
+            <th>Solicitud</th><th>Asunto</th><th>Estado</th><th>F. solicitud</th><th></th>
+          </tr></thead>
+          <tbody>${panelRows.map(r=>`<tr>
+            <td><b>${esc(r.expediente||'—')}</b></td>
+            <td>${esc(r.extension||'—')}</td>
+            <td>${esc(r.rd||'—')}</td>
+            <td>${esc(r.ultimo_folio||'—')}</td>
+            <td>${esc(r.solicitud_numero||'—')}</td>
+            <td>${esc(r.asunto||'—')}</td>
+            <td><span class="pill pending">PENDIENTE POR ATENDER</span></td>
+            <td>${fmtDate(r.fecha_solicitud||r.created_at)}</td>
+            <td><div style="display:flex;gap:6px;white-space:nowrap">
+              <button class="btn secondary small" onclick="showExpHistory('${r.expediente_id}')">Historial</button>
+              <button class="btn small" onclick="openPendingOwnerRequest('${r.solicitud_id||''}','${String(r.solicitante||'').replace(/'/g,"\'")}')">Gestionar</button>
+            </div></td>
+          </tr>`).join('')}</tbody>
+        </table>`;
+      }
+
+      updateUserPersonalKpiUI();
+      return;
+    }
 
     const panelRpc=userPanelMode==='DEVOLUCION_SOLICITADA'
       ?'listar_mis_devoluciones_solicitadas_nuevo'
@@ -14204,7 +14266,7 @@ function initUniversalModuleSticky(){
 
 
 /* ===== ACTUALIZACIÓN AUTOMÁTICA DE VERSIÓN ===== */
-const APP_VERSION='20260829-1322-pendientes-usuario-letra-mayor';
+const APP_VERSION='20260829-1323-pendientes-ver-expedientes';
 let __versionCheckRunning=false;
 
 async function checkForNewAppVersion(){
