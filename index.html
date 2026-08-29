@@ -9,7 +9,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="app-version" content="20260829-1424-filtro-estados-registro-maestro">
+<meta name="app-version" content="20260829-1430-seleccion-fila-click">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -163,6 +163,39 @@
 
 .cargo-toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
 .cargo-selected-row{background:#f7fbff}
+
+/* Expediente seleccionado: resaltar toda la fila con alto contraste. */
+.record-selected-row td{
+  background:#dbeafe!important;
+  color:#102f54!important;
+  box-shadow:inset 0 1px 0 rgba(29,78,216,.10),inset 0 -1px 0 rgba(29,78,216,.10);
+}
+.record-selected-row td:first-child{
+  box-shadow:inset 5px 0 0 #1d4ed8,inset 0 1px 0 rgba(29,78,216,.10),inset 0 -1px 0 rgba(29,78,216,.10);
+}
+.record-selected-row:hover td{
+  background:#cfe2ff!important;
+}
+.record-selected-row input[type=checkbox]{
+  accent-color:#1d4ed8;
+}
+.record-selectable-row{
+  cursor:pointer;
+}
+.record-selectable-row:hover td{
+  background:#f1f6fc;
+}
+.record-selectable-row.record-selected-row:hover td{
+  background:#cfe2ff!important;
+}
+.record-selectable-row button,
+.record-selectable-row a,
+.record-selectable-row input,
+.record-selectable-row select,
+.record-selectable-row textarea,
+.record-selectable-row label{
+  cursor:auto;
+}
 
 
 .alerts-btn{position:relative}
@@ -12613,8 +12646,30 @@ function updateSelectionUI(){
   if(el('bulkReassignBtn'))el('bulkReassignBtn').disabled=n===0;
   if(el('bulkReturnBtn'))el('bulkReturnBtn').disabled=n===0;
 }
-function toggleSelect(id,checked){
+function toggleSelect(id,checked,checkbox){
   if(checked)selectedIds.add(id);else selectedIds.delete(id);
+  if(checkbox?.closest('tr')){
+    checkbox.closest('tr').classList.toggle('record-selected-row',checked);
+  }
+  updateSelectionUI();
+}
+function toggleSelectFromRow(event,id,disabled=false){
+  if(disabled)return;
+
+  // Los controles internos mantienen su comportamiento normal y no deben
+  // seleccionar/deseleccionar la fila por accidente.
+  if(event?.target?.closest('input,button,a,select,textarea,label'))return;
+
+  const checked=!selectedIds.has(id);
+  if(checked)selectedIds.add(id);else selectedIds.delete(id);
+
+  const row=event?.currentTarget;
+  if(row){
+    row.classList.toggle('record-selected-row',checked);
+    const checkbox=row.querySelector('input[type="checkbox"]:not(:disabled)');
+    if(checkbox)checkbox.checked=checked;
+  }
+
   updateSelectionUI();
 }
 function toggleAllRows(checked,source){
@@ -13174,10 +13229,10 @@ function recordTable(data,withOwner=false,source='panel'){
   const selectableRows=data.filter(r=>!r._internal_reassign_requested);
   const allChecked=selectableRows.length>0&&selectableRows.every(r=>selectedIds.has(r.id));
 
-  const body=data.map(r=>`<tr>
+  const body=data.map(r=>`<tr class="${r._internal_reassign_requested?'':`record-selectable-row ${selectedIds.has(r.id)?'record-selected-row':''}`}" ${r._internal_reassign_requested?'':`onclick="toggleSelectFromRow(event,'${r.id}')" title="Clic en la fila para seleccionar o deseleccionar"`}>
     <td>${r._internal_reassign_requested
       ?`<input type="checkbox" disabled title="La reasignación fue solicitada, pero el expediente todavía no está bajo su custodia.">`
-      :`<input type="checkbox" aria-label="Seleccionar ${esc(expKey(r))}" ${selectedIds.has(r.id)?'checked':''} onchange="toggleSelect('${r.id}',this.checked)">`}</td>
+      :`<input type="checkbox" aria-label="Seleccionar ${esc(expKey(r))}" ${selectedIds.has(r.id)?'checked':''} onchange="toggleSelect('${r.id}',this.checked,this)">`}</td>
     <td><b>${esc(expBase(r.expediente))}</b></td>
     <td>${r.extension?esc(r.extension):'—'}</td>
     <td>${esc(r.rd)}</td>
@@ -14291,7 +14346,7 @@ function initUniversalModuleSticky(){
 
 
 /* ===== ACTUALIZACIÓN AUTOMÁTICA DE VERSIÓN ===== */
-const APP_VERSION='20260829-1424-filtro-estados-registro-maestro';
+const APP_VERSION='20260829-1430-seleccion-fila-click';
 let __versionCheckRunning=false;
 
 async function checkForNewAppVersion(){
