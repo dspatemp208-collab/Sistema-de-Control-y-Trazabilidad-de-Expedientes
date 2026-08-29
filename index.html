@@ -9,7 +9,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="app-version" content="20260829-1235-tarjetas-usuario-mini">
+<meta name="app-version" content="20260829-1322-pendientes-usuario-letra-mayor">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -1243,19 +1243,19 @@
     "label value"
     "action action";
   align-items:start;
-  row-gap:4px;
+  row-gap:3px;
   column-gap:8px;
 }
 .app.limited-user .user-personal-kpis .kpi .label{
   grid-area:label;
-  font-size:10px;
-  line-height:1.15;
+  font-size:11px;
+  line-height:1.12;
   margin:0;
   min-width:0;
 }
 .app.limited-user .user-personal-kpis .kpi .value{
   grid-area:value;
-  font-size:17px;
+  font-size:19px;
   margin:0;
   line-height:1;
   justify-self:end;
@@ -1265,8 +1265,8 @@
 .app.limited-user .user-personal-kpis .kpi-view{
   grid-area:action;
   margin-top:0;
-  font-size:10px;
-  line-height:1.1;
+  font-size:11px;
+  line-height:1.05;
   text-decoration:none;
   justify-self:start;
 }
@@ -1293,13 +1293,13 @@
 }
 .app.limited-user .user-request-kpis .kpi .label{
   grid-area:label;
-  font-size:10px;
-  line-height:1.15;
+  font-size:11px;
+  line-height:1.12;
   margin:0;
 }
 .app.limited-user .user-request-kpis .kpi .value{
   grid-area:value;
-  font-size:17px;
+  font-size:19px;
   margin:0;
   line-height:1;
   justify-self:end;
@@ -1308,8 +1308,8 @@
 .app.limited-user .user-request-kpis .kpi-view{
   grid-area:action;
   margin-top:0;
-  font-size:10px;
-  line-height:1.1;
+  font-size:11px;
+  line-height:1.05;
   text-decoration:none;
   justify-self:start;
 }
@@ -1892,6 +1892,12 @@
         <div class="label">En préstamo</div>
         <div class="value" id="uKLoan">0</div>
         <button class="kpi-view" onclick="showUserCard('PRESTAMO')">Ver expedientes</button>
+      </div>
+
+      <div class="card kpi" id="userKpiPendingAttentionCard">
+        <div class="label">Pendientes por atender</div>
+        <div class="value" id="uKPendingAttention">0</div>
+        <button class="kpi-view" onclick="openMyPendingAttentionFromPanel()">Ver solicitudes</button>
       </div>
 
       <div class="card kpi warn" id="userKpiReturnRequestedCard">
@@ -3232,7 +3238,7 @@ let asuntosCatalogo=ASUNTOS_PREDETERMINADOS.map((nombre,i)=>({id:'fallback-asunt
 let selectedIds=new Set(), cargoRows=[];
 let recordMode='single', batchCargoHeader=null;
 const ALL_PAGE_SIZE=50;
-let selectedOwner='', selectedState='', panelQuickFilter='', ownerCardsRows=[], ownerUserKpiSummary={total_custodia:0,en_prestamo:0,reasignados:0,devoluciones_pendientes_aceptacion:0,devoluciones_realizadas:0,alertas_30:0}, userPanelMode='TODOS', userPanelSummary={todos:0,en_prestamo:0,devolucion_solicitada:0,reasignados_por_mi:0,reasignados_a_mi:0,devueltos:0,alertas_30:0}, operationalAlertRows=[], operationalAlertCount=0, archiveDeliveryRows=[], archiveDeliveryAlertCount=0, currentRequestId='', currentRequest=null, requestSelectedIds=new Set(), requestSearchSelectedIds=new Set(), requestDraftItems=[], addToExistingRequestId='', page=0, panelCount=0, allPage=0, allCountValue=0, allTotalGeneral=0, stateDetailCount=0, panelTimer=null, allTimer=null, historyTimer=null, cargosTimer=null, requestsTimer=null, returnRequestsTimer=null, notificationsPollTimer=null;
+let selectedOwner='', selectedState='', panelQuickFilter='', ownerCardsRows=[], ownerUserKpiSummary={total_custodia:0,en_prestamo:0,reasignados:0,devoluciones_pendientes_aceptacion:0,devoluciones_realizadas:0,alertas_30:0}, userPanelMode='TODOS', userPanelSummary={todos:0,en_prestamo:0,pendientes_por_atender:0,devolucion_solicitada:0,reasignados_por_mi:0,reasignados_a_mi:0,devueltos:0,alertas_30:0}, operationalAlertRows=[], operationalAlertCount=0, archiveDeliveryRows=[], archiveDeliveryAlertCount=0, currentRequestId='', currentRequest=null, requestSelectedIds=new Set(), requestSearchSelectedIds=new Set(), requestDraftItems=[], addToExistingRequestId='', page=0, panelCount=0, allPage=0, allCountValue=0, allTotalGeneral=0, stateDetailCount=0, panelTimer=null, allTimer=null, historyTimer=null, cargosTimer=null, requestsTimer=null, returnRequestsTimer=null, notificationsPollTimer=null;
 
 function el(id){return document.getElementById(id)}
 
@@ -5301,6 +5307,42 @@ function reassignedAwayFromCurrentUser(r){
   return action.includes('REASIGNACIÓN') && from===mine && !!to && to!==mine;
 }
 
+async function countMyPendingAttentionItems(){
+  if(!sb||!session||!isLimitedUser())return 0;
+
+  const [requestsRes,pendingRes]=await Promise.all([
+    sb.rpc('listar_solicitudes_prestamo',{p_busqueda:null,p_estado:null}),
+    sb.rpc('listar_pendientes_por_atender_inclusivo')
+  ]);
+
+  if(requestsRes.error){
+    console.warn('Conteo personal de solicitudes:',requestsRes.error.message);
+    return 0;
+  }
+  if(pendingRes.error){
+    console.warn('Conteo personal pendiente por atender:',pendingRes.error.message);
+    return 0;
+  }
+
+  // La lista de solicitudes queda limitada al usuario por la lógica/RLS actual.
+  // Con sus claves identificamos únicamente sus expedientes pendientes.
+  const myRequestKeys=new Set();
+  (requestsRes.data||[]).forEach(r=>
+    requestRowPendingKeys(r).forEach(k=>myRequestKeys.add(k))
+  );
+
+  return (pendingRes.data||[]).filter(r=>
+    myRequestKeys.has(pendingRequestMatchKey(r))
+  ).length;
+}
+
+function openMyPendingAttentionFromPanel(){
+  const tab=document.querySelector('.tab[data-tab="requests"]');
+  if(tab) switchTab('requests',tab);
+  if(el('requestStateFilter'))el('requestStateFilter').value='PENDIENTES_POR_ATENDER_ITEMS';
+  loadRequests();
+}
+
 async function loadUserPersonalSummary(){
   if(!sb||!session||!isLimitedUser())return;
 
@@ -5335,6 +5377,8 @@ async function loadUserPersonalSummary(){
     requestedReturnCount=(returnRequested||[]).length;
   }
 
+  const pendingAttentionCount=await countMyPendingAttentionItems();
+
   // Las solicitudes internas enviadas todavía no son custodia del usuario,
   // pero deben figurar en "Todos mis expedientes" como REASIGNACIÓN SOLICITADA.
   await loadInternalReassignRequests(true);
@@ -5360,6 +5404,7 @@ async function loadUserPersonalSummary(){
   userPanelSummary={
     todos:(currentAllCount===null?Number(s.todos||0):currentAllCount)+internalRequestedCount,
     en_prestamo:Number(s.en_prestamo||0),
+    pendientes_por_atender:Number(pendingAttentionCount||0),
     devolucion_solicitada:Number(requestedReturnCount||0),
     reasignados_por_mi:Number(s.reasignados_por_mi||0),
     reasignados_a_mi:Number(s.reasignados_a_mi||0),
@@ -5369,6 +5414,7 @@ async function loadUserPersonalSummary(){
 
   if(el('uKAll'))el('uKAll').textContent=userPanelSummary.todos;
   if(el('uKLoan'))el('uKLoan').textContent=userPanelSummary.en_prestamo;
+  if(el('uKPendingAttention'))el('uKPendingAttention').textContent=userPanelSummary.pendientes_por_atender;
   if(el('uKReturnRequested'))el('uKReturnRequested').textContent=userPanelSummary.devolucion_solicitada;
   if(el('uKReassignedBy'))el('uKReassignedBy').textContent=userPanelSummary.reasignados_por_mi;
   if(el('uKReassignedTo'))el('uKReassignedTo').textContent=userPanelSummary.reasignados_a_mi;
@@ -14158,7 +14204,7 @@ function initUniversalModuleSticky(){
 
 
 /* ===== ACTUALIZACIÓN AUTOMÁTICA DE VERSIÓN ===== */
-const APP_VERSION='20260829-1235-tarjetas-usuario-mini';
+const APP_VERSION='20260829-1322-pendientes-usuario-letra-mayor';
 let __versionCheckRunning=false;
 
 async function checkForNewAppVersion(){
