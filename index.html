@@ -9,7 +9,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="app-version" content="20260829-1015-registro-maestro-fijo">
+<meta name="app-version" content="20260829-1025-correccion-estados-sin-kpis">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -1395,6 +1395,7 @@
 </style>
 <!-- ESTADO REASIGNADO ACTIVO -->
 <!-- TARJETAS SOLICITUDES COMPACTAS -->
+<!-- CORRECCIÓN ESTADOS SIN TARJETAS SUPERIORES -->
 </head>
 <body>
 <!-- Confirmaciones nativas del navegador eliminadas: las acciones se ejecutan directamente; se conservan validaciones y errores. -->
@@ -1660,22 +1661,6 @@
 
 
   <section id="tab-states" class="hidden">
-    <div class="states-kpis">
-      <div class="card kpi">
-        <div class="label">Total de estados</div>
-        <div class="value" id="statesTotalTypes">0</div>
-      </div>
-      <div class="card kpi">
-        <div class="label">Total de expedientes</div>
-        <div class="value" id="statesTotalRecords">0</div>
-      </div>
-      <div class="card kpi">
-        <div class="label">Estado con mayor cantidad</div>
-        <div class="value" id="statesTopCount">0</div>
-        <div class="note" id="statesTopName">—</div>
-      </div>
-    </div>
-
     <div class="card filters">
       <div class="field">
         <label>Buscar estado</label>
@@ -6467,10 +6452,12 @@ async function loadStates(){
 
   const top=stateRows.slice().sort((a,b)=>b.total-a.total)[0]||{estado:'—',total:0};
   const physicalTypes=stateRows.filter(x=>x.total>0).length;
-  el('statesTotalTypes').textContent=physicalTypes;
-  el('statesTotalRecords').textContent=totalExpedientes;
-  el('statesTopCount').textContent=top.total;
-  el('statesTopName').textContent=stateDisplayName(top.estado);
+  // Estas tarjetas superiores fueron retiradas de la interfaz. Mantener
+  // compatibilidad por si alguna versión antigua todavía contiene los nodos.
+  if(el('statesTotalTypes'))el('statesTotalTypes').textContent=physicalTypes;
+  if(el('statesTotalRecords'))el('statesTotalRecords').textContent=totalExpedientes;
+  if(el('statesTopCount'))el('statesTopCount').textContent=top.total;
+  if(el('statesTopName'))el('statesTopName').textContent=stateDisplayName(top.estado);
 
   if(['PENDIENTES POR REGISTRAR','REASIGNADO','POR REVISAR'].includes(selectedState)){
     selectedState=null;
@@ -6486,7 +6473,7 @@ function renderStates(){
 
   const card=(x,meta)=>{
     const stateArg=x.estado.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-    const denom=Number(el('statesTotalRecords')?.textContent||0);
+    const denom=stateRows.reduce((sum,row)=>sum+Number(row.total||0),0);
     const pct=denom?Math.min(100,(Number(x.total||0)/denom)*100):0;
     return `<div class="card state-card ${selectedState===x.estado?'selected':''}">
       <div class="state-name">${esc(x.estado)}</div>
@@ -13560,7 +13547,7 @@ async function importCSV(ev){
 
 
 /* ===== ACTUALIZACIÓN AUTOMÁTICA DE VERSIÓN ===== */
-const APP_VERSION='20260829-1015-registro-maestro-fijo';
+const APP_VERSION='20260829-1025-correccion-estados-sin-kpis';
 let __versionCheckRunning=false;
 
 async function checkForNewAppVersion(){
