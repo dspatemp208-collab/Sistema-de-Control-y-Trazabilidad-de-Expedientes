@@ -9,7 +9,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="app-version" content="20260829-1138-registro-maestro-reasignado-solicitante-verificar">
+<meta name="app-version" content="20260829-1125-registro-maestro-pendiente-atender">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -1396,6 +1396,7 @@
 <!-- ESTADO REASIGNADO ACTIVO -->
 <!-- TARJETAS SOLICITUDES COMPACTAS -->
 <!-- CORRECCIÓN ESTADOS SIN TARJETAS SUPERIORES -->
+<!-- REGISTRO MAESTRO V5: PENDIENTE POR ATENDER INTEGRADO -->
 </head>
 <body>
 <!-- Confirmaciones nativas del navegador eliminadas: las acciones se ejecutan directamente; se conservan validaciones y errores. -->
@@ -11631,7 +11632,7 @@ async function loadAll(){
   populateMasterFilters();
 
   const {data,error}=await sb.rpc(
-    'buscar_registro_maestro_v4',
+    'buscar_registro_maestro_v5',
     masterParams()
   );
 
@@ -11705,7 +11706,7 @@ async function fetchMasterFilteredRows(){
 
   while(true){
     const {data,error}=await sb.rpc(
-      'buscar_registro_maestro_v4',
+      'buscar_registro_maestro_v5',
       masterParams(BATCH,offset)
     );
 
@@ -13607,7 +13608,7 @@ async function importCSV(ev){
 
 
 /* ===== ACTUALIZACIÓN AUTOMÁTICA DE VERSIÓN ===== */
-const APP_VERSION='20260829-1138-registro-maestro-reasignado-solicitante-verificar';
+const APP_VERSION='20260829-1125-registro-maestro-pendiente-atender';
 let __versionCheckRunning=false;
 
 async function checkForNewAppVersion(){
