@@ -9,7 +9,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="app-version" content="20260829-1125-registro-maestro-pendiente-atender">
+<meta name="app-version" content="20260829-1138-exportar-tarjetas-estados">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -1383,6 +1383,9 @@
 #tab-states .state-progress{height:5px;margin-top:7px}
 #tab-states .state-card .btn.small,
 #tab-states .state-card .btn.secondary.small{padding:6px 10px;font-size:11px}
+#tab-states .state-card-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+#tab-states .state-card-actions .btn{margin:0}
+#tab-states .state-export-btn{background:#f8fafc}
 #tab-states .table-wrap{margin-top:10px}
 @media(max-width:900px){
   #tab-states .states-kpis{grid-template-columns:1fr}
@@ -6480,7 +6483,10 @@ function renderStates(){
       <div class="state-count">${Number(x.total||0)}</div>
       <div class="state-meta">${esc(meta)}</div>
       <div class="state-progress"><span style="width:${pct}%"></span></div>
-      <div style="margin-top:10px"><button class="btn secondary small" onclick="loadStateDetail('${stateArg}')">Ver expedientes</button></div>
+      <div class="state-card-actions">
+        <button class="btn secondary small" onclick="loadStateDetail('${stateArg}')">Ver expedientes</button>
+        <button class="btn secondary small state-export-btn" onclick="event.stopPropagation();exportStateCardCSV('${stateArg}',this)">Exportar</button>
+      </div>
     </div>`;
   };
 
@@ -6506,12 +6512,112 @@ function renderStates(){
         <div class="state-count">${returnRequestRows.length||0}</div>
         <div class="state-meta">Pendientes de recepción física</div>
         <div class="state-progress"><span style="width:${returnRequestRows.length?100:0}%"></span></div>
-        <div style="margin-top:10px"><button class="btn secondary small" onclick="toggleReturnRequestsInStates()">Ver solicitudes</button></div>
+        <div class="state-card-actions">
+          <button class="btn secondary small" onclick="toggleReturnRequestsInStates()">Ver solicitudes</button>
+          <button class="btn secondary small state-export-btn" onclick="exportStateCardCSV('SOLICITUDES DE DEVOLUCIÓN',this)">Exportar</button>
+        </div>
       </div>`;
     }
   }
 
   el('stateGrid').innerHTML=html||'<div class="empty">No se encontraron estados o bandejas.</div>';
+}
+
+
+function stateExportCell(v){
+  if(v===null || v===undefined || v==='')return '';
+  return String(v);
+}
+function stateExportFileName(estado){
+  const base=norm(estado||'ESTADO')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/[^A-Z0-9]+/g,'_')
+    .replace(/^_+|_+$/g,'');
+  return `ESTADO_${base||'LISTADO'}.csv`;
+}
+function stateExportDownload(estado,headers,rows){
+  const csv=[headers.join(';'),...rows.map(row=>row.map(stateExportCell).map(csvEscape).join(';'))].join('\n');
+  downloadBlob(stateExportFileName(estado),csv);
+}
+async function exportStateCardCSV(estado,btn){
+  if(!hasFullAccess())return;
+  const old=btn?.textContent||'Exportar';
+  if(btn){btn.disabled=true;btn.textContent='Exportando...';}
+  try{
+    if(estado==='EN PRÉSTAMO' || estado==='REASIGNACIONES'){
+      const {data,error}=await sb.rpc('listar_prestamos_activos_global_v3');
+      if(error)throw error;
+      const all=Array.isArray(data)?data:(data||[]);
+      const rows=estado==='REASIGNACIONES'
+        ?all.filter(x=>norm(x?.situacion_operativa||'').includes('REASIGNADO'))
+        :all.filter(x=>!norm(x?.situacion_operativa||'').includes('REASIGNADO'));
+      stateExportDownload(estado,
+        ['EXPEDIENTE','EXTENSIÓN','R.D.','ÚLTIMO FOLIO','RESPONSABLE ACTUAL','ÁREA','ESTADO / SITUACIÓN','FECHA ENTREGA','ÚLTIMA REASIGNACIÓN','DESDE','HACIA','CARGO','SOLICITUD'],
+        rows.map(x=>[
+          x.expediente,x.extension,x.rd,x.ultimo_folio,
+          x.responsable||x.responsable_actual,x.area_trabajo,
+          estado==='REASIGNACIONES'?'REASIGNADO':(x.situacion_operativa||'EN PRÉSTAMO'),
+          x.fecha_entrega,x.fecha_ultima_reasignacion||x.fecha_reasignacion,
+          x.reasignado_desde,x.reasignado_hacia,x.cargo_numero||x.cargo,x.solicitud_numero
+        ])
+      );
+      showToast(`${rows.length} expediente(s) exportados.`);
+      return;
+    }
+
+    if(estado==='PENDIENTE POR ATENDER'){
+      const {data,error}=await sb.rpc('listar_pendientes_por_atender_inclusivo');
+      if(error)throw error;
+      let rows=sortRequestsDesc(data||[],'solicitud_numero');
+      const ids=rows.map(x=>x.expediente_id).filter(Boolean);
+      if(ids.length){
+        const {data:masterRows,error:masterError}=await sb.from('expedientes').select('id,extension,rd,ultimo_folio').in('id',ids);
+        if(masterError)throw masterError;
+        const mm=new Map((masterRows||[]).map(x=>[x.id,x]));
+        rows=rows.map(x=>({...x,...(mm.get(x.expediente_id)||{})}));
+      }
+      stateExportDownload(estado,
+        ['EXPEDIENTE','EXTENSIÓN','R.D.','ÚLTIMO FOLIO','SOLICITUD','SOLICITANTE','ESTADO','FECHA SOLICITUD','OBSERVACIÓN'],
+        rows.map(x=>[x.expediente,x.extension,x.rd,x.ultimo_folio,x.solicitud_numero,x.solicitante,'PENDIENTE POR ATENDER',x.fecha_solicitud,x.observacion])
+      );
+      showToast(`${rows.length} expediente(s) exportados.`);
+      return;
+    }
+
+    if(estado==='DEVUELTOS AL ARCHIVO'){
+      const {data,error}=await sb.rpc('listar_devueltos_para_listado');
+      if(error)throw error;
+      const rows=data||[];
+      stateExportDownload(estado,
+        ['EXPEDIENTE','EXTENSIÓN','R.D.','ÚLTIMO FOLIO','ESTADO','FECHA DEVOLUCIÓN','DEVUELTO POR','CARGO','DESTINO','LISTADO','ESTADO LISTADO'],
+        rows.map(x=>[x.expediente,x.extension,x.rd,x.ultimo_folio,'DEVUELTO AL ARCHIVO',x.fecha_devolucion,x.devuelto_por,x.cargo,x.destino_archivo,x.listado_numero,x.listado_estado])
+      );
+      showToast(`${rows.length} expediente(s) exportados.`);
+      return;
+    }
+
+    if(estado==='SOLICITUDES DE DEVOLUCIÓN'){
+      const {data,error}=await sb.rpc('listar_solicitudes_devolucion_admin',{p_busqueda:null,p_responsable:null});
+      if(error)throw error;
+      const rows=await enrichRowsWithRequestOrigin(data||[],'solicitud_id');
+      stateExportDownload(estado,
+        ['EXPEDIENTE','EXTENSIÓN','SOLICITUD','SOLICITANTE','ORIGEN','REGISTRADO POR','RESPONSABLE ACTUAL','ESTADO','CARGO','FECHA SOLICITUD DEVOLUCIÓN','DÍAS HÁBILES','OBSERVACIÓN'],
+        rows.map(x=>[
+          x.expediente,x.extension,x.solicitud_numero,x.solicitante,x.origen_registro,x.registrado_por,
+          x.responsable_actual,'DEVOLUCIÓN SOLICITADA',x.cargo_numero,x.fecha_solicitud_devolucion,
+          returnBusinessDays(x.fecha_solicitud_devolucion),x.observacion
+        ])
+      );
+      showToast(`${rows.length} expediente(s) exportados.`);
+      return;
+    }
+
+    showToast('No hay exportación configurada para esta tarjeta.');
+  }catch(e){
+    serverError(e);
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent=old;}
+  }
 }
 
 function globalLoanSearchKey(v){
@@ -13608,7 +13714,7 @@ async function importCSV(ev){
 
 
 /* ===== ACTUALIZACIÓN AUTOMÁTICA DE VERSIÓN ===== */
-const APP_VERSION='20260829-1125-registro-maestro-pendiente-atender';
+const APP_VERSION='20260829-1138-exportar-tarjetas-estados';
 let __versionCheckRunning=false;
 
 async function checkForNewAppVersion(){
