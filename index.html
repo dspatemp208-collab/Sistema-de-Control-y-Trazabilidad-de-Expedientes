@@ -9,7 +9,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="app-version" content="20260829-1025-correccion-estados-sin-kpis">
+<meta name="app-version" content="20260829-1116-separar-prestamos-reasignaciones">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -6389,13 +6389,11 @@ async function loadStates(){
 
   const [
     {data,error},
-    {data:reassignData,error:reassignError},
     {data:loanData,error:loanError},
     {data:pendingAttentionData,error:pendingAttentionError}
   ]=await Promise.all([
     sb.rpc('resumen_estados'),
-    sb.rpc('resumen_reasignaciones'),
-    sb.rpc('resumen_prestamos_activos_global_v3'),
+    sb.rpc('listar_prestamos_activos_global_v3'),
     sb.rpc('listar_pendientes_por_atender_inclusivo')
   ]);
 
@@ -6404,8 +6402,7 @@ async function loadStates(){
     return;
   }
 
-  if(reassignError)console.warn('resumen_reasignaciones:',reassignError.message);
-  if(loanError)console.warn('resumen_prestamos_activos_global_v3:',loanError.message);
+  if(loanError)console.warn('listar_prestamos_activos_global_v3:',loanError.message);
   if(pendingAttentionError)console.warn('listar_pendientes_por_atender_inclusivo:',pendingAttentionError.message);
 
   pendingRegisterRows=[];
@@ -6414,16 +6411,18 @@ async function loadStates(){
   // Compatibilidad con la pantalla de preparación existente.
   pendingVerifyRows=pendingAttentionRows;
 
-  const totalEnPrestamo=Number(
-    Array.isArray(loanData)
-      ? (loanData[0]?.total||0)
-      : (loanData?.total||0)
-  );
-  const totalReasignaciones=Number(
-    Array.isArray(reassignData)
-      ? (reassignData[0]?.total||0)
-      : (reassignData?.total||0)
-  );
+  // Cache global de expedientes físicamente fuera de Archivo.
+  // Las vistas de EN PRÉSTAMO y REASIGNACIONES se derivan de esta misma fuente.
+  stateLoanAllRows=Array.isArray(loanData)?loanData:(loanData||[]);
+
+  // Separación exclusiva: un expediente reasignado no se contabiliza
+  // nuevamente dentro de EN PRÉSTAMO.
+  const activeLoanRows=Array.isArray(loanData)?loanData:(loanData||[]);
+  const isCurrentReassignment=x=>norm(x?.situacion_operativa||'').includes('REASIGNADO');
+  const regularLoanRows=activeLoanRows.filter(x=>!isCurrentReassignment(x));
+  const currentReassignmentRows=activeLoanRows.filter(isCurrentReassignment);
+  const totalEnPrestamo=regularLoanRows.length;
+  const totalReasignaciones=currentReassignmentRows.length;
 
   const dbRows=(data||[]).map(x=>({
     estado:(x.estado||'SIN ESTADO').trim()||'SIN ESTADO',
@@ -6492,14 +6491,14 @@ function renderStates(){
   let html='';
   if(physical.length){
     html+=physical.map(x=>card(x,
-      x.estado==='EN PRÉSTAMO'?'Todos los préstamos activos aún fuera de Archivo':
+      x.estado==='EN PRÉSTAMO'?'Préstamos activos sin reasignaciones vigentes':
       'Custodia física en Archivo')).join('');
   }
 
   if(work.length||showReturn){
     html+=work.map(x=>card(x,
       x.estado==='PENDIENTE POR ATENDER'?'Solicitud lista para preparar y generar cargo':
-      'Movimiento de custodia; el expediente continúa EN PRÉSTAMO')).join('');
+      'Expedientes cuyo estado operativo vigente es REASIGNADO')).join('');
     if(showReturn){
       html+=`<div class="card state-card">
         <div class="state-name">SOLICITUDES DE DEVOLUCIÓN</div>
@@ -6659,30 +6658,33 @@ async function loadStateDetail(estado){
       return;
     }
 
-    stateLoanAllRows=Array.isArray(data)?data:(data||[]);
+    const allActiveRows=Array.isArray(data)?data:(data||[]);
+    stateLoanAllRows=allActiveRows.filter(x=>!norm(x?.situacion_operativa||'').includes('REASIGNADO'));
     fillGlobalLoanFilters();
     renderGlobalLoanRows();
     return;
   }
 
   if(estado==='REASIGNACIONES'){
-    el('stateDetailTitle').textContent='Movimientos de reasignación';
+    el('stateDetailTitle').textContent='Expedientes reasignados';
     el('stateDetailTable').innerHTML='<div class="empty">Cargando expedientes reasignados...</div>';
 
-    const {data,error}=await sb.rpc('listar_expedientes_reasignados');
+    const {data,error}=await sb.rpc('listar_prestamos_activos_global_v3');
 
     if(error){
       el('stateDetailTable').innerHTML=`<div class="empty">${esc(error.message)}</div>`;
       return;
     }
 
-    const rows=data||[];
+    const rows=(Array.isArray(data)?data:(data||[]))
+      .filter(x=>norm(x?.situacion_operativa||'').includes('REASIGNADO'));
+
     stateDetailCount=rows.length;
     el('stateDetailCount').textContent=`${stateDetailCount} expedientes`;
 
     if(!rows.length){
       el('stateDetailTable').innerHTML=
-        '<div class="empty">No hay movimientos de reasignación para mostrar.</div>';
+        '<div class="empty">No hay expedientes con estado REASIGNADO.</div>';
       return;
     }
 
@@ -6706,21 +6708,21 @@ async function loadStateDetail(estado){
           <td><b>${esc(x.expediente||'—')}</b></td>
           <td>${esc(x.extension||'—')}</td>
           <td>${esc(x.rd||'—')}</td>
-          <td><b>${esc(x.responsable_actual||'—')}</b></td>
-          <td><span class="pill loan">EN PRÉSTAMO</span></td>
-          <td>${fmtDate(x.fecha_ultima_reasignacion)}</td>
-          <td>${esc(x.desde||'—')}</td>
-          <td><b>${esc(x.hacia||'—')}</b></td>
-          <td>${esc(x.cargo_numero||'—')}</td>
+          <td><b>${esc(x.responsable||x.responsable_actual||'—')}</b></td>
+          <td><span class="pill reassigned">REASIGNADO</span></td>
+          <td>${fmtDate(x.fecha_ultima_reasignacion||x.fecha_reasignacion)}</td>
+          <td>${esc(x.reasignado_desde||'—')}</td>
+          <td><b>${esc(x.reasignado_hacia||x.responsable||x.responsable_actual||'—')}</b></td>
+          <td>${esc(x.cargo_numero||x.cargo||'—')}</td>
           <td>
             <div style="display:flex;gap:6px;white-space:nowrap">
               <button class="btn secondary small"
-                onclick="showExpHistory('${x.expediente_id}')">
+                onclick="showExpHistory('${x.id}')">
                 Historial
               </button>
               ${hasFullAccess()
                 ?`<button class="btn small"
-                    onclick="manageExpedienteFromPanel('${x.expediente_id}')">
+                    onclick="manageExpedienteFromPanel('${x.id}')">
                     Gestionar
                   </button>`
                 :''}
@@ -13547,7 +13549,7 @@ async function importCSV(ev){
 
 
 /* ===== ACTUALIZACIÓN AUTOMÁTICA DE VERSIÓN ===== */
-const APP_VERSION='20260829-1025-correccion-estados-sin-kpis';
+const APP_VERSION='20260829-1116-separar-prestamos-reasignaciones';
 let __versionCheckRunning=false;
 
 async function checkForNewAppVersion(){
